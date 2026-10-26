@@ -32,6 +32,7 @@ pub struct GroupStats {
     pub merged_by_similarity: usize,
     pub merged_by_title_key: usize,
     pub kept_apart_for_review: usize,
+    pub split_from_drift: usize,
 }
 
 #[derive(sqlx::FromRow)]
@@ -155,15 +156,54 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         }
     }
 
-    // 3. One dish per component; its default is the most complete, newest version.
-    let mut components: HashMap<usize, Vec<usize>> = HashMap::new();
+    // 3. Split families that drifted along a chain of small changes ("Chicken Caesar Salad" → … → "Shrimp,
+    //    Chickpea & Kale Salad"). Every title group must be the same dish as its cluster's anchor (the most
+    //    common title), not merely as its neighbour in the chain.
+    let mut by_root: HashMap<usize, Vec<usize>> = HashMap::new();
     for i in 0..vs.len() {
-        components.entry(uf.find(i)).or_default().push(i);
+        by_root.entry(uf.find(i)).or_default().push(i);
     }
+    let same_dish = |a: usize, b: usize| -> bool {
+        let core = protein_core(&vs[a].title);
+        (!core.is_empty() && core == protein_core(&vs[b].title))
+            || strsim::sorensen_dice(&clean[a], &clean[b]) >= MIN_TITLE_SIMILARITY
+            || (overlap(vs[a].id, vs[b].id) >= STRONG_SHIPPED_OVERLAP
+                && [a, b].iter().all(|&x| shipped.get(&vs[x].id).map_or(0, HashSet::len) >= MIN_SHIPPED_ITEMS))
+    };
+    let mut components: Vec<Vec<usize>> = Vec::new();
+    for members in by_root.into_values() {
+        let mut groups: HashMap<&str, Vec<usize>> = HashMap::new();
+        for &m in &members {
+            groups.entry(clean[m].as_str()).or_default().push(m);
+        }
+        if groups.len() == 1 {
+            components.push(members);
+            continue;
+        }
+        // Largest title groups first, so the anchor is the dish's usual name; each group is represented by
+        // its newest version.
+        let mut groups: Vec<Vec<usize>> = groups.into_values().collect();
+        groups.sort_by_key(|g| std::cmp::Reverse((g.len(), g.iter().map(|&m| vs[m].published).max())));
+        let mut clusters: Vec<(usize, Vec<usize>)> = Vec::new(); // (anchor representative, members)
+        for g in groups {
+            let rep = *g.iter().max_by_key(|&&m| vs[m].published).unwrap();
+            match clusters.iter_mut().find(|(anchor, _)| same_dish(rep, *anchor)) {
+                Some((_, ms)) => ms.extend(g),
+                None => {
+                    stats.split_from_drift += 1;
+                    clusters.push((rep, g));
+                }
+            }
+        }
+        stats.split_from_drift -= 1; // the first cluster is the original dish, not a split
+        components.extend(clusters.into_iter().map(|(_, ms)| ms));
+    }
+
+    // 4. One dish per component; its default is the most complete, newest version.
     let mut slugs: HashSet<String> = sqlx::query_scalar::<_, String>("SELECT slug FROM dishes").fetch_all(&mut *tx).await?.into_iter().collect();
     let (mut d_id, mut d_title, mut d_sub, mut d_slug, mut d_type, mut d_default) = (vec![], vec![], vec![], vec![], vec![], vec![]);
     let (mut a_variant, mut a_dish) = (vec![], vec![]);
-    for members in components.values() {
+    for members in &components {
         let best = *members
             .iter()
             .max_by_key(|&&i| (vs[i].has_steps, vs[i].has_hero, vs[i].published))
