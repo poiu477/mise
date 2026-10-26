@@ -37,6 +37,20 @@ pub fn clean_title(title: &str) -> String {
     SPACES.replace_all(t.trim(), " ").into_owned()
 }
 
+/// A title for comparison: cleaned, normalized, and with "and" dropped so "&" and "and" read the same.
+pub fn title_key(title: &str) -> String {
+    normalize_name(&clean_title(title)).split(' ').filter(|w| *w != "and").collect::<Vec<_>>().join(" ")
+}
+
+/// Share of words two protein-neutral cores have in common (0 to 1).
+pub fn core_similarity(a: &str, b: &str) -> f64 {
+    let (ca, cb) = (protein_core(a), protein_core(b));
+    let wa: std::collections::HashSet<&str> = ca.split(' ').filter(|w| !w.is_empty()).collect();
+    let wb: std::collections::HashSet<&str> = cb.split(' ').filter(|w| !w.is_empty()).collect();
+    let union = wa.union(&wb).count();
+    if union == 0 { 0.0 } else { wa.intersection(&wb).count() as f64 / union as f64 }
+}
+
 /// Proteins and format words that vary between versions of one dish ("2x", "Prep & Bake", "One-Pan").
 const SWAPPABLE: &[&str] = &[
     "chicken", "pork", "beef", "steak", "shrimp", "salmon", "tilapia", "cod", "barramundi", "trout", "steelhead",
@@ -84,5 +98,17 @@ mod tests {
         assert_eq!(protein_core("Bulgogi Beef Tenderloin"), protein_core("Bulgogi Chicken"));
         assert_eq!(protein_core("One-Pan Pineapple Salsa & 2x Shrimp Tacos"), protein_core("One-Pan Pineapple Salsa & 2x Beef Tacos"));
         assert_ne!(protein_core("Chicken Schnitzel"), protein_core("Sweet Thai Chili Chicken"));
+    }
+
+    #[test]
+    fn and_reads_like_ampersand() {
+        assert_eq!(title_key("Spring Asparagus and Shrimp Risotto"), title_key("Spring Asparagus & Shrimp Risotto"));
+    }
+
+    #[test]
+    fn core_similarity_ignores_proteins() {
+        assert!(core_similarity("Chicken Caesar Salad", "Chicken, Chickpea & Kale Salad") < 0.34);
+        assert!(core_similarity("Tuscan-Spiced Chicken", "Tuscan Pork Filet") >= 0.34);
+        assert_eq!(core_similarity("Hot Honey Chicken", "Hot Honey Pork Filet"), 1.0);
     }
 }

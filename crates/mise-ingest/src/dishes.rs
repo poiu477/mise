@@ -8,7 +8,8 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Result};
-use mise_core::dish_titles::{clean_title, protein_core};
+use mise_core::dish_titles::{clean_title, core_similarity, protein_core, title_key};
+use mise_core::proteins::protein_of;
 use mise_core::text::{normalize_name, slugify};
 use serde_json::json;
 use sqlx::PgPool;
@@ -22,6 +23,14 @@ const MIN_SHIPPED_OVERLAP: f64 = 0.5;
 /// Chicken" ↔ "Tuscan Pork Filet"), provided both versions ship enough items for the overlap to mean something.
 const STRONG_SHIPPED_OVERLAP: f64 = 0.8;
 const MIN_SHIPPED_ITEMS: usize = 4;
+/// Within a dish every title must share this much of its protein-neutral core with the dish's anchor title,
+/// or at least `WEAK_CORE_SIMILARITY` plus near-identical non-protein shipped ingredients.
+const ANCHOR_CORE_SIMILARITY: f64 = 0.67;
+const WEAK_CORE_SIMILARITY: f64 = 0.34;
+/// Protein twins from separate lineages ("Gochujang Salmon" / "Gochujang Cod") merge when their non-protein
+/// shipped ingredients overlap this much, or their subtitles are this similar.
+const TWIN_OVERLAP: f64 = 0.5;
+const TWIN_SUBTITLE_SIMILARITY: f64 = 0.6;
 
 #[derive(Debug, Default)]
 pub struct GroupStats {
@@ -33,6 +42,7 @@ pub struct GroupStats {
     pub merged_by_title_key: usize,
     pub kept_apart_for_review: usize,
     pub split_from_drift: usize,
+    pub merged_as_cross_lineage_twin: usize,
 }
 
 #[derive(sqlx::FromRow)]
@@ -98,24 +108,33 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let index: HashMap<Uuid, usize> = vs.iter().enumerate().map(|(i, v)| (v.id, i)).collect();
 
     // Shipped ingredients only: pantry staples (salt, oil, butter) would make unrelated recipes look alike.
+    // Non-protein shipped ingredients as well: protein swaps differ there by design, so sameness of a dish is
+    // judged without them.
     let mut shipped: HashMap<Uuid, HashSet<Uuid>> = HashMap::new();
-    let rows: Vec<(Uuid, Uuid)> = sqlx::query_as(
-        "SELECT il.variant_id, il.food_id FROM ingredient_lines il JOIN variants v ON v.id = il.variant_id
-         WHERE v.dish_id IS NULL AND il.shipped AND il.food_id IS NOT NULL",
+    let mut flavour: HashMap<Uuid, HashSet<Uuid>> = HashMap::new();
+    let rows: Vec<(Uuid, Uuid, String)> = sqlx::query_as(
+        "SELECT il.variant_id, il.food_id, f.name FROM ingredient_lines il
+         JOIN variants v ON v.id = il.variant_id JOIN foods f ON f.id = il.food_id
+         WHERE v.dish_id IS NULL AND il.shipped",
     )
     .fetch_all(&mut *tx)
     .await?;
-    for (variant, food) in rows {
+    for (variant, food, name) in rows {
         shipped.entry(variant).or_default().insert(food);
+        if protein_of(&name).is_none() {
+            flavour.entry(variant).or_default().insert(food);
+        }
     }
-    let overlap = |a: Uuid, b: Uuid| -> f64 {
+    let jaccard = |sets: &HashMap<Uuid, HashSet<Uuid>>, a: Uuid, b: Uuid| -> f64 {
         let empty = HashSet::new();
-        let (sa, sb) = (shipped.get(&a).unwrap_or(&empty), shipped.get(&b).unwrap_or(&empty));
+        let (sa, sb) = (sets.get(&a).unwrap_or(&empty), sets.get(&b).unwrap_or(&empty));
         let union = sa.union(sb).count();
         if union == 0 { 0.0 } else { sa.intersection(sb).count() as f64 / union as f64 }
     };
+    let overlap = |a: Uuid, b: Uuid| jaccard(&shipped, a, b);
+    let flavour_overlap = |a: Uuid, b: Uuid| jaccard(&flavour, a, b);
 
-    let clean: Vec<String> = vs.iter().map(|v| normalize_name(&clean_title(&v.title))).collect();
+    let clean: Vec<String> = vs.iter().map(|v| title_key(&v.title)).collect();
     let mut uf = UnionFind((0..vs.len()).collect());
     let mut reviews = Vec::new();
 
@@ -156,6 +175,34 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         }
     }
 
+    // 2b. Protein twins from separate lineages: the same protein-neutral core (two words or more, so a bare
+    //     "Tacos" does not qualify) and shared non-protein ingredients or similar subtitles.
+    let sub_key: Vec<String> = vs.iter().map(|v| normalize_name(&clean_title(v.subtitle.as_deref().unwrap_or("")))).collect();
+    let mut twins: HashMap<(String, &str), Vec<usize>> = HashMap::new(); // representatives per core
+    for (i, v) in vs.iter().enumerate() {
+        let core = protein_core(&v.title);
+        if core.split(' ').filter(|w| !w.is_empty()).count() < 2 {
+            continue;
+        }
+        let reps = twins.entry((core, v.content_type.as_str())).or_default();
+        let mut placed = false;
+        for &r in reps.iter() {
+            if uf.find(r) == uf.find(i) {
+                placed = true;
+                break;
+            }
+            let subtitles_alike = !sub_key[i].is_empty() && strsim::sorensen_dice(&sub_key[i], &sub_key[r]) >= TWIN_SUBTITLE_SIMILARITY;
+            if flavour_overlap(v.id, vs[r].id) >= TWIN_OVERLAP || subtitles_alike {
+                stats.merged_as_cross_lineage_twin += uf.union(i, r) as usize;
+                placed = true;
+                break;
+            }
+        }
+        if !placed {
+            reps.push(i);
+        }
+    }
+
     // 3. Split families that drifted along a chain of small changes ("Chicken Caesar Salad" → … → "Shrimp,
     //    Chickpea & Kale Salad"). Every title group must be the same dish as its cluster's anchor (the most
     //    common title), not merely as its neighbour in the chain.
@@ -163,12 +210,14 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     for i in 0..vs.len() {
         by_root.entry(uf.find(i)).or_default().push(i);
     }
+    // Compared on protein-neutral cores: shared protein words ("Chicken ... Salad") would make different dishes
+    // look alike.
     let same_dish = |a: usize, b: usize| -> bool {
-        let core = protein_core(&vs[a].title);
-        (!core.is_empty() && core == protein_core(&vs[b].title))
-            || strsim::sorensen_dice(&clean[a], &clean[b]) >= MIN_TITLE_SIMILARITY
-            || (overlap(vs[a].id, vs[b].id) >= STRONG_SHIPPED_OVERLAP
-                && [a, b].iter().all(|&x| shipped.get(&vs[x].id).map_or(0, HashSet::len) >= MIN_SHIPPED_ITEMS))
+        let sim = core_similarity(&vs[a].title, &vs[b].title);
+        sim >= ANCHOR_CORE_SIMILARITY
+            || (sim >= WEAK_CORE_SIMILARITY
+                && flavour_overlap(vs[a].id, vs[b].id) >= STRONG_SHIPPED_OVERLAP
+                && [a, b].iter().all(|&x| flavour.get(&vs[x].id).map_or(0, HashSet::len) >= MIN_SHIPPED_ITEMS))
     };
     let mut components: Vec<Vec<usize>> = Vec::new();
     for members in by_root.into_values() {

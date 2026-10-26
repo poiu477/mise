@@ -5,3 +5,4 @@ pub mod curate;
 pub mod dishes;
 pub mod foods;
 pub mod options;
+pub mod prune;

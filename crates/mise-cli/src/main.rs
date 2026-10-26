@@ -35,6 +35,11 @@ enum Command {
     GroupDishes,
     /// Derive each dish's options (protein, portion, version) from its variants. Re-runnable.
     DeriveOptions,
+    /// Delete imported variants of one content type, e.g. ready meals. Re-run group-dishes and derive-options after.
+    Prune {
+        #[arg(long, value_parser = ["ready_meal", "product", "add_on"])]
+        content_type: String,
+    },
     /// Inspect and curate foods, brands and the food tree.
     #[command(subcommand)]
     Food(food::FoodCommand),
@@ -98,6 +103,10 @@ async fn main() -> anyhow::Result<()> {
             let started = std::time::Instant::now();
             let stats = mise_ingest::options::derive_options(&pool).await?;
             tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "options derived");
+        }
+        Command::Prune { content_type } => {
+            let stats = mise_ingest::prune::prune_content_type(&pool, &content_type).await?;
+            tracing::info!(?stats, content_type, "pruned");
         }
         Command::Food(cmd) => food::run(&pool, cmd).await?,
         Command::GateReport { sample, out, seed } => {

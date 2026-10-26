@@ -5,3 +5,5 @@
 /seed/
 # Gate and other reports contain personal data (decisions, titles from private sources).
 /reports/
+# Agent worktrees
+/.claude/
