@@ -13,8 +13,12 @@ path = "src/main.rs"
 anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive", "env"] }
 dotenvy = "0.15.7"
+mise-core = { version = "0.1.0", path = "../mise-core" }
 mise-db = { version = "0.1.0", path = "../mise-db" }
 mise-ingest = { version = "0.1.0", path = "../mise-ingest" }
+serde_json.workspace = true
+sqlx.workspace = true
 tokio = { version = "1.54.1", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+uuid.workspace = true

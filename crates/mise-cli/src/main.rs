@@ -1,5 +1,7 @@
 //! `mise` command-line tool: database setup and data-core jobs.
 
+mod food;
+
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
@@ -28,6 +30,9 @@ enum Command {
         #[arg(long)]
         reset: bool,
     },
+    /// Inspect and curate foods, brands and the food tree.
+    #[command(subcommand)]
+    Food(food::FoodCommand),
 }
 
 #[tokio::main]
@@ -67,6 +72,7 @@ async fn main() -> anyhow::Result<()> {
             let stats = mise_ingest::foods::match_foods(&pool).await?;
             tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "foods matched");
         }
+        Command::Food(cmd) => food::run(&pool, cmd).await?,
     }
     Ok(())
 }

@@ -96,7 +96,7 @@ async fn upsert_food(
     kind: &str,
 ) -> Result<(Uuid, bool)> {
     let inserted: Option<Uuid> = sqlx::query_scalar(
-        "INSERT INTO foods (id, name, slug, parent_id, kind) VALUES ($1, $2, $3, $4, $5::food_kind)
+        "INSERT INTO foods (id, name, slug, parent_id, kind, origin) VALUES ($1, $2, $3, $4, $5::food_kind, 'knowledge')
          ON CONFLICT (slug) DO NOTHING RETURNING id",
     )
     .bind(Uuid::now_v7())
@@ -113,7 +113,7 @@ async fn upsert_food(
 }
 
 async fn add_alias(tx: &mut Transaction<'_, Postgres>, food_id: Uuid, name: &str) -> Result<()> {
-    sqlx::query("INSERT INTO food_aliases (food_id, alias) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+    sqlx::query("INSERT INTO food_aliases (food_id, alias, origin) VALUES ($1, $2, 'knowledge') ON CONFLICT DO NOTHING")
         .bind(food_id)
         .bind(singular_key(name))
         .execute(&mut **tx)
@@ -140,21 +140,31 @@ struct Food {
     created: bool,
 }
 
-/// Undo a previous matching run: unlink ingredient lines and delete the foods, links and review items it
-/// created. Foods loaded as knowledge (and their categories and facts) are kept.
+/// Undo a previous matching run: unlink ingredient lines and delete the foods, links and open review items it
+/// created. Knowledge foods and anything a person created or edited (origin `user`) are kept.
 pub async fn reset_matching(pool: &PgPool) -> Result<()> {
     let mut tx = pool.begin().await?;
-    sqlx::query("UPDATE ingredient_lines SET food_id = NULL WHERE food_id IS NOT NULL").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM review_items WHERE kind IN ('food_parent', 'food_match')").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM food_relations").execute(&mut *tx).await?;
-    // Matching-created foods have no facts and are not categories.
+    // Only lines pointing at matched foods are unlinked; lines a person pointed elsewhere stay.
     sqlx::query(
-        "DELETE FROM foods f WHERE f.kind <> 'category'
-           AND NOT EXISTS (SELECT 1 FROM food_facts ff WHERE ff.food_id = f.id)
-           AND NOT EXISTS (SELECT 1 FROM foods c WHERE c.parent_id = f.id AND EXISTS (SELECT 1 FROM food_facts x WHERE x.food_id = c.id))",
+        "UPDATE ingredient_lines il SET food_id = NULL FROM foods f WHERE f.id = il.food_id AND f.origin = 'matched'",
     )
     .execute(&mut *tx)
     .await?;
+    sqlx::query("DELETE FROM review_items WHERE kind IN ('food_parent', 'food_match') AND status = 'open'").execute(&mut *tx).await?;
+    sqlx::query(
+        "DELETE FROM food_relations r USING foods a, foods b
+         WHERE a.id = r.from_food AND b.id = r.to_food AND a.origin = 'matched' AND b.origin = 'matched'",
+    )
+    .execute(&mut *tx)
+    .await?;
+    // Knowledge and user foods may have been placed under a matched parent; detach before deleting it.
+    sqlx::query(
+        "UPDATE foods c SET parent_id = NULL FROM foods p
+         WHERE p.id = c.parent_id AND p.origin = 'matched' AND c.origin <> 'matched'",
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("DELETE FROM foods WHERE origin = 'matched'").execute(&mut *tx).await?;
     tx.commit().await?;
     Ok(())
 }
