@@ -30,6 +30,8 @@ enum Command {
         #[arg(long)]
         reset: bool,
     },
+    /// Group variants into dishes (re-runnable; leaves dishes and placements made by a person alone).
+    GroupDishes,
     /// Inspect and curate foods, brands and the food tree.
     #[command(subcommand)]
     Food(food::FoodCommand),
@@ -71,6 +73,11 @@ async fn main() -> anyhow::Result<()> {
             }
             let stats = mise_ingest::foods::match_foods(&pool).await?;
             tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "foods matched");
+        }
+        Command::GroupDishes => {
+            let started = std::time::Instant::now();
+            let stats = mise_ingest::dishes::group_dishes(&pool).await?;
+            tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "dishes grouped");
         }
         Command::Food(cmd) => food::run(&pool, cmd).await?,
     }

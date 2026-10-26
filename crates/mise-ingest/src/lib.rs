@@ -2,4 +2,5 @@
 
 pub mod bundle;
 pub mod curate;
+pub mod dishes;
 pub mod foods;

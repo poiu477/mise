@@ -1,0 +1,245 @@
+//! Group variants into dishes.
+//!
+//! Variants are joined (union-find) when one was copied from the other and they are recognisably the same
+//! dish, or when separate lineages share the same cleaned title and subtitle. Copies that look like a recipe
+//! reused as a template for a different dish are left apart and queued for review. Variants pinned by a
+//! person, and dishes a person made, are never touched.
+
+use std::collections::{HashMap, HashSet};
+
+use anyhow::{Context, Result};
+use mise_core::dish_titles::{clean_title, protein_core};
+use mise_core::text::{normalize_name, slugify};
+use serde_json::json;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+/// Title similarity (Sørensen–Dice on letter pairs) and shipped-ingredient overlap a renamed copy needs to
+/// count as the same dish.
+const MIN_TITLE_SIMILARITY: f64 = 0.6;
+const MIN_SHIPPED_OVERLAP: f64 = 0.5;
+/// Near-identical shipped ingredients alone mean the same dish (a renamed protein swap such as "Tuscan-Spiced
+/// Chicken" ↔ "Tuscan Pork Filet"), provided both versions ship enough items for the overlap to mean something.
+const STRONG_SHIPPED_OVERLAP: f64 = 0.8;
+const MIN_SHIPPED_ITEMS: usize = 4;
+
+#[derive(Debug, Default)]
+pub struct GroupStats {
+    pub variants: usize,
+    pub dishes: usize,
+    pub merged_by_title: usize,
+    pub merged_as_protein_swap: usize,
+    pub merged_by_similarity: usize,
+    pub merged_by_title_key: usize,
+    pub kept_apart_for_review: usize,
+}
+
+#[derive(sqlx::FromRow)]
+struct V {
+    id: Uuid,
+    title: String,
+    subtitle: Option<String>,
+    parent_variant_id: Option<Uuid>,
+    content_type: String,
+    has_steps: bool,
+    has_hero: bool,
+    published: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+struct UnionFind(Vec<usize>);
+
+impl UnionFind {
+    fn find(&mut self, x: usize) -> usize {
+        let mut root = x;
+        while self.0[root] != root {
+            root = self.0[root];
+        }
+        let mut x = x;
+        while self.0[x] != root {
+            let next = self.0[x];
+            self.0[x] = root;
+            x = next;
+        }
+        root
+    }
+    fn union(&mut self, a: usize, b: usize) -> bool {
+        let (ra, rb) = (self.find(a), self.find(b));
+        if ra == rb {
+            return false;
+        }
+        self.0[ra] = rb;
+        true
+    }
+}
+
+pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
+    let mut stats = GroupStats::default();
+    let mut tx = pool.begin().await?;
+
+    // Start over for everything the job owns.
+    sqlx::query("UPDATE variants v SET dish_id = NULL FROM dishes d WHERE d.id = v.dish_id AND d.origin = 'grouped' AND NOT v.dish_pinned")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("UPDATE dishes SET default_variant_id = NULL WHERE origin = 'grouped'").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM dishes d WHERE origin = 'grouped' AND NOT EXISTS (SELECT 1 FROM variants v WHERE v.dish_id = d.id)")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM review_items WHERE kind = 'dish_merge' AND status = 'open'").execute(&mut *tx).await?;
+
+    let vs: Vec<V> = sqlx::query_as(
+        "SELECT id, title, subtitle, parent_variant_id, coalesce(meta->>'content_type', 'recipe') AS content_type,
+                has_steps, (meta->'media'->>'hero') IS NOT NULL AS has_hero, published_at AS published
+         FROM variants WHERE dish_id IS NULL",
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    stats.variants = vs.len();
+    let index: HashMap<Uuid, usize> = vs.iter().enumerate().map(|(i, v)| (v.id, i)).collect();
+
+    // Shipped ingredients only: pantry staples (salt, oil, butter) would make unrelated recipes look alike.
+    let mut shipped: HashMap<Uuid, HashSet<Uuid>> = HashMap::new();
+    let rows: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT il.variant_id, il.food_id FROM ingredient_lines il JOIN variants v ON v.id = il.variant_id
+         WHERE v.dish_id IS NULL AND il.shipped AND il.food_id IS NOT NULL",
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    for (variant, food) in rows {
+        shipped.entry(variant).or_default().insert(food);
+    }
+    let overlap = |a: Uuid, b: Uuid| -> f64 {
+        let empty = HashSet::new();
+        let (sa, sb) = (shipped.get(&a).unwrap_or(&empty), shipped.get(&b).unwrap_or(&empty));
+        let union = sa.union(sb).count();
+        if union == 0 { 0.0 } else { sa.intersection(sb).count() as f64 / union as f64 }
+    };
+
+    let clean: Vec<String> = vs.iter().map(|v| normalize_name(&clean_title(&v.title))).collect();
+    let mut uf = UnionFind((0..vs.len()).collect());
+    let mut reviews = Vec::new();
+
+    // 1. Lineage: a copy joins its parent when it is recognisably the same dish.
+    for (i, v) in vs.iter().enumerate() {
+        let Some(&p) = v.parent_variant_id.and_then(|p| index.get(&p)) else { continue };
+        if vs[p].content_type != v.content_type {
+            continue;
+        }
+        if clean[i] == clean[p] {
+            stats.merged_by_title += uf.union(i, p) as usize;
+            continue;
+        }
+        let core = protein_core(&v.title);
+        if !core.is_empty() && core == protein_core(&vs[p].title) {
+            stats.merged_as_protein_swap += uf.union(i, p) as usize;
+            continue;
+        }
+        let (sim, ov) = (strsim::sorensen_dice(&clean[i], &clean[p]), overlap(v.id, vs[p].id));
+        let enough_items = [v.id, vs[p].id].iter().all(|id| shipped.get(id).map_or(0, HashSet::len) >= MIN_SHIPPED_ITEMS);
+        if (sim >= MIN_TITLE_SIMILARITY && ov >= MIN_SHIPPED_OVERLAP) || (ov >= STRONG_SHIPPED_OVERLAP && enough_items) {
+            stats.merged_by_similarity += uf.union(i, p) as usize;
+        } else {
+            reviews.push((v, &vs[p], sim, ov));
+        }
+    }
+    stats.kept_apart_for_review = reviews.len();
+
+    // 2. Separate lineages with the same cleaned title and subtitle are the same dish.
+    let mut by_key: HashMap<(String, String, &str), usize> = HashMap::new();
+    for (i, v) in vs.iter().enumerate() {
+        let sub = normalize_name(&clean_title(v.subtitle.as_deref().unwrap_or("")));
+        match by_key.entry((clean[i].clone(), sub, v.content_type.as_str())) {
+            std::collections::hash_map::Entry::Occupied(e) => stats.merged_by_title_key += uf.union(i, *e.get()) as usize,
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(i);
+            }
+        }
+    }
+
+    // 3. One dish per component; its default is the most complete, newest version.
+    let mut components: HashMap<usize, Vec<usize>> = HashMap::new();
+    for i in 0..vs.len() {
+        components.entry(uf.find(i)).or_default().push(i);
+    }
+    let mut slugs: HashSet<String> = sqlx::query_scalar::<_, String>("SELECT slug FROM dishes").fetch_all(&mut *tx).await?.into_iter().collect();
+    let (mut d_id, mut d_title, mut d_sub, mut d_slug, mut d_type, mut d_default) = (vec![], vec![], vec![], vec![], vec![], vec![]);
+    let (mut a_variant, mut a_dish) = (vec![], vec![]);
+    for members in components.values() {
+        let best = *members
+            .iter()
+            .max_by_key(|&&i| (vs[i].has_steps, vs[i].has_hero, vs[i].published))
+            .expect("components are never empty");
+        // The dish is named by its most common cleaned title (ties go to the most recent), not by whichever
+        // version happens to be the default: that one may be a protein swap or carry a word like "Organic".
+        let mut counts: HashMap<String, (usize, Option<chrono::DateTime<chrono::Utc>>)> = HashMap::new();
+        for &m in members {
+            let e = counts.entry(clean_title(&vs[m].title)).or_default();
+            e.0 += 1;
+            e.1 = e.1.max(vs[m].published);
+        }
+        let title = counts.into_iter().max_by_key(|(_, (n, latest))| (*n, *latest)).map(|(t, _)| t).unwrap_or_default();
+        let base = slugify(&title);
+        let mut slug = base.clone();
+        let mut n = 2;
+        while !slugs.insert(slug.clone()) {
+            slug = format!("{base}-{n}");
+            n += 1;
+        }
+        let id = Uuid::now_v7();
+        d_id.push(id);
+        d_title.push(title.clone());
+        // Subtitle: the most common one among versions that carry the chosen title, so the two read together.
+        let mut subs: HashMap<String, usize> = HashMap::new();
+        for &m in members.iter().filter(|&&m| clean_title(&vs[m].title) == title) {
+            *subs.entry(vs[m].subtitle.as_deref().map(clean_title).unwrap_or_default()).or_default() += 1;
+        }
+        d_sub.push(subs.into_iter().max_by_key(|(s, n)| (*n, s.clone())).map(|(s, _)| s).filter(|s| !s.is_empty()));
+        d_slug.push(slug);
+        d_type.push(vs[best].content_type.clone());
+        d_default.push(vs[best].id);
+        for &m in members {
+            a_variant.push(vs[m].id);
+            a_dish.push(id);
+        }
+    }
+    stats.dishes = d_id.len();
+
+    sqlx::query(
+        "INSERT INTO dishes (id, title, subtitle, slug, content_type, default_variant_id, origin)
+         SELECT id, t, s, sl, ct::content_type, dv, 'grouped'
+         FROM UNNEST($1::uuid[], $2::text[], $3::text[], $4::text[], $5::text[], $6::uuid[]) AS x(id, t, s, sl, ct, dv)",
+    )
+    .bind(&d_id)
+    .bind(&d_title)
+    .bind(&d_sub)
+    .bind(&d_slug)
+    .bind(&d_type)
+    .bind(&d_default)
+    .execute(&mut *tx)
+    .await
+    .context("inserting dishes")?;
+    sqlx::query("UPDATE variants v SET dish_id = x.d FROM UNNEST($1::uuid[], $2::uuid[]) AS x(v, d) WHERE v.id = x.v")
+        .bind(&a_variant)
+        .bind(&a_dish)
+        .execute(&mut *tx)
+        .await
+        .context("assigning variants")?;
+
+    let dish_of: HashMap<Uuid, Uuid> = a_variant.iter().copied().zip(a_dish.iter().copied()).collect();
+    for (v, p, sim, ov) in reviews {
+        let (dv, dp) = (dish_of[&v.id], dish_of[&p.id]);
+        if dv == dp {
+            continue; // joined some other way
+        }
+        sqlx::query("INSERT INTO review_items (id, kind, subject, proposal, confidence) VALUES ($1, 'dish_merge', $2, $3, $4)")
+            .bind(Uuid::now_v7())
+            .bind(json!({ "variant_id": v.id, "dish_id": dv, "title": clean_title(&v.title) }))
+            .bind(json!({ "merge_into_dish": dp, "copied_from_variant": p.id, "copied_from_title": clean_title(&p.title),
+                          "title_similarity": (sim * 100.0).round() / 100.0, "shipped_overlap": (ov * 100.0).round() / 100.0 }))
+            .bind(((sim + ov) / 2.0) as f32)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    tx.commit().await?;
+    Ok(stats)
+}
