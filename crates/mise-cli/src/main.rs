@@ -22,6 +22,12 @@ enum Command {
         /// Directory containing manifest.json and variants.ndjson.
         dir: std::path::PathBuf,
     },
+    /// Match ingredient lines to foods and propose the food tree.
+    MatchFoods {
+        /// First undo the previous matching run (keeps imported food knowledge).
+        #[arg(long)]
+        reset: bool,
+    },
 }
 
 #[tokio::main]
@@ -46,6 +52,20 @@ async fn main() -> anyhow::Result<()> {
             let started = std::time::Instant::now();
             let stats = mise_ingest::bundle::import_bundle(&pool, &dir).await?;
             tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "bundle imported");
+            let foods = dir.join("foods.ndjson");
+            if foods.exists() {
+                let added = mise_ingest::foods::import_food_knowledge(&pool, &foods).await?;
+                tracing::info!(added, "food knowledge imported");
+            }
+        }
+        Command::MatchFoods { reset } => {
+            let started = std::time::Instant::now();
+            if reset {
+                mise_ingest::foods::reset_matching(&pool).await?;
+                tracing::info!("previous matching undone");
+            }
+            let stats = mise_ingest::foods::match_foods(&pool).await?;
+            tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "foods matched");
         }
     }
     Ok(())
