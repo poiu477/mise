@@ -17,7 +17,7 @@
 //! some records start at 2, so the step's position is looked up rather than computed from the index. A
 //! record without raw steps falls back to reading the index as 1-based.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{Cursor, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -112,6 +112,31 @@ fn log_rate(done: u64, total: u64, started: Instant) -> (f64, u64) {
     ((rate * 10.0).round() / 10.0, eta)
 }
 
+/// Order `root`-relative file paths by modification time, read from directory listings (no file is opened).
+/// The archive was written in download order, so on a hard disk this turns scattered seeks into mostly
+/// sequential reads (path order is not download order). Files that cannot be listed go last.
+fn in_disk_order<T: Send>(root: &Path, items: Vec<T>, path_of: impl Fn(&T) -> &str + Sync, threads: &rayon::ThreadPool) -> Vec<T> {
+    let mut dirs: Vec<&str> = items.iter().map(|it| path_of(it).rsplit_once('/').map_or("", |(d, _)| d)).collect();
+    dirs.sort_unstable();
+    dirs.dedup();
+    let modified: HashMap<String, std::time::SystemTime> = threads.install(|| {
+        dirs.par_iter()
+            .flat_map_iter(|dir| {
+                let entries = std::fs::read_dir(root.join(dir)).into_iter().flatten().flatten();
+                entries.filter_map(move |e| {
+                    let time = e.metadata().ok()?.modified().ok()?;
+                    let name = e.file_name().into_string().ok()?;
+                    Some((if dir.is_empty() { name } else { format!("{dir}/{name}") }, time))
+                })
+            })
+            .collect()
+    });
+    let mut keyed: Vec<(Option<std::time::SystemTime>, T)> =
+        items.into_iter().map(|it| (modified.get(path_of(&it)).copied(), it)).collect();
+    keyed.sort_by_key(|(time, _)| (time.is_none(), *time));
+    keyed.into_iter().map(|(_, it)| it).collect()
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // Store
 
@@ -147,7 +172,7 @@ pub async fn store_and_link(pool: &PgPool, opts: &MediaOptions) -> Result<StoreS
     std::fs::create_dir_all(&opts.media_root)
         .with_context(|| format!("creating media root {}", opts.media_root.display()))?;
 
-    // Ordered by path so files of one recipe are read together.
+    // Ordered by path so a --limit trial run takes whole recipes; reading order is decided below.
     let referenced: Vec<String> = sqlx::query_scalar(REFERENCED_PATHS).fetch_all(pool).await?;
     let stored: HashSet<String> = sqlx::query_scalar("SELECT path FROM media_sources").fetch_all(pool).await?.into_iter().collect();
     stats.referenced = referenced.len() as u64;
@@ -159,6 +184,8 @@ pub async fn store_and_link(pool: &PgPool, opts: &MediaOptions) -> Result<StoreS
     tracing::info!(referenced = stats.referenced, already_stored = stats.already_stored, to_read = todo.len(), "storing originals");
 
     let pool_threads = thread_pool(opts.jobs)?;
+    let todo = in_disk_order(archive_root, todo, |p| p.as_str(), &pool_threads);
+    tracing::info!("ordered by modification time");
     let started = Instant::now();
     let total = todo.len() as u64;
     let mut processed = 0u64;
@@ -430,12 +457,11 @@ enum DerivativeOutcome {
 pub async fn make_derivatives(pool: &PgPool, opts: &MediaOptions) -> Result<DerivativeStats> {
     let mut stats = DerivativeStats::default();
     let sizes: Vec<i32> = WEB_SIZES.iter().map(|&s| s as i32).collect();
-    // Ordered by archive path, so reads walk the disk in the order the files were written.
     let mut todo: Vec<(Uuid, String, String)> = sqlx::query_as(
         "SELECT m.id, m.sha256, m.path FROM media m
          WHERE m.decode_error IS NULL AND m.mime LIKE 'image/%'
            AND (SELECT count(*) FROM media_derivatives d WHERE d.media_id = m.id AND d.max_side = ANY($1)) < cardinality($1)
-         ORDER BY (SELECT min(s.path) FROM media_sources s WHERE s.media_id = m.id)",
+         ORDER BY m.path",
     )
     .bind(&sizes)
     .fetch_all(pool)
@@ -448,6 +474,8 @@ pub async fn make_derivatives(pool: &PgPool, opts: &MediaOptions) -> Result<Deri
     tracing::info!(waiting, queued = stats.queued, sizes = ?WEB_SIZES, jobs = opts.jobs, "making web copies");
 
     let threads = thread_pool(opts.jobs)?;
+    // Originals are hard links to the archive files, so they share their modification times and disk layout.
+    let todo = in_disk_order(&opts.media_root, todo, |m| m.2.as_str(), &threads);
     let started = Instant::now();
     let mut next_log = LOG_EVERY;
     for chunk in todo.chunks(DERIVATIVE_BATCH) {
