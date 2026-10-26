@@ -1,0 +1,5 @@
+/target
+.env
+*.log
+# Seed bundles are generated locally from private sources and never committed.
+/seed/

@@ -1,0 +1,21 @@
+[package]
+name = "mise-ingest"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+chrono = { version = "0.4.45", features = ["serde"] }
+hex = "0.4.3"
+mise-core = { version = "0.1.0", path = "../mise-core" }
+mise-db = { version = "0.1.0", path = "../mise-db" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+sqlx = { version = "0.9.0", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json"] }
+strsim = "0.11.1"
+tracing = "0.1.44"
+unicode-normalization = "0.1.26"
+uuid = { version = "1.29.0", features = ["v7"] }

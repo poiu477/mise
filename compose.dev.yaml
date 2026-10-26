@@ -1,0 +1,38 @@
+# Development services. Run: docker compose -f compose.dev.yaml up -d db
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: mise
+      POSTGRES_PASSWORD: mise
+      POSTGRES_DB: mise
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mise -d mise"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Linux build environment matching the production LXC: docker compose -f compose.dev.yaml run --rm rust cargo build
+  rust:
+    image: rust:1
+    working_dir: /src
+    environment:
+      DATABASE_URL: postgres://mise:mise@db:5432/mise
+      CARGO_TARGET_DIR: /target
+    volumes:
+      - .:/src
+      - cargo-registry:/usr/local/cargo/registry
+      - rust-target:/target
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["tools"]
+
+volumes:
+  pgdata:
+  cargo-registry:
+  rust-target:
