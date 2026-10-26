@@ -3,3 +3,5 @@
 *.log
 # Seed bundles are generated locally from private sources and never committed.
 /seed/
+# Gate and other reports contain personal data (decisions, titles from private sources).
+/reports/

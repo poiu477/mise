@@ -1,6 +1,7 @@
 //! `mise` command-line tool: database setup and data-core jobs.
 
 mod food;
+mod gate;
 
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
@@ -37,6 +38,18 @@ enum Command {
     /// Inspect and curate foods, brands and the food tree.
     #[command(subcommand)]
     Food(food::FoodCommand),
+    /// Write the phase 1 gate report: a stratified sample of dishes to check grouping by hand (read-only).
+    GateReport {
+        /// Number of dishes to sample.
+        #[arg(long, default_value_t = 500)]
+        sample: usize,
+        /// HTML file to write.
+        #[arg(long, default_value = "reports/gate-500.html")]
+        out: std::path::PathBuf,
+        /// Seed for the sample: the same seed on the same data picks the same dishes.
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
+    },
 }
 
 #[tokio::main]
@@ -87,6 +100,14 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "options derived");
         }
         Command::Food(cmd) => food::run(&pool, cmd).await?,
+        Command::GateReport { sample, out, seed } => {
+            let report = gate::write_report(&pool, sample, seed, &out).await?;
+            let bytes = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
+            for s in &report.strata {
+                tracing::info!(stratum = s.key, in_data = s.population, sampled = s.sampled, "stratum");
+            }
+            tracing::info!(dishes = report.cards.len(), seed, kib = bytes / 1024, out = %out.display(), "gate report written");
+        }
     }
     Ok(())
 }
