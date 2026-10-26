@@ -9,13 +9,16 @@ license.workspace = true
 anyhow = "1.0.104"
 chrono = { version = "0.4.45", features = ["serde"] }
 hex = "0.4.3"
+image = { version = "0.25.8", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 mise-core = { version = "0.1.0", path = "../mise-core" }
 mise-db = { version = "0.1.0", path = "../mise-db" }
+rayon = "1.12.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
 sha2 = "0.11.1"
 sqlx.workspace = true
 strsim = "0.11.1"
+tokio = { version = "1.54.1", features = ["rt"] }
 tracing = "0.1.44"
 unicode-normalization = "0.1.26"
 uuid.workspace = true

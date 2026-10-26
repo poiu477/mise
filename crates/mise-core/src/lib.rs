@@ -2,5 +2,6 @@
 
 pub mod dish_titles;
 pub mod food_names;
+pub mod media;
 pub mod proteins;
 pub mod text;
