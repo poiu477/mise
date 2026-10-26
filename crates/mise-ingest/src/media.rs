@@ -638,3 +638,27 @@ async fn write_derivatives(pool: &PgPool, outcomes: Vec<DerivativeOutcome>, stat
     tx.commit().await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn orders_by_modification_time_with_unlisted_last() {
+        let root = std::env::temp_dir().join(format!("mise-media-order-{}", Uuid::now_v7()));
+        std::fs::create_dir_all(root.join("a/images")).unwrap();
+        std::fs::create_dir_all(root.join("b/images")).unwrap();
+        let base = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        for (path, offset) in [("a/images/hero.jpg", 30), ("b/images/hero.jpg", 10), ("b/images/step-01-1.jpg", 20)] {
+            let file = std::fs::File::create(root.join(path)).unwrap();
+            file.set_modified(base + Duration::from_secs(offset)).unwrap();
+        }
+        let threads = thread_pool(2).unwrap();
+        let paths: Vec<String> =
+            ["a/images/hero.jpg", "missing/x.jpg", "b/images/step-01-1.jpg", "b/images/hero.jpg"].map(String::from).into();
+        let ordered = in_disk_order(&root, paths, |p| p.as_str(), &threads);
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(ordered, ["b/images/hero.jpg", "b/images/step-01-1.jpg", "a/images/hero.jpg", "missing/x.jpg"]);
+    }
+}
