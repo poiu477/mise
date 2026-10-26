@@ -32,6 +32,8 @@ enum Command {
     },
     /// Group variants into dishes (re-runnable; leaves dishes and placements made by a person alone).
     GroupDishes,
+    /// Derive each dish's options (protein, portion, version) from its variants. Re-runnable.
+    DeriveOptions,
     /// Inspect and curate foods, brands and the food tree.
     #[command(subcommand)]
     Food(food::FoodCommand),
@@ -78,6 +80,11 @@ async fn main() -> anyhow::Result<()> {
             let started = std::time::Instant::now();
             let stats = mise_ingest::dishes::group_dishes(&pool).await?;
             tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "dishes grouped");
+        }
+        Command::DeriveOptions => {
+            let started = std::time::Instant::now();
+            let stats = mise_ingest::options::derive_options(&pool).await?;
+            tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "options derived");
         }
         Command::Food(cmd) => food::run(&pool, cmd).await?,
     }
