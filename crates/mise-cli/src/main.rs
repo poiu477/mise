@@ -35,10 +35,14 @@ enum Command {
     GroupDishes,
     /// Derive each dish's options (protein, portion, version) from its variants. Re-runnable.
     DeriveOptions,
-    /// Delete imported variants of one content type, e.g. ready meals. Re-run group-dishes and derive-options after.
+    /// Delete imported variants: one content type (e.g. ready meals), or whatever a re-exported bundle no longer
+    /// contains. Re-run group-dishes and derive-options after.
     Prune {
-        #[arg(long, value_parser = ["ready_meal", "product", "add_on"])]
-        content_type: String,
+        #[arg(long, value_parser = ["ready_meal", "product", "add_on"], required_unless_present = "missing_from", conflicts_with = "missing_from")]
+        content_type: Option<String>,
+        /// Seed bundle directory: remove this source's variants that are not in it.
+        #[arg(long)]
+        missing_from: Option<std::path::PathBuf>,
     },
     /// Inspect and curate foods, brands and the food tree.
     #[command(subcommand)]
@@ -104,9 +108,13 @@ async fn main() -> anyhow::Result<()> {
             let stats = mise_ingest::options::derive_options(&pool).await?;
             tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "options derived");
         }
-        Command::Prune { content_type } => {
-            let stats = mise_ingest::prune::prune_content_type(&pool, &content_type).await?;
-            tracing::info!(?stats, content_type, "pruned");
+        Command::Prune { content_type, missing_from } => {
+            let stats = match (content_type, missing_from) {
+                (Some(ct), _) => mise_ingest::prune::prune_content_type(&pool, &ct).await?,
+                (None, Some(dir)) => mise_ingest::prune::prune_missing_from(&pool, &dir).await?,
+                (None, None) => unreachable!("clap requires one of them"),
+            };
+            tracing::info!(?stats, "pruned");
         }
         Command::Food(cmd) => food::run(&pool, cmd).await?,
         Command::GateReport { sample, out, seed } => {

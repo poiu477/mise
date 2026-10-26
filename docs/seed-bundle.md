@@ -37,7 +37,7 @@ One JSON object per line. Every field except `external_id`, `title` and `ingredi
 | `url` | string | Where the recipe lives, if anywhere |
 | `parent_external_id` | string | The record this one was copied from (lineage), if the source tracks it |
 | `title`, `subtitle`, `description` | string | Description in Markdown |
-| `content_type` | `recipe` \| `ready_meal` \| `add_on` \| `product` | Defaults to `recipe`. Imported variants of a type can be removed later with `mise prune --content-type <type>` |
+| `content_type` | `recipe` \| `ready_meal` \| `add_on` \| `product` | Defaults to `recipe`. Imported variants of a type can be removed later with `mise prune --content-type <type>`; after a converter starts leaving records out, `mise prune --missing-from <bundle>` removes them |
 | `published_at`, `updated_at` | RFC 3339 | |
 | `meta` | object | Free-form: `cuisines`, `tags`, `difficulty`, `prep_time`, `total_time` (ISO 8601 durations), `nutrition` |
 | `yields` | number[] | Serving counts the source publishes amounts for |
