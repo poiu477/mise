@@ -1,0 +1,32 @@
+[package]
+name = "mise-api"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+axum = "0.8.9"
+chrono = { version = "0.4.45", features = ["serde"] }
+dotenvy = "0.15.7"
+mise-core = { version = "0.1.0", path = "../mise-core" }
+mise-db = { version = "0.1.0", path = "../mise-db" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["full"] }
+tower-http = { version = "0.7.1", features = ["fs", "cors", "trace", "compression-gzip", "set-header"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+utoipa = { version = "5.5.0", features = ["axum_extras", "uuid", "chrono"] }
+uuid.workspace = true
+
+[[bin]]
+name = "mise-server"
+path = "src/main.rs"
+
+[dev-dependencies]
+http-body-util = "0.1.5"
+tower = { version = "0.5.3", features = ["util"] }
