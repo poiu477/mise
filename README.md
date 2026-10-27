@@ -5,6 +5,11 @@ shopping list. Recipes come from seed bundles, websites, files, or your own kitc
 
 Status: phase 1 (data core) done; phase 2 (browse and cook) in progress. See the design document for the full plan.
 
+## Running it
+
+On a home server: `cp deploy.env.example .env`, set `POSTGRES_PASSWORD`, then `docker compose up -d --build`.
+See [docs/deploy.md](docs/deploy.md).
+
 ## Development
 
 Requirements: Rust (stable), Node 20+, Docker.
@@ -45,3 +50,5 @@ docker compose -f compose.dev.yaml run --rm rust cargo test
 | `migrations/` | Postgres schema |
 | `docs/seed-bundle.md` | The bulk-import format |
 | `docs/sign-in.md` | Accounts, households, single sign-on, API tokens |
+| `docs/deploy.md` | Running mise with Docker Compose (e.g. in a Proxmox LXC) |
+| `compose.yaml`, `Dockerfile` | The production stack; settings in `deploy.env.example` |

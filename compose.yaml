@@ -1,0 +1,79 @@
+# mise for a home server (e.g. a Docker-enabled Proxmox LXC). Settings come from .env next to this file; start
+# from deploy.env.example. See docs/deploy.md.
+name: mise
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mise
+      POSTGRES_DB: mise
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mise -d mise"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    image: mise:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # The media folder must be writable by this user (default uid 10001; see docs/deploy.md).
+    user: "${MISE_UID:-10001}:${MISE_GID:-10001}"
+    environment:
+      DATABASE_URL: postgres://mise:${POSTGRES_PASSWORD}@db:5432/mise
+      AUTH_MODES: ${AUTH_MODES:-local}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      SESSION_DAYS: ${SESSION_DAYS:-30}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_NAME: ${OIDC_NAME:-}
+      OIDC_SCOPES: ${OIDC_SCOPES:-}
+      OIDC_ADMIN_GROUP: ${OIDC_ADMIN_GROUP:-}
+      OIDC_HOUSEHOLD: ${OIDC_HOUSEHOLD:-}
+      RUST_LOG: ${RUST_LOG:-info,sqlx=error,tower_http=warn}
+    ports:
+      # Home network by default; bind to 127.0.0.1 instead when only a reverse proxy should reach it.
+      - "${MISE_LISTEN:-0.0.0.0}:${MISE_PORT:-8080}:8080"
+    volumes:
+      # Photos: the LXC's own disk by default; point MEDIA_DIR at another disk or an NFS/SMB mount.
+      - ${MEDIA_DIR:-./data/media}:/data/media
+      # A recipe archive to import photos from, read-only (optional).
+      - ${ARCHIVE_DIR:-./data/archive}:/archive:ro
+
+  # Nightly database dump into BACKUP_DIR, keeping BACKUP_DAYS days. Media is not included: it is rebuildable
+  # from the archive, or back up MEDIA_DIR with the rest of the host.
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_DAYS: ${BACKUP_DAYS:-14}
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          now=$$(date +%s); next=$$(date -d "today $${BACKUP_HOUR}:00" +%s)
+          [ "$$next" -le "$$now" ] && next=$$(date -d "tomorrow $${BACKUP_HOUR}:00" +%s)
+          sleep $$((next - now))
+          f=/backups/mise-$$(date +%F).dump
+          pg_dump -h db -U mise -d mise --format=custom --file="$$f.part" && mv "$$f.part" "$$f" && echo "backup: $$f"
+          find /backups -name 'mise-*.dump' -mtime +$${BACKUP_DAYS} -delete
+        done
+
+volumes:
+  pgdata:

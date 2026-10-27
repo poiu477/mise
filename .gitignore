@@ -12,3 +12,6 @@
 /web/dist/
 /web/openapi.json
 /web/*.tsbuildinfo
+# Production stack data and backups (compose.yaml defaults)
+/data/
+/backups/
