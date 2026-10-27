@@ -331,9 +331,13 @@ pub fn parse_number(s: &str) -> Option<(f64, usize)> {
     Some((value, i))
 }
 
-/// "/4" or "⁄4" (fraction slash) → (4, bytes used).
+/// "/4", "⁄4" (fraction slash) or "∕4" (division slash, in some extracted text) → (4, bytes used).
 fn fraction_tail(s: &str) -> Option<(f64, usize)> {
-    let sep = if s.starts_with('/') { 1 } else if s.starts_with('⁄') { '⁄'.len_utf8() } else { return None };
+    let sep = match s.chars().next()? {
+        '/' => 1,
+        c @ ('⁄' | '∕') => c.len_utf8(),
+        _ => return None,
+    };
     let rest = &s[sep..];
     let n = rest.bytes().take_while(u8::is_ascii_digit).count();
     if n == 0 {
@@ -384,6 +388,7 @@ mod tests {
         assert_eq!(parse_number("31⁄4 cups").map(|x| x.0), Some(3.25));
         assert_eq!(parse_number("12⁄3 cups").map(|x| x.0), Some(1.0 + 2.0 / 3.0));
         assert_eq!(parse_number("1⁄2 tsp").map(|x| x.0), Some(0.5));
+        assert_eq!(parse_number("1∕3 cup").map(|x| x.0), Some(1.0 / 3.0));
     }
 
     #[test]

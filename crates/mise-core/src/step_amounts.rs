@@ -54,7 +54,7 @@ impl Template {
     }
 }
 
-const NUM: &str = r"(?:\d+(?:\.\d+)?\s+\d+\s*[⁄/]\s*\d+|\d+\s?[½⅓⅔¼¾⅛⅜⅝⅞]|\d+\s*[⁄/]\s*\d+|\d+(?:\.\d+)?|[½⅓⅔¼¾⅛⅜⅝⅞])";
+const NUM: &str = r"(?:\d+(?:\.\d+)?\s+\d+\s*[⁄/∕]\s*\d+|\d+\s?[½⅓⅔¼¾⅛⅜⅝⅞]|\d+\s*[⁄/∕]\s*\d+|\d+(?:\.\d+)?|[½⅓⅔¼¾⅛⅜⅝⅞])";
 const UNIT: &str = r"(?i:tbsps?|tablespoons?|tsps?|teaspoons?|cups?|fl\.? oz|oz|ounces?|lbs?|pounds?|grams?|g|ml|milliliters?|cloves?|pinch(?:es)?)";
 
 static QTY: LazyLock<Regex> = LazyLock::new(|| Regex::new(&format!(r"({NUM})\s*({UNIT})\b")).unwrap());
@@ -89,7 +89,7 @@ fn quantities(text: &str, offset: usize) -> Vec<Found> {
             let m = c.get(0).unwrap();
             // Not part of a range or a size ("2-3 TBSP" stays as written; "1-inch" never matches a unit).
             let before = text[..m.start()].chars().next_back();
-            if before.is_some_and(|ch| ch == '-' || ch == '–' || ch.is_alphanumeric() || ch == '⁄' || ch == '/') {
+            if before.is_some_and(|ch| ch == '-' || ch == '–' || ch.is_alphanumeric() || ch == '⁄' || ch == '/' || ch == '∕') {
                 return None;
             }
             let (amount, _) = parse_number(c.get(1).unwrap().as_str().trim())?;
@@ -571,6 +571,14 @@ used 2 tsp kosher salt) and pepper.");
         assert_eq!(at(4.0), "Add remaining Tuscan Heat Spice, 2 tsp sugar, and water.");
         assert_eq!(at(5.0), "Add remaining Tuscan Heat Spice, 2½ tsp sugar, and water.");
         assert_eq!(at(6.0), "Add remaining Tuscan Heat Spice, 1 TBSP sugar, and water.");
+    }
+
+    #[test]
+    fn division_slash_fractions() {
+        let t = parse("Stir in stock concentrate and 1∕3 cup water (2⁄3 cup for 4 servings).", &lines());
+        let c = ctx(2.0, &none);
+        assert_eq!(render(&t, 2.0, &c).text, "Stir in stock concentrate and ⅓ cup water.");
+        assert_eq!(render(&t, 4.0, &c).text, "Stir in stock concentrate and ⅔ cup water.");
     }
 
     #[test]

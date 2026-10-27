@@ -50,5 +50,6 @@ docker compose -f compose.dev.yaml run --rm rust cargo test
 | `migrations/` | Postgres schema |
 | `docs/seed-bundle.md` | The bulk-import format |
 | `docs/sign-in.md` | Accounts, households, single sign-on, API tokens |
+| `docs/scaling-rules.md` | How recipes scale: established rules, exceptions, the archive's evidence |
 | `docs/deploy.md` | Running mise with Docker Compose (e.g. in a Proxmox LXC) |
 | `compose.yaml`, `Dockerfile` | The production stack; settings in `deploy.env.example` |
