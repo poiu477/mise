@@ -35,13 +35,23 @@ pub async fn parse_steps(pool: &PgPool) -> Result<ParseStats> {
     for (v, key, name) in rows {
         lines.entry(v).or_default().push((key, name));
     }
-    let steps: Vec<(Uuid, Uuid, String)> =
-        sqlx::query_as("SELECT id, variant_id, text FROM steps").fetch_all(pool).await.context("loading steps")?;
+    let steps: Vec<(Uuid, Uuid, String, String)> =
+        sqlx::query_as("SELECT s.id, s.variant_id, s.text, v.title FROM steps s JOIN variants v ON v.id = s.variant_id")
+            .fetch_all(pool)
+            .await
+            .context("loading steps")?;
 
     let empty = Vec::new();
     let parsed: Vec<(Uuid, step_amounts::Template)> = steps
         .par_iter()
-        .map(|(id, v, text)| (*id, step_amounts::parse(text, lines.get(v).unwrap_or(&empty))))
+        .map(|(id, v, text, title)| {
+            let mut t = step_amounts::parse(text, lines.get(v).unwrap_or(&empty));
+            // A soup's or a rice dish's water is the dish, whatever the step says.
+            if step_amounts::not_a_pan_sauce(title) {
+                t.drop_boil_off();
+            }
+            (*id, t)
+        })
         .collect();
 
     let mut stats = ParseStats { steps: parsed.len(), ..Default::default() };

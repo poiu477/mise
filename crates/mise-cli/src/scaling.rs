@@ -17,7 +17,7 @@ use std::path::Path;
 use anyhow::{Context as _, Result};
 use mise_core::quantity::{Quantity, Unit};
 use mise_core::servings;
-use mise_core::step_amounts::{Context, Method, Part, Template, amount_at, text_base};
+use mise_core::step_amounts::{Context, Method, Part, Template, amount_at, pan_note, pans_needed, text_base};
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -57,6 +57,7 @@ fn method_name(m: Method) -> &'static str {
         Method::FromLine => "from the ingredient's official amounts",
         Method::Interpolated => "interpolated",
         Method::Proportional => "in proportion to servings",
+        Method::BoilOff => "cooking water, part boiled off",
         Method::Unchanged => "unchanged",
     }
 }
@@ -204,7 +205,7 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path) -
         let ctx = Context { base, scale_plain: false, line_amount: &no_lines };
         for s in ss {
             for p in &s.template.parts {
-                let Part::Amount { base: b, alts, line: Some(line) } = p else { continue };
+                let Part::Amount { base: b, alts, line: Some(line), .. } = p else { continue };
                 let Some(list) = amounts.get(&(*v, line.clone())) else { continue };
                 let official = |t: f64| {
                     list.iter()
@@ -302,6 +303,9 @@ fn render_html(t: &Template, target: f64, ctx: &Context) -> String {
                 }
             }
         }
+    }
+    if let Some(n) = pans_needed(t, target, ctx) {
+        let _ = write!(h, "<span class=\"note check\">{}</span>", esc(&pan_note(target, n)));
     }
     h
 }

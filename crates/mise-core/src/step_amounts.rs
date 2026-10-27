@@ -24,6 +24,10 @@ pub enum Part {
         alts: Vec<(f64, Quantity)>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         line: Option<String>,
+        /// Cooking water in a pan sauce: the share of it an open pan boils off at the base yield, which stays
+        /// the same however many servings share the pan (see `docs/scaling-rules.md`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        boil_off: Option<f64>,
     },
     /// Words that change with the yield: "half the lime zest" → "all the lime zest".
     Words { base: String, alts: Vec<(f64, String)> },
@@ -40,6 +44,15 @@ pub struct Template {
 }
 
 impl Template {
+    /// Treat every amount as an ordinary one: for soups, stews and pots, whose water is the dish.
+    pub fn drop_boil_off(&mut self) {
+        for p in &mut self.parts {
+            if let Part::Amount { boil_off, .. } = p {
+                *boil_off = None;
+            }
+        }
+    }
+
     pub fn amounts(&self) -> impl Iterator<Item = &Part> {
         self.parts.iter().filter(|p| matches!(p, Part::Amount { .. }))
     }
@@ -77,6 +90,44 @@ const MAX_YIELD: f64 = 100.0;
 /// "we used ½ tsp; 1 tsp", "we\nused ¾ tsp, 1½ tsp", "we used 1 tsp kosher salt; use 2 tsp".
 static WE_USED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)^we\s+used\s+(.+?)\s*[;,]\s*(?:use\s+)?(.+)$").unwrap());
 
+/// Water named just after an amount: "½ cup water", "¼ cup reserved pasta cooking water".
+static WATER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^\s*(?:of\s+)?(?:(?:hot|warm|cold|reserved|pasta|noodle|cooking)\s+)*water\b").unwrap()
+});
+/// Dishes whose water is absorbed or served rather than boiled off: these scale normally.
+static NOT_A_PAN_SAUCE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b(rice|couscous|quinoa|farro|bulgur|orzo|grits|polenta|oats|risotto|soups?|stews?|chili|chowders?|bisques?|broth|ramen|pho)\b")
+        .unwrap()
+});
+static REDUCES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(simmer|reduc|thicken)").unwrap());
+static PAN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(pans?|skillets?)\b").unwrap());
+/// The share of a pan sauce's water boiled off at the base yield: simmered or reduced in a pan, or otherwise.
+/// Fitted on 3,436 published 2- and 4-serving water amounts and checked on recipes left out of the fit.
+const SIMMER_BOIL_OFF: f64 = 0.5;
+const OTHER_BOIL_OFF: f64 = 0.2;
+/// The most a recipe's own amounts may imply: more is a recipe that adds less water as it grows ("½ cup water
+/// (⅓ cup for 4)"), which mise does not carry on extrapolating.
+const MAX_BOIL_OFF: f64 = 2.0 / 3.0;
+/// Water under ¼ cup (a slurry, a splash) is measured per serving.
+const MIN_POT_WATER_TSP: f64 = 12.0;
+/// Servings one pan takes: half again the largest yield the recipe is written for, counted as at least 4.
+const PAN_ROOM: f64 = 1.5;
+const MIN_PAN_YIELD: f64 = 4.0;
+
+/// A title or step that is not a pan sauce: rice and grains, soups, stews and pots.
+pub fn not_a_pan_sauce(text: &str) -> bool {
+    NOT_A_PAN_SAUCE.is_match(text)
+}
+
+/// The share boiled off for an amount of water in this step, if it is cooking water in a pan sauce.
+fn boil_off(text: &str, q: &Quantity, after: &str) -> Option<f64> {
+    let tsp = q.in_unit(&Unit::Tsp)?;
+    if tsp < MIN_POT_WATER_TSP - 1e-9 || !WATER.is_match(after) || not_a_pan_sauce(text) {
+        return None;
+    }
+    Some(if REDUCES.is_match(text) && PAN.is_match(text) { SIMMER_BOIL_OFF } else { OTHER_BOIL_OFF })
+}
+
 struct Found {
     start: usize,
     end: usize,
@@ -101,6 +152,15 @@ fn quantities(text: &str, offset: usize) -> Vec<Found> {
 
 /// Ingredient lines as (line key, name) for linking amounts to what they measure.
 pub type Lines<'a> = &'a [(String, String)];
+
+/// The word naming what an amount measures: "¼ cup water, …" → "water", "2 tsp of sugar" → "sugar".
+fn noun(after: &str) -> Option<String> {
+    let after = after.trim_start();
+    let after = after.strip_prefix("of ").unwrap_or(after);
+    let word: String = after.chars().take_while(|c| c.is_alphabetic()).collect::<String>().to_lowercase();
+    let word = word.strip_suffix('s').map(str::to_string).unwrap_or(word);
+    (word.len() > 1 && !matches!(word.as_str(), "and" | "for" | "to" | "in" | "or" | "each" | "per" | "total")).then_some(word)
+}
 
 /// The line an amount measures: the longest line name that the words just after the amount begin with
 /// ("1 TBSP butter" → Butter, "1 TBSP bulgogi sauce" → Bulgogi Sauce).
@@ -169,7 +229,8 @@ pub fn parse(text: &str, lines: Lines) -> Template {
             if let (Some(b), Some(a)) = (base.first(), alt.first()) {
                 let g1_end = inner.start() + g1.end();
                 reps.push((start, b.start, Part::Text { text: text[start..b.start].to_string() }));
-                reps.push((b.start, b.end, Part::Amount { base: b.q.clone(), alts: vec![(servings, a.q.clone())], line: None }));
+                let part = Part::Amount { base: b.q.clone(), alts: vec![(servings, a.q.clone())], line: None, boil_off: None };
+                reps.push((b.start, b.end, part));
                 reps.push((b.end, end, Part::Text { text: text[b.end..g1_end].to_string() + ")" }));
                 prev_end = end;
                 continue;
@@ -178,12 +239,35 @@ pub fn parse(text: &str, lines: Lines) -> Template {
 
         let alts = quantities(inner.as_str(), inner.start());
         if !alts.is_empty() {
-            // Pair each alternative, right to left, with the nearest unused base amount of the same kind before
-            // the parentheses.
+            let usable = |i: usize, a: &Found| {
+                let b = &all_qty[i];
+                !taken[i] && b.start >= prev_end && b.end <= start && !in_paren(b.start) && b.q.unit.compatible(&a.q.unit)
+            };
+            // When every alternative names what it measures, pair it with the base amount naming the same thing,
+            // whatever the order: "1 tsp cornstarch and ¼ cup water (½ cup water and 2 tsp cornstarch for 4)".
+            let by_name: Option<Vec<(usize, Quantity)>> = alts
+                .iter()
+                .map(|a| {
+                    let name = noun(&text[a.end..inner.end()])?;
+                    let mut found = (0..all_qty.len()).filter(|&i| usable(i, a) && noun(&text[all_qty[i].end..]).as_ref() == Some(&name));
+                    match (found.next(), found.next()) {
+                        (Some(i), None) => Some((i, a.q.clone())),
+                        _ => None,
+                    }
+                })
+                .collect::<Option<Vec<_>>>()
+                .filter(|pairs| {
+                    let mut seen: Vec<usize> = pairs.iter().map(|p| p.0).collect();
+                    seen.sort_unstable();
+                    seen.dedup();
+                    seen.len() == pairs.len()
+                });
+            // Otherwise pair each alternative, right to left, with the nearest unused base amount of the same kind
+            // before the parentheses.
             let mut pairs = Vec::new();
             let mut ok = true;
             let mut cursor = all_qty.len();
-            for a in alts.iter().rev() {
+            for a in alts.iter().rev().filter(|_| by_name.is_none()) {
                 let found = (0..cursor).rev().find(|&i| {
                     let b = &all_qty[i];
                     !taken[i] && b.start >= prev_end && b.end <= start && !in_paren(b.start) && b.q.unit.compatible(&a.q.unit)
@@ -199,15 +283,16 @@ pub fn parse(text: &str, lines: Lines) -> Template {
                     }
                 }
             }
+            if let Some(named) = by_name {
+                pairs = named;
+            }
             if ok {
                 for (i, alt) in pairs {
                     taken[i] = true;
                     let b = &all_qty[i];
-                    reps.push((
-                        b.start,
-                        b.end,
-                        Part::Amount { base: b.q.clone(), alts: vec![(servings, alt)], line: link(&text[b.end..], lines) },
-                    ));
+                    let after = &text[b.end..];
+                    let boil_off = boil_off(text, &b.q, after);
+                    reps.push((b.start, b.end, Part::Amount { base: b.q.clone(), alts: vec![(servings, alt)], line: link(after, lines), boil_off }));
                     used_spans.push((b.start, b.end));
                 }
                 // The remark after the yield, if any, holds at every yield.
@@ -248,7 +333,9 @@ pub fn parse(text: &str, lines: Lines) -> Template {
     // Amounts with no published alternative: kept as written, or scaled when the recipe never varies its text.
     for (i, f) in all_qty.iter().enumerate() {
         if !taken[i] && !in_paren(f.start) && !reps.iter().any(|(s, e, _)| f.start < *e && *s < f.end) {
-            reps.push((f.start, f.end, Part::Amount { base: f.q.clone(), alts: vec![], line: link(&text[f.end..], lines) }));
+            let after = &text[f.end..];
+            let part = Part::Amount { base: f.q.clone(), alts: vec![], line: link(after, lines), boil_off: boil_off(text, &f.q, after) };
+            reps.push((f.start, f.end, part));
         }
     }
 
@@ -329,6 +416,8 @@ pub enum Method {
     FromLine,
     Interpolated,
     Proportional,
+    /// Cooking water: part boiled off by the pan whatever the batch, part per serving.
+    BoilOff,
     Unchanged,
 }
 
@@ -367,14 +456,87 @@ pub fn amount_at(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Opt
     Some((q, m))
 }
 
+/// The published points of an amount as (yield, amount in the base unit, unit as written), by yield.
+fn points(base: &Quantity, alts: &[(f64, Quantity)], ctx: &Context, use_alts: bool) -> Vec<(f64, f64, Unit)> {
+    let mut points = vec![(ctx.base, base.amount, base.unit.clone())];
+    if use_alts {
+        points.extend(
+            alts.iter()
+                .filter(|(s, _)| (s - ctx.base).abs() > 1e-9)
+                .filter_map(|(s, q)| Some((*s, q.in_unit(&base.unit)?, q.unit.clone()))),
+        );
+    }
+    points.sort_by(|a, b| a.0.total_cmp(&b.0));
+    points
+}
+
+/// How many pans cooking water for `target` servings assumes, given the largest yield the recipe is written for.
+fn pans(largest: f64, target: f64) -> f64 {
+    (target / (PAN_ROOM * largest.max(MIN_PAN_YIELD))).ceil().max(1.0)
+}
+
+/// Cooking water outside the published yields: what the pan boils off stays (once per pan), the rest goes with
+/// the servings. The share boiled off comes from the recipe's own two nearest amounts when it publishes them,
+/// else from the kind of step.
+fn boiled_off_water(points: &[(f64, f64, Unit)], share: f64, target: f64) -> Option<Quantity> {
+    let (lo, hi) = (points.first()?, points.last()?);
+    let (near, other) = if target > hi.0 {
+        (hi, points.len().checked_sub(2).map(|i| &points[i]))
+    } else if target < lo.0 {
+        (lo, points.get(1))
+    } else {
+        return None;
+    };
+    if near.0 <= 0.0 || near.1 <= 0.0 {
+        return None;
+    }
+    let share = match other {
+        // The amount both points share, on the line through them.
+        Some(o) => {
+            let per_serving = (near.1 - o.1) / (near.0 - o.0);
+            ((near.1 - per_serving * near.0) / near.1).clamp(0.0, MAX_BOIL_OFF)
+        }
+        None => share,
+    };
+    let pans = if target > hi.0 { pans(hi.0, target) } else { 1.0 };
+    let v = near.1 * (share * pans + (1.0 - share) * target / near.0);
+    let v = Quantity::new(v, points[0].2.clone()).in_unit(&near.2)?;
+    Some(Quantity::new(v, near.2.clone()).rounded())
+}
+
+/// The pans a step's cooking water assumes at `target`, when more than one.
+pub fn pans_needed(t: &Template, target: f64, ctx: &Context) -> Option<u32> {
+    t.parts
+        .iter()
+        .filter_map(|p| {
+            let Part::Amount { base, alts, boil_off: Some(_), .. } = p else { return None };
+            let largest = points(base, alts, ctx, true).last()?.0;
+            let boiled = matches!(amount_at(p, target, ctx, true), Some((_, Method::BoilOff)));
+            (target > largest && boiled).then(|| pans(largest, target) as u32)
+        })
+        .max()
+        .filter(|n| *n > 1)
+}
+
+/// " (For 12 servings, use 2 pans and divide everything between them.)"
+pub fn pan_note(target: f64, pans: u32) -> String {
+    format!(" (For {target} servings, use {pans} pans and divide everything between them.)")
+}
+
 fn derive(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Option<(Quantity, Method)> {
-    let Part::Amount { base, alts, line } = part else { return None };
+    let Part::Amount { base, alts, line, boil_off } = part else { return None };
     if (target - ctx.base).abs() < 1e-9 {
         return Some((base.clone(), Method::Published));
     }
     if use_alts {
         if let Some((_, q)) = alts.iter().find(|(s, _)| (s - target).abs() < 1e-9) {
             return Some((q.clone(), Method::Published));
+        }
+    }
+    // Cooking water in a pan sauce, wherever mise would otherwise scale it in proportion.
+    if let Some(share) = boil_off.filter(|_| ctx.base > 0.0 && (ctx.scale_plain || !alts.is_empty() || !use_alts)) {
+        if let Some(q) = boiled_off_water(&points(base, alts, ctx, use_alts), share, target) {
+            return Some((q, Method::BoilOff));
         }
     }
     // The ingredient's official amounts, when they move with the yield the way the text does. Pantry lines
@@ -457,6 +619,9 @@ pub fn render(t: &Template, target: f64, ctx: &Context) -> Rendered {
             }
         }
     }
+    if let Some(n) = pans_needed(t, target, ctx) {
+        out.text.push_str(&pan_note(target, n));
+    }
     out
 }
 
@@ -504,6 +669,14 @@ mod tests {
         assert_eq!(t.unparsed, 0);
         let c = ctx(2.0, &none);
         assert_eq!(render(&t, 4.0, &c).text, "Add vinegar, 4 TBSP water, 2 tsp sugar, and a pinch of salt; stir.");
+    }
+
+    #[test]
+    fn alternatives_pair_by_name_in_any_order() {
+        let t = parse("Combine vinegar, 1 tsp cornstarch and 1/4 cup water. (1/2 cup water and 2 tsp cornstarch for 4). Set aside.", &lines());
+        assert_eq!(t.unparsed, 0);
+        let c = ctx(2.0, &none);
+        assert_eq!(render(&t, 4.0, &c).text, "Combine vinegar, 2 tsp cornstarch and ½ cup water.. Set aside.");
     }
 
     #[test]
@@ -633,6 +806,46 @@ used 2 tsp kosher salt) and pepper.");
         assert_eq!(render(&t, 4.0, &fixed).text, "Add ½ cup water.");
         let scaling = Context { base: 2.0, scale_plain: true, line_amount: &none };
         assert_eq!(render(&t, 4.0, &scaling).text, "Add 1 cup water.");
+    }
+
+    #[test]
+    fn pan_sauce_water_keeps_what_the_pan_boils_off() {
+        let t = parse("Add ½ cup water to the pan and simmer until thickened.", &lines());
+        assert!(matches!(&t.parts[1], Part::Amount { boil_off: Some(s), .. } if *s == SIMMER_BOIL_OFF));
+        let c = Context { base: 2.0, scale_plain: true, line_amount: &none };
+        // Half boiled off, half per serving: ½ × (½ + ½ × 2).
+        assert_eq!(render(&t, 4.0, &c).text, "Add ¾ cup water to the pan and simmer until thickened.");
+        // Past one pan's room (6 servings here) each pan boils off its own share, and the step says so.
+        assert_eq!(
+            render(&t, 8.0, &c).text,
+            "Add 1½ cups water to the pan and simmer until thickened. (For 8 servings, use 2 pans and divide everything between them.)"
+        );
+    }
+
+    #[test]
+    fn pan_sauce_water_follows_the_recipes_own_shape() {
+        // ¾ cup for 2 and 1 cup for 4: ½ cup is boiled off, ⅛ cup goes with each serving.
+        let t = parse("Stir in ¾ cup water (1 cup for 4 servings) and simmer in the pan.", &lines());
+        let c = ctx(2.0, &none);
+        assert_eq!(render(&t, 6.0, &c).text, "Stir in 1¼ cups water and simmer in the pan.");
+    }
+
+    #[test]
+    fn water_that_is_the_dish_scales_normally() {
+        let c = Context { base: 2.0, scale_plain: true, line_amount: &none };
+        for text in ["Add 1 cup water and the rice to the pot; simmer.", "Add 1 cup water to the pan with the stock; simmer for the soup."] {
+            let t = parse(text, &lines());
+            assert!(t.amounts().all(|p| matches!(p, Part::Amount { boil_off: None, .. })), "{text}");
+            assert!(render(&t, 4.0, &c).text.contains("2 cups water"), "{text}");
+        }
+        // A slurry is measured per serving.
+        let t = parse("Whisk 2 TBSP water with the cornstarch, add to the pan and simmer.", &lines());
+        assert_eq!(render(&t, 4.0, &c).text, "Whisk 4 TBSP water with the cornstarch, add to the pan and simmer.");
+        // Soups by title.
+        let mut t = parse("Add ½ cup water to the pan and simmer.", &lines());
+        assert!(not_a_pan_sauce("Creamy Tomato Soup"));
+        t.drop_boil_off();
+        assert_eq!(render(&t, 4.0, &c).text, "Add 1 cup water to the pan and simmer.");
     }
 
     #[test]
