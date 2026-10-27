@@ -1,8 +1,10 @@
-// mise service worker: keeps the app shell and photos available when the network drops mid-recipe.
+// mise service worker: keeps the app shell, recipes and photos available when the network drops mid-recipe.
 // Photos are content-addressed (a media id never changes), so they are served from cache first; pages and
-// API data always try the network and fall back to the last copy.
-const SHELL = "mise-shell-v1";
+// recipe data always try the network and fall back to the last copy. Account data (/api/me, tokens, people)
+// is never cached, so nothing personal outlives signing out on a shared device.
+const SHELL = "mise-shell-v2";
 const PHOTOS = "mise-photos-v1";
+const RECIPE_DATA = ["/api/dishes", "/api/variants/"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(SHELL).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icon.svg"])));
@@ -21,6 +23,8 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // Account and sign-in requests go straight to the network, never through a cache.
+  if (url.pathname.startsWith("/api/") && !url.pathname.startsWith("/api/media/") && !RECIPE_DATA.some((p) => url.pathname.startsWith(p))) return;
 
   if (url.pathname.startsWith("/api/media/")) {
     event.respondWith(
@@ -38,7 +42,8 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(req)
       .then((res) => {
-        if (res.ok && (req.mode === "navigate" || url.pathname.startsWith("/assets/") || url.pathname.startsWith("/api/"))) {
+        const recipe = RECIPE_DATA.some((p) => url.pathname.startsWith(p));
+        if (res.ok && (req.mode === "navigate" || url.pathname.startsWith("/assets/") || recipe)) {
           const copy = res.clone();
           caches.open(SHELL).then((c) => c.put(req.mode === "navigate" ? "/" : req, copy));
         }

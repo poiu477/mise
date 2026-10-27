@@ -35,7 +35,10 @@ async fn main() -> anyhow::Result<()> {
     if migrate {
         mise_db::migrate(&pool).await?;
     }
-    let app = mise_api::router(mise_api::AppState { pool, media_root: media_root.clone() }, web_dir.as_deref());
+    let auth = mise_api::auth::AuthConfig::from_env()?;
+    tracing::info!(local = auth.local, oidc = auth.oidc.is_some(), public_base_url = ?auth.public_base_url.as_ref().map(|u| u.as_str()), "sign-in");
+    let state = mise_api::AppState { pool, media_root: media_root.clone(), auth: std::sync::Arc::new(mise_api::auth::Auth::new(auth)) };
+    let app = mise_api::router(state, web_dir.as_deref());
     if let Some(dir) = &web_dir {
         tracing::info!(web_dir = %dir.display(), "serving the web app");
     }

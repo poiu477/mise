@@ -14,6 +14,7 @@ anyhow = "1.0.104"
 chrono = "0.4.45"
 clap = { version = "4.6.7", features = ["derive", "env"] }
 dotenvy = "0.15.7"
+mise-api = { version = "0.1.0", path = "../mise-api" }
 mise-core = { version = "0.1.0", path = "../mise-core" }
 mise-db = { version = "0.1.0", path = "../mise-db" }
 mise-ingest = { version = "0.1.0", path = "../mise-ingest" }

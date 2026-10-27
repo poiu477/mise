@@ -1,7 +1,44 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
+import { useSession } from "../session";
+
+const OPEN = ["/login", "/setup"];
 
 export function Layout() {
+  const { session } = useSession();
+  const location = useLocation();
+  const here = location.pathname + location.search;
+  const onOpenPage = OPEN.includes(location.pathname);
+
+  if (session.status === "loading") return <p className="empty">Loading…</p>;
+  if (session.status === "offline") return <p className="empty">Can't reach the mise server. Check that it's running and reload.</p>;
+  if (session.status === "setup" && location.pathname !== "/setup") return <Navigate to="/setup" replace />;
+  if (session.status === "out" && location.pathname !== "/login") {
+    return <Navigate to={`/login?return_to=${encodeURIComponent(here)}`} replace />;
+  }
+  if (session.status === "in" && onOpenPage) {
+    const back = new URLSearchParams(location.search).get("return_to");
+    return <Navigate to={back && back.startsWith("/") && !back.startsWith("//") ? back : "/"} replace />;
+  }
+  if (onOpenPage) {
+    return (
+      <main className="content open">
+        <Outlet />
+      </main>
+    );
+  }
+  return (
+    <div className="app">
+      <TopBar />
+      <main className="content">
+        <Outlet />
+      </main>
+    </div>
+  );
+}
+
+function TopBar() {
+  const { session } = useSession();
   const [params] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -20,26 +57,22 @@ export function Layout() {
   };
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <Link to="/" className="brand" aria-label="mise home">
-          <img src="/icon.svg" alt="" width={28} height={28} />
-          <span>mise</span>
+    <header className="topbar">
+      <Link to="/" className="brand" aria-label="mise home">
+        <img src="/icon.svg" alt="" width={28} height={28} />
+        <span>mise</span>
+      </Link>
+      <form className="search" role="search" onSubmit={submit}>
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search dishes" aria-label="Search dishes" enterKeyHint="search" />
+      </form>
+      {session.status === "in" && (
+        <Link to="/account" className="account-link" title="Account">
+          <span className="avatar" aria-hidden="true">
+            {session.me.display_name.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="account-name">{session.me.display_name}</span>
         </Link>
-        <form className="search" role="search" onSubmit={submit}>
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search dishes"
-            aria-label="Search dishes"
-            enterKeyHint="search"
-          />
-        </form>
-      </header>
-      <main className="content">
-        <Outlet />
-      </main>
-    </div>
+      )}
+    </header>
   );
 }

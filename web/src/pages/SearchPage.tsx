@@ -92,7 +92,9 @@ export function SearchPage() {
         ))}
       </ul>
 
-      {state === "ready" && items.length === 0 && <p className="empty">No dishes match. Try fewer words.</p>}
+      {state === "ready" && items.length === 0 && (
+        <p className="empty">{q || ingredient ? "No dishes match. Try fewer words." : "No dishes yet. Import a seed bundle or add a recipe to get started."}</p>
+      )}
       {items.length < total && (
         <div className="more">
           <button type="button" onClick={() => load(items.length)} disabled={state === "loading"}>

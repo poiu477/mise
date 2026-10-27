@@ -4,6 +4,108 @@
  */
 
 export interface paths {
+    "/api/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How this install signs people in. */
+        get: operations["auth_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign in with a username and password. Sets the session cookie. */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out of this browser. */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The provider sends people back here; sign them in and continue where they started. */
+        get: operations["oidc_callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/oidc/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Begin single sign-on: redirect to the provider. */
+        get: operations["oidc_start"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create the first account (an admin) on a fresh install. Refused once any account exists. */
+        post: operations["setup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dishes": {
         parameters: {
             query?: never;
@@ -55,6 +157,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/households": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every household (admins only). */
+        get: operations["list_households"];
+        put?: never;
+        /** Add a household (admins only). */
+        post: operations["create_household"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in account. */
+        get: operations["me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set or change this account's password. Signs out every other browser. */
+        post: operations["change_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** This account's API tokens. */
+        get: operations["list_tokens"];
+        put?: never;
+        /** Make an API token. Only from a browser session, so one token cannot mint another. */
+        post: operations["create_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one of this account's tokens. */
+        delete: operations["delete_token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/media/{id}/{size}": {
         parameters: {
             query?: never;
@@ -70,6 +259,41 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every account (admins only). */
+        get: operations["list_users"];
+        put?: never;
+        /** Add an account (admins only). */
+        post: operations["create_user"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change an account (admins only). An admin cannot remove the last admin or turn off their own account. */
+        patch: operations["update_user"];
         trace?: never;
     };
     "/api/variants/{id}": {
@@ -93,6 +317,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AuthInfo: {
+            /** @description Username and password sign-in is on. */
+            local: boolean;
+            /** @description Label of the single-sign-on button, when single sign-on is on. */
+            oidc?: string | null;
+            /** @description No account exists yet: the first visitor creates the admin account. */
+            setup_required: boolean;
+        };
         Choice: {
             label: string;
             value: string;
@@ -151,6 +383,11 @@ export interface components {
             status: string;
             version: string;
         };
+        Household: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         /** @description Links to one photo in every size, for responses. */
         Image: {
             /** Format: uuid */
@@ -176,6 +413,55 @@ export interface components {
             /** @description Supplied by the source (meal kit) rather than from the pantry. */
             shipped?: boolean | null;
         };
+        LoginRequest: {
+            password: string;
+            username: string;
+        };
+        Me: {
+            display_name: string;
+            email?: string | null;
+            /** @description The account can sign in with a password (single-sign-on-only accounts cannot). */
+            has_password: boolean;
+            household: components["schemas"]["Household"];
+            /** Format: uuid */
+            id: string;
+            is_admin: boolean;
+            username: string;
+        };
+        NewHousehold: {
+            name: string;
+        };
+        NewToken: {
+            info: components["schemas"]["TokenInfo"];
+            /** @description Shown once: send it as `Authorization: Bearer <token>`. */
+            token: string;
+        };
+        NewUser: {
+            display_name?: string | null;
+            email?: string | null;
+            /**
+             * Format: uuid
+             * @description Join this household; leave out (with `household_name`) to start a new one.
+             */
+            household_id?: string | null;
+            household_name?: string | null;
+            is_admin?: boolean;
+            /** @description Leave out for an account that only signs in with single sign-on. */
+            password?: string | null;
+            username: string;
+        };
+        PasswordChange: {
+            /** @description Required when the account already has a password. */
+            current?: string | null;
+            new: string;
+        };
+        SetupRequest: {
+            display_name?: string | null;
+            /** @description Name for the first household (default "Home"). */
+            household?: string | null;
+            password: string;
+            username: string;
+        };
         Step: {
             /** @description Some wording came from the nearest published yield; worth a second look. */
             check: boolean;
@@ -185,6 +471,46 @@ export interface components {
             /** @description Some amount in this step was derived for this yield. */
             scaled: boolean;
             text: string;
+        };
+        TokenInfo: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            name: string;
+            /** @description read or read_write. */
+            scope: string;
+        };
+        TokenRequest: {
+            name: string;
+            /** @description read or read_write. */
+            scope: string;
+        };
+        UserInfo: {
+            disabled: boolean;
+            display_name: string;
+            email?: string | null;
+            has_password: boolean;
+            household: components["schemas"]["Household"];
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: int64
+             * @description Single-sign-on identities linked to the account.
+             */
+            identities: number;
+            is_admin: boolean;
+            username: string;
+        };
+        UserUpdate: {
+            disabled?: boolean | null;
+            /** Format: uuid */
+            household_id?: string | null;
+            is_admin?: boolean | null;
+            /** @description Set a new password (and sign the account out everywhere). */
+            password?: string | null;
         };
         Variant: {
             description?: string | null;
@@ -237,6 +563,150 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    auth_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthInfo"];
+                };
+            };
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oidc_callback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed in, back to the app */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oidc_start: {
+        parameters: {
+            query?: {
+                return_to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description To the provider */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_dishes: {
         parameters: {
             query?: {
@@ -314,6 +784,173 @@ export interface operations {
             };
         };
     };
+    list_households: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Household"][];
+                };
+            };
+        };
+    };
+    create_household: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewHousehold"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Household"];
+                };
+            };
+        };
+    };
+    me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    change_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenInfo"][];
+                };
+            };
+        };
+    };
+    create_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewToken"];
+                };
+            };
+        };
+    };
+    delete_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     get_media: {
         parameters: {
             query?: never;
@@ -333,6 +970,89 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_users: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserInfo"][];
+                };
+            };
+        };
+    };
+    create_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewUser"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
             };
             404: {
                 headers: {

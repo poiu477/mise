@@ -41,3 +41,18 @@ impl<T: DeserializeOwned + Send, S: Send + Sync> FromRequestParts<S> for Path<T>
             .map_err(|e| ApiError::BadRequest(e.body_text()))
     }
 }
+
+/// A JSON request body. Requiring `Content-Type: application/json` is also what keeps other sites from
+/// submitting forms to the API with a signed-in visitor's cookie.
+pub struct JsonBody<T>(pub T);
+
+impl<T: DeserializeOwned, S: Send + Sync> axum::extract::FromRequest<S> for JsonBody<T> {
+    type Rejection = ApiError;
+
+    async fn from_request(req: axum::extract::Request, state: &S) -> Result<Self, Self::Rejection> {
+        axum::Json::<T>::from_request(req, state)
+            .await
+            .map(|j| JsonBody(j.0))
+            .map_err(|e| ApiError::BadRequest(e.body_text()))
+    }
+}

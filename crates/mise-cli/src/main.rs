@@ -4,6 +4,7 @@ mod dish;
 mod food;
 mod gate;
 mod scaling;
+mod user;
 
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
@@ -88,6 +89,9 @@ enum Command {
     /// Record decisions about which recipes belong in one dish.
     #[command(subcommand)]
     Dish(dish::DishCommand),
+    /// Manage accounts (e.g. reset a lost admin password).
+    #[command(subcommand)]
+    User(user::UserCommand),
     /// Write the phase 1 gate report: a stratified sample of dishes to check grouping by hand (read-only).
     GateReport {
         /// Number of dishes to sample.
@@ -192,6 +196,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Food(cmd) => food::run(&pool, cmd).await?,
         Command::Dish(cmd) => dish::run(&pool, cmd).await?,
+        Command::User(cmd) => user::run(&pool, cmd).await?,
         Command::GateReport { sample, out, seed } => {
             let report = gate::write_report(&pool, sample, seed, &out).await?;
             let bytes = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);

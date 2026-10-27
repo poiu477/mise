@@ -1,6 +1,7 @@
 //! The mise REST API. One router backs the web app, kitchen mode and integrations; the OpenAPI document at
 //! `/api/openapi.json` describes it.
 
+pub mod auth;
 pub mod dishes;
 pub mod error;
 pub mod extract;
@@ -10,13 +11,12 @@ pub mod variants;
 use std::path::{Path, PathBuf};
 
 use axum::{
-    Json, Router,
-    routing::{any, get},
+    Json, Router, middleware,
+    routing::{any, delete, get, patch, post},
 };
 use sqlx::PgPool;
 use tower_http::{
     compression::CompressionLayer,
-    cors::CorsLayer,
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
@@ -27,15 +27,39 @@ pub struct AppState {
     pub pool: PgPool,
     /// Where stored photos and their web-size copies live (MEDIA_ROOT).
     pub media_root: PathBuf,
+    pub auth: std::sync::Arc<auth::Auth>,
 }
 
 #[derive(OpenApi)]
 #[openapi(
     info(title = "mise", description = "Self-hosted recipe system: dishes, their versions, and any serving count."),
-    paths(health, dishes::list, dishes::get, variants::get, media::get),
-    tags((name = "dishes", description = "Browse and search dishes"), (name = "media", description = "Photos"))
+    paths(
+        health, dishes::list, dishes::get, variants::get, media::get,
+        auth::routes::config, auth::routes::setup, auth::routes::login, auth::routes::logout, auth::oidc::start, auth::oidc::callback,
+        auth::routes::me, auth::routes::change_password, auth::routes::list_tokens, auth::routes::create_token, auth::routes::delete_token,
+        auth::routes::list_users, auth::routes::create_user, auth::routes::update_user, auth::routes::list_households, auth::routes::create_household,
+    ),
+    tags(
+        (name = "dishes", description = "Browse and search dishes"), (name = "media", description = "Photos"),
+        (name = "auth", description = "Signing in"), (name = "account", description = "The signed-in account"),
+        (name = "admin", description = "Accounts and households (admins)"),
+    ),
+    modifiers(&Security)
 )]
 pub struct ApiDoc;
+
+/// Documents the two ways to authenticate: the browser session cookie and a personal API token.
+struct Security;
+
+impl utoipa::Modify for Security {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityRequirement, SecurityScheme};
+        let c = openapi.components.get_or_insert_with(Default::default);
+        c.add_security_scheme("session", SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new(auth::SESSION_COOKIE))));
+        c.add_security_scheme("token", SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer).build()));
+        openapi.security = Some(vec![SecurityRequirement::new("session", Vec::<String>::new()), SecurityRequirement::new("token", Vec::<String>::new())]);
+    }
+}
 
 #[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct Health {
@@ -57,6 +81,19 @@ async fn openapi() -> Json<utoipa::openapi::OpenApi> {
 pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
     let mut app = Router::new()
         .route("/api/health", get(health))
+        .route("/api/auth/config", get(auth::routes::config))
+        .route("/api/auth/setup", post(auth::routes::setup))
+        .route("/api/auth/login", post(auth::routes::login))
+        .route("/api/auth/logout", post(auth::routes::logout))
+        .route("/api/auth/oidc/start", get(auth::oidc::start))
+        .route("/api/auth/oidc/callback", get(auth::oidc::callback))
+        .route("/api/me", get(auth::routes::me))
+        .route("/api/me/password", post(auth::routes::change_password))
+        .route("/api/me/tokens", get(auth::routes::list_tokens).post(auth::routes::create_token))
+        .route("/api/me/tokens/{id}", delete(auth::routes::delete_token))
+        .route("/api/users", get(auth::routes::list_users).post(auth::routes::create_user))
+        .route("/api/users/{id}", patch(auth::routes::update_user))
+        .route("/api/households", get(auth::routes::list_households).post(auth::routes::create_household))
         .route("/api/openapi.json", get(openapi))
         .route("/api/dishes", get(dishes::list))
         .route("/api/dishes/{slug}", get(dishes::get))
@@ -64,13 +101,12 @@ pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
         .route("/api/media/{id}/{size}", get(media::get))
         .route("/api", any(|| async { error::ApiError::NotFound }))
         .route("/api/{*rest}", any(|| async { error::ApiError::NotFound }))
+        .layer(middleware::from_fn_with_state(state.clone(), auth::require_auth))
         .with_state(state);
     if let Some(dir) = web_dir {
         app = app.fallback_service(web_app(dir));
     }
-    app.layer(CompressionLayer::new())
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http())
+    app.layer(CompressionLayer::new()).layer(TraceLayer::new_for_http())
 }
 
 /// The built web app: its files, with any other path answered by index.html (status 200) so client-side

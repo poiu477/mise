@@ -168,3 +168,48 @@ h1, h2 { line-height: 1.2; margin: 0; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
   .ingredients li { grid-template-columns: 36px 80px 1fr; }
 }
+
+/* Accounts */
+.content.open { min-height: 100vh; display: grid; place-items: center; }
+.auth-card { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 24px; box-shadow: var(--shadow); text-align: center; }
+.auth-card h1 { font-size: 24px; margin: 12px 0 6px; }
+.auth-card img { margin: 0 auto; }
+.form { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; text-align: left; }
+.form.row { flex-direction: row; flex-wrap: wrap; align-items: flex-end; }
+.form.row label { flex: 1 1 180px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.form label.check { flex-direction: row; align-items: center; flex: 0 0 auto; gap: 6px; padding-bottom: 10px; }
+.form input:not([type="checkbox"]), .form select, .table select {
+  font: inherit; font-weight: 400; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px;
+}
+.form input:focus, .form select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hint { font-weight: 400; font-size: 12px; }
+button.primary, .button.primary { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; padding: 11px 18px; font-weight: 650; cursor: pointer; }
+.form button:not(.primary), .account-head button { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 16px; cursor: pointer; }
+button:disabled { opacity: 0.6; cursor: default; }
+.button.sso { display: block; text-decoration: none; border: 1px solid var(--accent); color: var(--accent); border-radius: 10px; padding: 11px 18px; font-weight: 650; margin-top: 8px; }
+.or { color: var(--muted); margin: 14px 0 4px; font-size: 14px; }
+.form-error { color: #b3261e; background: color-mix(in srgb, #b3261e 10%, transparent); border-radius: 8px; padding: 8px 12px; font-size: 14px; text-align: left; }
+.form-ok { color: var(--accent); font-size: 14px; }
+.account-link { display: flex; align-items: center; gap: 8px; text-decoration: none; margin-left: auto; }
+.avatar { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.account { max-width: 900px; margin: 0 auto; }
+.account-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
+.account-head .tag, .account .tag { margin-left: 8px; font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 20px; }
+.panel h2 { font-size: 19px; margin-bottom: 4px; }
+.panel h3 { font-size: 16px; margin: 22px 0 0; }
+.table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+.table th, .table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.table th { color: var(--muted); font-weight: 600; }
+.table tr.off td { opacity: 0.55; }
+.link.danger { color: #b3261e; border: 0; background: none; padding: 0; cursor: pointer; }
+.fresh-token { background: var(--warm-soft); border-radius: 10px; padding: 12px 14px; margin: 12px 0; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.fresh-token p { margin: 0; width: 100%; font-size: 14px; }
+.fresh-token code { word-break: break-all; font-size: 13px; flex: 1; }
+.fresh-token button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+@media (max-width: 720px) {
+  .account-name { display: none; }
+  .table { display: block; overflow-x: auto; }
+}

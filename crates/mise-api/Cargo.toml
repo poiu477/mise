@@ -7,19 +7,28 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = "1.0.104"
+argon2 = "0.6.0"
 axum = "0.8.9"
+axum-extra = { version = "0.12.6", features = ["cookie"] }
+base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 dotenvy = "0.15.7"
+hex = "0.4.3"
 mise-core = { version = "0.1.0", path = "../mise-core" }
 mise-db = { version = "0.1.0", path = "../mise-db" }
+openidconnect = { version = "4.0.1", features = ["reqwest"] }
+rand = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
+sha2 = "0.11.0"
 sqlx.workspace = true
 thiserror = "2.0.21"
+time = "0.3.45"
 tokio = { version = "1.54.1", features = ["full"] }
 tower-http = { version = "0.7.1", features = ["fs", "cors", "trace", "compression-gzip", "set-header"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+url = "2.5.8"
 utoipa = { version = "5.5.0", features = ["axum_extras", "uuid", "chrono"] }
 uuid.workspace = true
 

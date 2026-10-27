@@ -44,3 +44,4 @@ docker compose -f compose.dev.yaml run --rm rust cargo test
 | `web/` | The web app (installable PWA) |
 | `migrations/` | Postgres schema |
 | `docs/seed-bundle.md` | The bulk-import format |
+| `docs/sign-in.md` | Accounts, households, single sign-on, API tokens |
