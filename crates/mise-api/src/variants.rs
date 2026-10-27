@@ -70,6 +70,7 @@ pub struct Variant {
     pub steps: Vec<Step>,
     pub image: Option<Image>,
     /// Source details kept with the version: prep and total time, difficulty, tags, cuisines, nutrition.
+    #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]
     pub meta: serde_json::Value,
 }
 
@@ -77,7 +78,7 @@ type LineRow = (Uuid, String, String, Option<Uuid>, Option<String>, Option<bool>
 
 /// A version of a dish at a serving count.
 #[utoipa::path(
-    get, path = "/api/variants/{id}", tag = "dishes", params(("id" = Uuid, Path), RenderParams),
+    get, path = "/api/variants/{id}", operation_id = "get_variant", tag = "dishes", params(("id" = Uuid, Path), RenderParams),
     responses((status = 200, body = Variant), (status = 404, body = crate::error::ErrorBody))
 )]
 pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Query<RenderParams>) -> ApiResult<Json<Variant>> {

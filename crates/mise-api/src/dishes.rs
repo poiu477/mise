@@ -51,7 +51,7 @@ pub struct DishPage {
 }
 
 /// Search and browse dishes.
-#[utoipa::path(get, path = "/api/dishes", tag = "dishes", params(ListParams), responses((status = 200, body = DishPage)))]
+#[utoipa::path(get, path = "/api/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams), responses((status = 200, body = DishPage)))]
 pub async fn list(State(s): State<AppState>, Query(p): Query<ListParams>) -> ApiResult<Json<DishPage>> {
     let limit = p.limit.unwrap_or(24).clamp(1, MAX_LIMIT);
     let offset = p.offset.unwrap_or(0).max(0);
@@ -124,6 +124,7 @@ pub struct VariantSummary {
     pub yields: Vec<f64>,
     pub has_steps: bool,
     /// This version's value for each of the dish's options.
+    #[schema(value_type = std::collections::HashMap<String, String>)]
     pub attributes: serde_json::Value,
     pub image: Option<Image>,
 }
@@ -144,7 +145,7 @@ pub struct Dish {
 
 /// A dish with its options and versions.
 #[utoipa::path(
-    get, path = "/api/dishes/{slug}", tag = "dishes", params(("slug" = String, Path)),
+    get, path = "/api/dishes/{slug}", operation_id = "get_dish", tag = "dishes", params(("slug" = String, Path)),
     responses((status = 200, body = Dish), (status = 404, body = crate::error::ErrorBody))
 )]
 pub async fn get(State(s): State<AppState>, Path(slug): Path<String>) -> ApiResult<Json<Dish>> {

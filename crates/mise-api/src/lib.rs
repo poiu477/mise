@@ -6,11 +6,19 @@ pub mod error;
 pub mod media;
 pub mod variants;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use axum::{Json, Router, routing::get};
+use axum::{
+    Json, Router,
+    routing::{any, get},
+};
 use sqlx::PgPool;
-use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
+use tower_http::{
+    compression::CompressionLayer,
+    cors::CorsLayer,
+    services::{ServeDir, ServeFile},
+    trace::TraceLayer,
+};
 use utoipa::OpenApi;
 
 #[derive(Clone)]
@@ -35,7 +43,7 @@ pub struct Health {
 }
 
 /// Liveness and version.
-#[utoipa::path(get, path = "/api/health", responses((status = 200, body = Health)))]
+#[utoipa::path(get, path = "/api/health", operation_id = "health", responses((status = 200, body = Health)))]
 pub async fn health() -> Json<Health> {
     Json(Health { status: "ok", version: env!("CARGO_PKG_VERSION") })
 }
@@ -44,16 +52,27 @@ async fn openapi() -> Json<utoipa::openapi::OpenApi> {
     Json(ApiDoc::openapi())
 }
 
-pub fn router(state: AppState) -> Router {
-    Router::new()
+/// The API, and the built web app in `web_dir` for every other path when given.
+pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
+    let mut app = Router::new()
         .route("/api/health", get(health))
         .route("/api/openapi.json", get(openapi))
         .route("/api/dishes", get(dishes::list))
         .route("/api/dishes/{slug}", get(dishes::get))
         .route("/api/variants/{id}", get(variants::get))
         .route("/api/media/{id}/{size}", get(media::get))
-        .with_state(state)
-        .layer(CompressionLayer::new())
+        .route("/api/{*rest}", any(|| async { error::ApiError::NotFound }))
+        .with_state(state);
+    if let Some(dir) = web_dir {
+        app = app.fallback_service(web_app(dir));
+    }
+    app.layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
+}
+
+/// The built web app: its files, with any other path answered by index.html so client-side routes work on
+/// reload.
+fn web_app(dir: &Path) -> ServeDir<tower_http::set_status::SetStatus<ServeFile>> {
+    ServeDir::new(dir).not_found_service(ServeFile::new(dir.join("index.html")))
 }

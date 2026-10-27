@@ -7,3 +7,8 @@
 /reports/
 # Agent worktrees
 /.claude/
+# Web app: dependencies, build output, and the spec copy its types are generated from
+/web/node_modules/
+/web/dist/
+/web/openapi.json
+/web/*.tsbuildinfo

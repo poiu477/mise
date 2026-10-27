@@ -1,0 +1,13 @@
+{
+  "name": "mise",
+  "short_name": "mise",
+  "description": "Our recipes: every version, any serving count.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f4ee",
+  "theme_color": "#2f5d50",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

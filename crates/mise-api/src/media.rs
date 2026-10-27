@@ -40,7 +40,7 @@ impl Image {
 
 /// A photo. `size` is `400`, `1200` or `original`; a size the photo was never made in falls back to the original.
 #[utoipa::path(
-    get, path = "/api/media/{id}/{size}", tag = "media",
+    get, path = "/api/media/{id}/{size}", operation_id = "get_media", tag = "media",
     params(("id" = Uuid, Path), ("size" = String, Path, description = "400, 1200 or original")),
     responses((status = 200, description = "The image"), (status = 404, body = crate::error::ErrorBody))
 )]
