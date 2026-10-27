@@ -128,6 +128,20 @@ impl Quantity {
         other.in_unit(&self.unit).is_some_and(|b| (self.amount - b).abs() <= 0.02 * self.amount.abs().max(b.abs()) + 1e-9)
     }
 
+    /// The same amount in the clearest words, for a published amount: 3 tsp reads as 1 TBSP and 6 tsp as 2 TBSP,
+    /// and a source's pinches stored as decimals (0.06 tsp, a "large pinch" as 0.12 tsp) read as pinches again.
+    /// Measurable amounts are never moved: ⅛ tsp stays ⅛ tsp.
+    pub fn tidied(&self) -> Quantity {
+        let a = self.amount;
+        match self.unit {
+            Unit::Tsp if a >= 3.0 && is_multiple(a / 3.0, 0.5) => Quantity::new(a / 3.0, Unit::Tbsp),
+            Unit::Tsp if a > 0.0 && a < 0.25 && (a - round_to(a, 0.125)).abs() > 0.004 => {
+                Quantity::new((a / PINCH_TSP).round().max(1.0), Unit::Pinch)
+            }
+            _ => self.clone(),
+        }
+    }
+
     /// Round to something a cook can measure: spoons to ⅛ tsp (½ for tablespoons), cups to quarters and
     /// thirds, weights to the nearest half ounce, counts to halves. Moves between tsp, TBSP and cup when the
     /// amount reads better in the next unit.
@@ -182,6 +196,9 @@ impl Quantity {
         }
     }
 }
+
+/// A pinch, as sources convert it: a sixteenth of a teaspoon.
+pub const PINCH_TSP: f64 = 1.0 / 16.0;
 
 fn round_to(a: f64, step: f64) -> f64 {
     (a / step).round() * step
@@ -420,6 +437,19 @@ mod tests {
         assert_eq!(q(1.3, Unit::Count("clove".into())).rounded(), q(1.5, Unit::Count("clove".into())));
         assert_eq!(q(0.7, Unit::Count("lime".into())).rounded(), q(0.75, Unit::Count("lime".into())));
         assert_eq!(q(0.035, Unit::Count("thumb".into())).rounded(), q(0.04, Unit::Count("thumb".into())));
+    }
+
+    #[test]
+    fn tidies_published_amounts_without_changing_them() {
+        assert_eq!(q(3.0, Unit::Tsp).tidied().to_string(), "1 TBSP");
+        assert_eq!(q(6.0, Unit::Tsp).tidied().to_string(), "2 TBSP");
+        assert_eq!(q(2.25, Unit::Tsp).tidied().to_string(), "2¼ tsp");
+        assert_eq!(q(0.06, Unit::Tsp).tidied().to_string(), "1 pinch");
+        assert_eq!(q(0.068, Unit::Tsp).tidied().to_string(), "1 pinch");
+        assert_eq!(q(0.12, Unit::Tsp).tidied().to_string(), "2 pinches");
+        assert_eq!(q(0.18, Unit::Tsp).tidied().to_string(), "3 pinches");
+        assert_eq!(q(0.125, Unit::Tsp).tidied().to_string(), "⅛ tsp");
+        assert_eq!(q(0.5, Unit::Tsp).tidied().to_string(), "½ tsp");
     }
 
     #[test]

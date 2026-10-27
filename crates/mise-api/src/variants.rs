@@ -6,7 +6,6 @@ use axum::{
     Json,
     extract::State,
 };
-use mise_core::quantity::{Quantity, Unit, format_amount};
 use mise_core::servings;
 use mise_core::step_amounts::{self, Context, Template};
 use serde::{Deserialize, Serialize};
@@ -157,7 +156,7 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
     let ingredients: Vec<Ingredient> = lines
         .iter()
         .map(|(line, _, name, food_id, food, shipped, allergens, note, image)| {
-            let (amount, scaled) = amounts.get(line).map_or((None, false), |a| line_text(a, target));
+            let (amount, scaled) = amounts.get(line).map_or((None, false), |a| servings::line_text(a, target));
             Ingredient {
                 name: name.clone(),
                 food_id: *food_id,
@@ -215,40 +214,6 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
     }))
 }
 
-/// An ingredient line's amount at `target`: as published when it is, else derived from the published yields
-/// in the unit of the nearest one and rounded to kitchen amounts.
-fn line_text(published: &[(f64, f64, Option<String>)], target: f64) -> (Option<String>, bool) {
-    let show = |a: f64, unit: &Option<String>, round: bool| match unit.as_deref().and_then(Unit::parse) {
-        Some(u) => {
-            let q = Quantity::new(a, u);
-            if round { q.rounded() } else { q }.to_string()
-        }
-        None => format!("{} {}", format_amount(a), unit.as_deref().unwrap_or("")).trim().to_string(),
-    };
-    if let Some((_, a, u)) = published.iter().find(|(s, _, _)| (s - target).abs() < 1e-9) {
-        return (Some(show(*a, u, false)), false);
-    }
-    let yields: Vec<f64> = published.iter().map(|p| p.0).collect();
-    let Some(near) = servings::nearest(&yields, target) else { return (None, false) };
-    let unit = published.iter().find(|p| p.0 == near).and_then(|p| p.2.clone());
-    let same_unit: Vec<(f64, f64)> = published.iter().filter(|p| p.2 == unit).map(|p| (p.0, p.1)).collect();
-    let Some((a, _)) = servings::amount_at(&same_unit, target) else { return (None, false) };
-    // Rounded, it must still sit between the published amounts on either side; when it would not, it reads as
-    // that neighbour (13.76 oz published for 2 and 4 is 13¾ oz at 3, not a rounded-up 14 oz).
-    if let Some(u) = unit.as_deref().and_then(Unit::parse) {
-        let r = Quantity::new(a, u).rounded().in_unit(&Unit::parse(unit.as_deref().unwrap_or("")).unwrap()).unwrap_or(a);
-        let below = same_unit.iter().filter(|p| p.0 < target).max_by(|x, y| x.0.total_cmp(&y.0));
-        let above = same_unit.iter().filter(|p| p.0 > target).min_by(|x, y| x.0.total_cmp(&y.0));
-        if let Some(&(_, b)) = below.filter(|p| r < p.1 - 1e-9) {
-            return (Some(show(b, &unit, false)), true);
-        }
-        if let Some(&(_, b)) = above.filter(|p| r > p.1 + 1e-9) {
-            return (Some(show(b, &unit, false)), true);
-        }
-    }
-    (Some(show(a, &unit, true)), true)
-}
-
 /// Source metadata worth showing; internal bookkeeping (lineage, media paths) stays out.
 fn public_meta(mut meta: serde_json::Value) -> serde_json::Value {
     if let Some(m) = meta.as_object_mut() {
@@ -256,24 +221,4 @@ fn public_meta(mut meta: serde_json::Value) -> serde_json::Value {
         m.remove("media");
     }
     meta
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn published_amounts_are_exact_and_others_rounded() {
-        let a = vec![(2.0, 0.5, Some("cup".into())), (4.0, 1.0, Some("cup".into()))];
-        assert_eq!(line_text(&a, 2.0), (Some("½ cup".into()), false));
-        assert_eq!(line_text(&a, 3.0), (Some("¾ cup".into()), true));
-        assert_eq!(line_text(&a, 6.0), (Some("1½ cups".into()), true));
-        let counts = vec![(2.0, 1.0, Some("unit".into())), (4.0, 2.0, Some("unit".into()))];
-        assert_eq!(line_text(&counts, 5.0), (Some("2½".into()), true));
-        // Rounding never passes a published neighbour.
-        let can = vec![(2.0, 13.76, Some("ounce".into())), (4.0, 13.76, Some("ounce".into()))];
-        assert_eq!(line_text(&can, 3.0), (Some("13¾ oz".into()), true));
-        let odd = vec![(2.0, 4.0, Some("nach Geschmack".into()))];
-        assert_eq!(line_text(&odd, 2.0), (Some("4 nach Geschmack".into()), false));
-    }
 }

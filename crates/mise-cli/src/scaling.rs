@@ -73,13 +73,6 @@ fn esc(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
-fn fmt_line(amount: f64, unit: &Option<String>) -> String {
-    match unit.as_deref().and_then(Unit::parse) {
-        Some(u) => Quantity::new(amount, u).to_string(),
-        None => format!("{} {}", mise_core::quantity::format_amount(amount), unit.as_deref().unwrap_or("")).trim().to_string(),
-    }
-}
-
 pub struct Summary {
     pub step_overall: (usize, f64),
     pub step_sample: (usize, f64),
@@ -329,36 +322,27 @@ fn write_card(
         let list = amounts.get(&(v, key.clone()));
         let get = |t: f64| list.and_then(|l| l.iter().find(|(s, _, _)| (s - t).abs() < 1e-9));
         let _ = write!(h, "<tr><td>{}</td>", esc(name));
-        let known: Vec<(f64, f64)> = [2.0, 4.0].iter().filter_map(|&t| get(t).map(|x| (t, x.1))).collect();
+        // As the app shows it, and as the app would show it knowing only 2 and 4 servings.
+        let all: Vec<(f64, f64, Option<String>)> = list.cloned().unwrap_or_default();
+        let known: Vec<(f64, f64, Option<String>)> = [2.0, 4.0].iter().filter_map(|&t| get(t).cloned()).collect();
         for t in [2.0, 3.0, 4.0, 6.0] {
-            match get(t) {
-                Some((_, a, u)) => {
-                    let mut cell = esc(&fmt_line(*a, u));
+            match servings::line_text(&all, t) {
+                (Some(shown), false) => {
+                    let mut cell = esc(&shown);
                     if t == 3.0 || t == 6.0 {
-                        if let (Some(unit), Some((d, _))) = (u.as_deref().and_then(Unit::parse), servings::amount_at(&known, t)) {
-                            let pred = Quantity::new(d, unit.clone()).rounded();
-                            if !pred.same_as(&Quantity::new(*a, unit)) {
-                                let _ = write!(cell, " <span class=\"miss\" title=\"derived from 2 and 4\">≠ {}</span>", esc(&pred.to_string()));
+                        if let (Some(pred), _) = servings::line_text(&known, t) {
+                            if pred != shown {
+                                let _ = write!(cell, " <span class=\"miss\" title=\"derived from 2 and 4\">≠ {}</span>", esc(&pred));
                             }
                         }
                     }
                     let _ = write!(h, "<td>{cell}</td>");
                 }
-                None => {
-                    // Not published, or left out for shrinking: what the app shows instead.
-                    let all: Vec<(f64, f64)> = list.map(|l| l.iter().map(|x| (x.0, x.1)).collect()).unwrap_or_default();
-                    let unit = list.and_then(|l| l.first()).and_then(|x| x.2.clone());
-                    match servings::amount_at(&all, t) {
-                        Some((d, _)) => {
-                            let shown = match unit.as_deref().and_then(Unit::parse) {
-                                Some(u) => Quantity::new(d, u).rounded().to_string(),
-                                None => fmt_line(d, &unit),
-                            };
-                            let _ = write!(h, "<td><mark title=\"derived: the published amount shrank, or none was published\">≈ {}</mark></td>", esc(&shown));
-                        }
-                        None => h.push_str("<td class=\"muted\">–</td>"),
-                    }
+                // Not published, or left out for shrinking: what the app shows instead.
+                (Some(shown), true) => {
+                    let _ = write!(h, "<td><mark title=\"derived: the published amount shrank, or none was published\">≈ {}</mark></td>", esc(&shown));
                 }
+                (None, _) => h.push_str("<td class=\"muted\">–</td>"),
             }
         }
         h.push_str("</tr>");
