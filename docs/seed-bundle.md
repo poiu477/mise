@@ -25,7 +25,10 @@ my-bundle/
 
 `source.key` identifies the source across re-imports: importing a bundle with the same key again updates
 that source's variants instead of duplicating them. `media_root` is where the relative media paths below
-are resolved; media is copied into mise's own storage on import.
+are resolved. `mise import-bundle` records the paths; `mise ingest-media --from <media_root>` then stores the
+files under `MEDIA_ROOT` by content hash (hard-linked when on the same volume, otherwise copied), links them
+to variants, steps and foods, and makes web-size copies. A step's images are matched to its step by
+`index`: looked up among the raw record's `steps` when it has them, otherwise read as 1-based.
 
 ## variants.ndjson
 

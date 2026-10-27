@@ -44,6 +44,28 @@ enum Command {
         #[arg(long)]
         missing_from: Option<std::path::PathBuf>,
     },
+    /// Store referenced photos under MEDIA_ROOT, link them to variants, steps and foods, and make web copies.
+    /// Resumable: a re-run only reads files and makes copies it has not done yet.
+    IngestMedia {
+        /// Archive root the media paths are relative to (the bundle's `media_root`, e.g. D:/Recipes).
+        #[arg(long, required_unless_present = "derivatives_only")]
+        from: Option<std::path::PathBuf>,
+        /// Where media is stored. Hard links are used when this is on the same volume as the archive.
+        #[arg(long, env = "MEDIA_ROOT", default_value = "./data/media")]
+        media_root: std::path::PathBuf,
+        /// Read at most this many new files, and make web copies for at most this many media (trial runs).
+        #[arg(long)]
+        limit: Option<usize>,
+        /// Store and link only; make web copies in a later run.
+        #[arg(long)]
+        skip_derivatives: bool,
+        /// Only make missing web copies of media already stored.
+        #[arg(long, conflicts_with = "skip_derivatives")]
+        derivatives_only: bool,
+        /// Worker threads for hashing and resizing (default: all cores).
+        #[arg(long)]
+        jobs: Option<usize>,
+    },
     /// Inspect and curate foods, brands and the food tree.
     #[command(subcommand)]
     Food(food::FoodCommand),
@@ -115,6 +137,24 @@ async fn main() -> anyhow::Result<()> {
                 (None, None) => unreachable!("clap requires one of them"),
             };
             tracing::info!(?stats, "pruned");
+        }
+        Command::IngestMedia { from, media_root, limit, skip_derivatives, derivatives_only, jobs } => {
+            let opts = mise_ingest::media::MediaOptions {
+                archive_root: from,
+                media_root,
+                limit,
+                jobs: jobs.unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get())),
+            };
+            if !derivatives_only {
+                let started = std::time::Instant::now();
+                let stats = mise_ingest::media::store_and_link(&pool, &opts).await?;
+                tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "media stored and linked");
+            }
+            if !skip_derivatives {
+                let started = std::time::Instant::now();
+                let stats = mise_ingest::media::make_derivatives(&pool, &opts).await?;
+                tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "web copies made");
+            }
         }
         Command::Food(cmd) => food::run(&pool, cmd).await?,
         Command::GateReport { sample, out, seed } => {
