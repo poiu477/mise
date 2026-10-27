@@ -3,6 +3,7 @@
 mod dish;
 mod food;
 mod gate;
+mod scaling;
 
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
@@ -66,6 +67,20 @@ enum Command {
         /// Worker threads for hashing and resizing (default: all cores).
         #[arg(long)]
         jobs: Option<usize>,
+    },
+    /// Parse step text into amount templates, linking amounts to ingredient lines. Re-runnable.
+    ParseSteps,
+    /// Write the phase 2 gate report: automatic tests of scaled amounts plus a sample to check by hand (read-only).
+    ScalingReport {
+        /// Number of recipes to sample.
+        #[arg(long, default_value_t = 500)]
+        sample: usize,
+        /// HTML file to write.
+        #[arg(long, default_value = "reports/scaling-500.html")]
+        out: std::path::PathBuf,
+        /// Seed for the sample: the same seed on the same data picks the same recipes.
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
     },
     /// Inspect and curate foods, brands and the food tree.
     #[command(subcommand)]
@@ -159,6 +174,21 @@ async fn main() -> anyhow::Result<()> {
                 let stats = mise_ingest::media::make_derivatives(&pool, &opts).await?;
                 tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "web copies made");
             }
+        }
+        Command::ParseSteps => {
+            let started = std::time::Instant::now();
+            let stats = mise_ingest::steps::parse_steps(&pool).await?;
+            tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "steps parsed");
+        }
+        Command::ScalingReport { sample, out, seed } => {
+            let s = scaling::write_report(&pool, sample, seed, &out).await?;
+            tracing::info!(cases = s.step_overall.0, right_pct = format!("{:.1}", s.step_overall.1), "step amounts at 4, all recipes");
+            tracing::info!(cases = s.step_sample.0, right_pct = format!("{:.1}", s.step_sample.1), "step amounts at 4, sample");
+            tracing::info!(cases = s.whole_line_3.0, right_pct = format!("{:.1}", s.whole_line_3.1), "whole-line step amounts at 3");
+            tracing::info!(cases = s.whole_line_6.0, right_pct = format!("{:.1}", s.whole_line_6.1), "whole-line step amounts at 6");
+            tracing::info!(cases = s.ingredient_3.0, right_pct = format!("{:.1}", s.ingredient_3.1), "ingredient amounts at 3");
+            tracing::info!(cases = s.ingredient_6.0, right_pct = format!("{:.1}", s.ingredient_6.1), "ingredient amounts at 6");
+            tracing::info!(out = %out.display(), "scaling report written");
         }
         Command::Food(cmd) => food::run(&pool, cmd).await?,
         Command::Dish(cmd) => dish::run(&pool, cmd).await?,

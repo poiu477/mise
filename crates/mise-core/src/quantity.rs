@@ -1,0 +1,400 @@
+//! Kitchen quantities: reading amounts as recipes write them ("1 1⁄2 TBSP", "¾ cup", "2 cloves"), converting
+//! between units, scaling, and rounding to amounts a cook can measure.
+
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
+
+/// A unit as cooks use it. Volume and weight units convert within their family; counts never convert.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Unit {
+    Tsp,
+    Tbsp,
+    Cup,
+    FlOz,
+    Ml,
+    L,
+    Oz,
+    Lb,
+    G,
+    Kg,
+    Pinch,
+    /// A countable item, holding its noun as written ("clove", "wedge"); empty for a bare number.
+    Count(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Family {
+    Volume,
+    Weight,
+    Count,
+    Pinch,
+}
+
+impl Unit {
+    /// Recognise a unit word as recipes and the seed data spell it.
+    pub fn parse(word: &str) -> Option<Unit> {
+        let w = word.trim().trim_end_matches('.').to_lowercase();
+        let w = w.split(" (").next().unwrap_or(&w); // "teaspoon (tsp)", "ounce(oz)" → the first word
+        let w = w.split('(').next().unwrap_or(w).trim();
+        Some(match w {
+            "tsp" | "tsps" | "teaspoon" | "teaspoons" => Unit::Tsp,
+            "tbsp" | "tbsps" | "tablespoon" | "tablespoons" | "tbs" => Unit::Tbsp,
+            "cup" | "cups" => Unit::Cup,
+            "fl oz" | "fluid ounce" | "fluid ounces" => Unit::FlOz,
+            "ml" | "milliliter" | "milliliters" | "millilitre" | "millilitres" => Unit::Ml,
+            "l" | "liter" | "liters" | "litre" | "litres" => Unit::L,
+            "oz" | "ounce" | "ounces" => Unit::Oz,
+            "lb" | "lbs" | "pound" | "pounds" => Unit::Lb,
+            "g" | "gram" | "grams" => Unit::G,
+            "kg" | "kilogram" | "kilograms" => Unit::Kg,
+            "pinch" | "pinches" => Unit::Pinch,
+            "unit" | "units" | "" => Unit::Count(String::new()),
+            "clove" | "cloves" | "thumb" | "thumbs" | "slice" | "slices" | "piece" | "pieces" | "sprig" | "sprigs"
+            | "can" | "cans" | "jar" | "jars" | "box" | "boxes" | "bunch" | "bunches" | "head" | "heads" | "stalk"
+            | "stalks" | "pack" | "packs" | "pick" | "picks" | "bun" | "buns" | "tube" | "tubes" | "wedge" | "wedges" => {
+                Unit::Count(singular(w).to_string())
+            }
+            _ => return None,
+        })
+    }
+
+    pub fn family(&self) -> Family {
+        match self {
+            Unit::Tsp | Unit::Tbsp | Unit::Cup | Unit::FlOz | Unit::Ml | Unit::L => Family::Volume,
+            Unit::Oz | Unit::Lb | Unit::G | Unit::Kg => Family::Weight,
+            Unit::Pinch => Family::Pinch,
+            Unit::Count(_) => Family::Count,
+        }
+    }
+
+    /// Size in the family's base unit: teaspoons for volume, grams for weight, 1 otherwise.
+    fn size(&self) -> f64 {
+        match self {
+            Unit::Tsp => 1.0,
+            Unit::Tbsp => 3.0,
+            Unit::Cup => 48.0,
+            Unit::FlOz => 6.0,
+            Unit::Ml => 1.0 / 4.929,
+            Unit::L => 1000.0 / 4.929,
+            Unit::Oz => 28.3495,
+            Unit::Lb => 453.592,
+            Unit::G => 1.0,
+            Unit::Kg => 1000.0,
+            Unit::Pinch | Unit::Count(_) => 1.0,
+        }
+    }
+
+    /// Two units measure the same kind of thing (count nouns must match).
+    pub fn compatible(&self, other: &Unit) -> bool {
+        match (self, other) {
+            (Unit::Count(a), Unit::Count(b)) => a == b || a.is_empty() || b.is_empty(),
+            _ => self.family() == other.family(),
+        }
+    }
+}
+
+fn singular(w: &str) -> &str {
+    match w {
+        "boxes" => "box",
+        "bunches" => "bunch",
+        _ => w.strip_suffix('s').unwrap_or(w),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Quantity {
+    pub amount: f64,
+    pub unit: Unit,
+}
+
+impl Quantity {
+    pub fn new(amount: f64, unit: Unit) -> Self {
+        Quantity { amount, unit }
+    }
+
+    pub fn scaled(&self, factor: f64) -> Quantity {
+        Quantity { amount: self.amount * factor, unit: self.unit.clone() }
+    }
+
+    /// The amount expressed in `unit`, when the two convert.
+    pub fn in_unit(&self, unit: &Unit) -> Option<f64> {
+        self.unit.compatible(unit).then(|| self.amount * self.unit.size() / unit.size())
+    }
+
+    /// Same amount within 2% once both are in one unit.
+    pub fn same_as(&self, other: &Quantity) -> bool {
+        other.in_unit(&self.unit).is_some_and(|b| (self.amount - b).abs() <= 0.02 * self.amount.abs().max(b.abs()) + 1e-9)
+    }
+
+    /// Round to something a cook can measure: spoons to ⅛ tsp (½ for tablespoons), cups to quarters and
+    /// thirds, weights to the nearest half ounce, counts to halves. Moves between tsp, TBSP and cup when the
+    /// amount reads better in the next unit.
+    pub fn rounded(&self) -> Quantity {
+        let a = self.amount;
+        if a <= 0.0 {
+            return self.clone();
+        }
+        match &self.unit {
+            Unit::Tsp => {
+                if a >= 3.0 && is_multiple(a / 3.0, 0.5) {
+                    return Quantity::new(a / 3.0, Unit::Tbsp).rounded();
+                }
+                let step = if a < 1.0 { 0.125 } else { 0.25 };
+                Quantity::new(round_to(a, step).max(0.125), Unit::Tsp)
+            }
+            Unit::Tbsp => {
+                if a < 0.5 {
+                    return Quantity::new(a * 3.0, Unit::Tsp).rounded();
+                }
+                if a >= 8.0 {
+                    return Quantity::new(a / 16.0, Unit::Cup).rounded();
+                }
+                Quantity::new(round_to(a, 0.5), Unit::Tbsp)
+            }
+            Unit::Cup => {
+                if a < 0.25 {
+                    return Quantity::new(a * 16.0, Unit::Tbsp).rounded();
+                }
+                Quantity::new(round_cup(a), Unit::Cup)
+            }
+            Unit::Oz | Unit::FlOz => Quantity::new(round_to(a, if a < 1.0 { 0.25 } else { 0.5 }), self.unit.clone()),
+            Unit::Lb => Quantity::new(round_to(a, 0.25), Unit::Lb),
+            Unit::G | Unit::Ml => Quantity::new(round_to(a, if a >= 20.0 { 5.0 } else { 1.0 }), self.unit.clone()),
+            Unit::Kg | Unit::L => Quantity::new(round_to(a, 0.05), self.unit.clone()),
+            Unit::Count(_) => Quantity::new(round_to(a, 0.5).max(0.5), self.unit.clone()),
+            Unit::Pinch => self.clone(),
+        }
+    }
+}
+
+fn round_to(a: f64, step: f64) -> f64 {
+    (a / step).round() * step
+}
+
+fn is_multiple(a: f64, step: f64) -> bool {
+    ((a / step) - (a / step).round()).abs() < 1e-6
+}
+
+/// Cups round to the nearest quarter or third.
+fn round_cup(a: f64) -> f64 {
+    let whole = a.floor();
+    let frac = a - whole;
+    let best = [0.0, 0.25, 1.0 / 3.0, 0.5, 2.0 / 3.0, 0.75, 1.0]
+        .into_iter()
+        .min_by(|x, y| (x - frac).abs().total_cmp(&(y - frac).abs()))
+        .unwrap();
+    whole + best
+}
+
+const GLYPHS: &[(f64, &str)] = &[
+    (0.125, "⅛"),
+    (0.25, "¼"),
+    (1.0 / 3.0, "⅓"),
+    (0.375, "⅜"),
+    (0.5, "½"),
+    (0.625, "⅝"),
+    (2.0 / 3.0, "⅔"),
+    (0.75, "¾"),
+    (0.875, "⅞"),
+];
+
+/// "1½", "¾", "2"; falls back to a trimmed decimal when no kitchen fraction fits.
+pub fn format_amount(a: f64) -> String {
+    let whole = a.floor();
+    let frac = a - whole;
+    if frac < 0.01 {
+        return format!("{whole}");
+    }
+    if frac > 0.99 {
+        return format!("{}", whole + 1.0);
+    }
+    match GLYPHS.iter().find(|(v, _)| (v - frac).abs() < 0.01) {
+        Some((_, g)) if whole == 0.0 => (*g).to_string(),
+        Some((_, g)) => format!("{whole}{g}"),
+        None => {
+            let s = format!("{a:.2}");
+            s.trim_end_matches('0').trim_end_matches('.').to_string()
+        }
+    }
+}
+
+impl fmt::Display for Quantity {
+    /// In the house style of the seed's step text: "1½ TBSP", "¾ cup", "2 cups", "1 tsp", "10 oz".
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let n = format_amount(self.amount);
+        let plural = self.amount > 1.0 + 1e-9;
+        let unit = match &self.unit {
+            Unit::Tsp => "tsp".to_string(),
+            Unit::Tbsp => "TBSP".to_string(),
+            Unit::Cup => if plural { "cups" } else { "cup" }.to_string(),
+            Unit::FlOz => "fl oz".to_string(),
+            Unit::Ml => "ml".to_string(),
+            Unit::L => "L".to_string(),
+            Unit::Oz => "oz".to_string(),
+            Unit::Lb => "lb".to_string(),
+            Unit::G => "g".to_string(),
+            Unit::Kg => "kg".to_string(),
+            Unit::Pinch => if plural { "pinches" } else { "pinch" }.to_string(),
+            Unit::Count(noun) if noun.is_empty() => return write!(f, "{n}"),
+            Unit::Count(noun) => {
+                if plural {
+                    format!("{noun}s")
+                } else {
+                    noun.clone()
+                }
+            }
+        };
+        write!(f, "{n} {unit}")
+    }
+}
+
+/// Read a number at the start of `s` as recipes write it: "2", "1.5", "½", "1½", "1 1⁄2", "3/4", "1 ½".
+/// Returns the value and how many bytes it used.
+pub fn parse_number(s: &str) -> Option<(f64, usize)> {
+    let glyph = |c: char| GLYPHS.iter().find(|(_, g)| g.starts_with(c)).map(|(v, _)| *v);
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    let digits = &s[..i];
+    if i == 0 {
+        // A lone glyph or a fraction like "3/4" can't start here without digits; a glyph can.
+        let c = s.chars().next()?;
+        return glyph(c).map(|v| (v, c.len_utf8()));
+    }
+    let mut value: f64 = digits.parse().ok()?;
+    // Decimal.
+    if s[i..].starts_with('.') && s[i + 1..].starts_with(|c: char| c.is_ascii_digit()) {
+        let mut j = i + 1;
+        while j < bytes.len() && bytes[j].is_ascii_digit() {
+            j += 1;
+        }
+        return Some((s[..j].parse().ok()?, j));
+    }
+    // "3/4" or "3⁄4" directly.
+    if let Some((den, used)) = fraction_tail(&s[i..]) {
+        return Some((value / den, i + used));
+    }
+    // Mixed number: "1½", "1 ½", "1 1⁄2".
+    let rest = &s[i..];
+    let trimmed = rest.trim_start_matches(' ');
+    let skipped = rest.len() - trimmed.len();
+    if skipped <= 1 {
+        if let Some(c) = trimmed.chars().next() {
+            if let Some(v) = glyph(c) {
+                return Some((value + v, i + skipped + c.len_utf8()));
+            }
+        }
+        if skipped == 1 {
+            let mut j = 0;
+            let tb = trimmed.as_bytes();
+            while j < tb.len() && tb[j].is_ascii_digit() {
+                j += 1;
+            }
+            if j > 0 {
+                if let Some((den, used)) = fraction_tail(&trimmed[j..]) {
+                    let num: f64 = trimmed[..j].parse().ok()?;
+                    value += num / den;
+                    return Some((value, i + skipped + j + used));
+                }
+            }
+        }
+    }
+    Some((value, i))
+}
+
+/// "/4" or "⁄4" (fraction slash) → (4, bytes used).
+fn fraction_tail(s: &str) -> Option<(f64, usize)> {
+    let sep = if s.starts_with('/') { 1 } else if s.starts_with('⁄') { '⁄'.len_utf8() } else { return None };
+    let rest = &s[sep..];
+    let n = rest.bytes().take_while(u8::is_ascii_digit).count();
+    if n == 0 {
+        return None;
+    }
+    let den: f64 = rest[..n].parse().ok()?;
+    (den > 0.0).then_some((den, sep + n))
+}
+
+/// Number words used in step text ("juice from one lemon wedge (two wedges for 4)").
+pub fn number_word(w: &str) -> Option<f64> {
+    Some(match w.to_lowercase().as_str() {
+        "a" | "an" | "one" | "whole" | "a whole" => 1.0,
+        "two" => 2.0,
+        "three" => 3.0,
+        "four" => 4.0,
+        "five" => 5.0,
+        "six" => 6.0,
+        "eight" => 8.0,
+        "half" | "half a" | "a half" | "one-half" => 0.5,
+        "a third" | "one-third" | "one third" => 1.0 / 3.0,
+        "a quarter" | "one-quarter" | "a fourth" | "one-fourth" => 0.25,
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn q(a: f64, u: Unit) -> Quantity {
+        Quantity::new(a, u)
+    }
+
+    #[test]
+    fn parses_numbers_as_written() {
+        assert_eq!(parse_number("2 TBSP"), Some((2.0, 1)));
+        assert_eq!(parse_number("½ cup"), Some((0.5, '½'.len_utf8())));
+        assert_eq!(parse_number("1½ cups").map(|x| x.0), Some(1.5));
+        assert_eq!(parse_number("1 1⁄2 tsp").map(|x| x.0), Some(1.5));
+        assert_eq!(parse_number("1⁄2 TBSP").map(|x| x.0), Some(0.5));
+        assert_eq!(parse_number("3/4 tsp").map(|x| x.0), Some(0.75));
+        assert_eq!(parse_number("1.5 oz").map(|x| x.0), Some(1.5));
+        assert_eq!(parse_number("1 ½ cups").map(|x| x.0), Some(1.5));
+        assert_eq!(parse_number("10 oz").map(|x| x.0), Some(10.0));
+        assert_eq!(parse_number("cup"), None);
+    }
+
+    #[test]
+    fn recognises_units() {
+        assert_eq!(Unit::parse("TBSP"), Some(Unit::Tbsp));
+        assert_eq!(Unit::parse("teaspoon (tsp)"), Some(Unit::Tsp));
+        assert_eq!(Unit::parse("tablespoon (tbsp)"), Some(Unit::Tbsp));
+        assert_eq!(Unit::parse("ounce(oz)"), Some(Unit::Oz));
+        assert_eq!(Unit::parse("cloves"), Some(Unit::Count("clove".into())));
+        assert_eq!(Unit::parse("minutes"), None);
+    }
+
+    #[test]
+    fn rounds_to_measurable_amounts() {
+        assert_eq!(q(0.3, Unit::Tsp).rounded(), q(0.25, Unit::Tsp));
+        assert_eq!(q(1.4, Unit::Tsp).rounded(), q(1.5, Unit::Tsp));
+        assert_eq!(q(4.5, Unit::Tsp).rounded(), q(1.5, Unit::Tbsp));
+        assert_eq!(q(1.2, Unit::Tbsp).rounded(), q(1.0, Unit::Tbsp));
+        assert_eq!(q(1.25, Unit::Tbsp).rounded(), q(1.5, Unit::Tbsp));
+        assert_eq!(q(0.25, Unit::Tbsp).rounded(), q(0.75, Unit::Tsp));
+        assert_eq!(q(0.7, Unit::Cup).rounded(), q(2.0 / 3.0, Unit::Cup));
+        assert_eq!(q(0.125, Unit::Cup).rounded(), q(2.0, Unit::Tbsp));
+        assert_eq!(q(7.3, Unit::Oz).rounded(), q(7.5, Unit::Oz));
+        assert_eq!(q(1.3, Unit::Count("clove".into())).rounded(), q(1.5, Unit::Count("clove".into())));
+    }
+
+    #[test]
+    fn formats_in_house_style() {
+        assert_eq!(q(1.5, Unit::Tbsp).to_string(), "1½ TBSP");
+        assert_eq!(q(0.75, Unit::Cup).to_string(), "¾ cup");
+        assert_eq!(q(2.0, Unit::Cup).to_string(), "2 cups");
+        assert_eq!(q(0.125, Unit::Tsp).to_string(), "⅛ tsp");
+        assert_eq!(q(2.0, Unit::Count("clove".into())).to_string(), "2 cloves");
+        assert_eq!(q(0.3, Unit::Oz).to_string(), "0.3 oz");
+    }
+
+    #[test]
+    fn compares_across_units() {
+        assert!(q(3.0, Unit::Tsp).same_as(&q(1.0, Unit::Tbsp)));
+        assert!(q(0.25, Unit::Cup).same_as(&q(4.0, Unit::Tbsp)));
+        assert!(!q(1.0, Unit::Tbsp).same_as(&q(1.0, Unit::Oz)));
+    }
+}
