@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::State,
 };
 use mise_core::quantity::{Quantity, Unit, format_amount};
 use mise_core::servings;
@@ -16,9 +16,11 @@ use uuid::Uuid;
 use crate::{
     AppState,
     error::{ApiError, ApiResult},
+    extract::{Path, Query},
     media::Image,
 };
 
+/// The largest derived yield; any published yield is allowed, however large (a 40-serving roast turkey).
 const MAX_SERVINGS: f64 = 24.0;
 
 #[derive(Deserialize, IntoParams)]
@@ -64,7 +66,10 @@ pub struct Variant {
     /// Serving counts with published amounts.
     pub yields: Vec<f64>,
     pub servings: f64,
-    /// The requested yield is published, so every amount is as published.
+    /// The requested yield is one of the published ones.
+    pub published_yield: bool,
+    /// Every amount shown is as published (a published yield can still lack an amount for a line, or have
+    /// step text written for another yield).
     pub official: bool,
     pub ingredients: Vec<Ingredient>,
     pub steps: Vec<Step>,
@@ -96,8 +101,9 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
         .fetch_all(&s.pool)
         .await?;
     let target = p.servings.or_else(|| yields.first().copied()).unwrap_or(2.0);
-    if !(target > 0.0 && target <= MAX_SERVINGS) {
-        return Err(ApiError::BadRequest(format!("servings must be between 1 and {MAX_SERVINGS}")));
+    let max = yields.iter().copied().fold(MAX_SERVINGS, f64::max);
+    if !(target > 0.0 && target <= max) {
+        return Err(ApiError::BadRequest(format!("servings must be more than 0 and at most {max}")));
     }
 
     let lines: Vec<LineRow> = sqlx::query_as(
@@ -110,7 +116,7 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
     let mut amounts: HashMap<Uuid, Vec<(f64, f64, Option<String>)>> = HashMap::new();
     for (line, sv, a, u) in sqlx::query_as::<_, (Uuid, f64, f64, Option<String>)>(
         "SELECT la.line_id, la.servings::float8, la.amount::float8, la.unit FROM line_amounts la
-         JOIN ingredient_lines il ON il.id = la.line_id WHERE il.variant_id = $1 AND la.amount IS NOT NULL",
+         JOIN ingredient_lines il ON il.id = la.line_id WHERE il.variant_id = $1 AND la.amount > 0",
     )
     .bind(id)
     .fetch_all(&s.pool)
@@ -120,7 +126,7 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
     }
     let by_key: HashMap<&str, Uuid> = lines.iter().map(|l| (l.1.as_str(), l.0)).collect();
 
-    let ingredients = lines
+    let ingredients: Vec<Ingredient> = lines
         .iter()
         .map(|(line, _, name, food_id, food, shipped, allergens, note, image)| {
             let (amount, scaled) = amounts.get(line).map_or((None, false), |a| line_text(a, target));
@@ -166,7 +172,7 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
         amounts.get(by_key.get(key)?)?.iter().find(|(x, _, _)| (x - sv).abs() < 1e-9).map(|(_, a, _)| *a)
     };
     let ctx = Context { base, scale_plain: !any_alts, line_amount: &line_amount };
-    let steps = step_rows
+    let steps: Vec<Step> = step_rows
         .iter()
         .zip(&templates)
         .map(|((step, position, text, _), t)| {
@@ -178,7 +184,10 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
         })
         .collect();
 
-    let official = yields.iter().any(|y| (y - target).abs() < 1e-9);
+    let published_yield = yields.iter().any(|y| (y - target).abs() < 1e-9);
+    let official = published_yield
+        && !ingredients.iter().any(|i: &Ingredient| i.scaled)
+        && !steps.iter().any(|s: &Step| s.scaled);
     let meta = public_meta(meta);
     Ok(Json(Variant {
         id,
@@ -188,6 +197,7 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
         description,
         yields,
         servings: target,
+        published_yield,
         official,
         ingredients,
         steps,

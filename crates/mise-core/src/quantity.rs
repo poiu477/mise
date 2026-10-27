@@ -159,9 +159,14 @@ impl Quantity {
                 }
                 Quantity::new(round_cup(a), Unit::Cup)
             }
-            Unit::Oz | Unit::FlOz => Quantity::new(round_to(a, if a < 1.0 { 0.25 } else { 0.5 }), self.unit.clone()),
+            // Nothing positive rounds to zero: small amounts move to the next smaller unit or keep the smallest
+            // measurable step.
+            Unit::Oz | Unit::FlOz => Quantity::new(round_to(a, if a < 1.0 { 0.25 } else { 0.5 }).max(0.25), self.unit.clone()),
+            Unit::Lb if a < 0.25 => Quantity::new(a * 16.0, Unit::Oz).rounded(),
             Unit::Lb => Quantity::new(round_to(a, 0.25), Unit::Lb),
-            Unit::G | Unit::Ml => Quantity::new(round_to(a, if a >= 20.0 { 5.0 } else { 1.0 }), self.unit.clone()),
+            Unit::G | Unit::Ml => Quantity::new(round_to(a, if a >= 20.0 { 5.0 } else { 1.0 }).max(1.0), self.unit.clone()),
+            Unit::Kg if a < 0.05 => Quantity::new(a * 1000.0, Unit::G).rounded(),
+            Unit::L if a < 0.05 => Quantity::new(a * 1000.0, Unit::Ml).rounded(),
             Unit::Kg | Unit::L => Quantity::new(round_to(a, 0.05), self.unit.clone()),
             Unit::Count(_) => Quantity::new(round_to(a, 0.5).max(0.5), self.unit.clone()),
             Unit::Pinch => self.clone(),
@@ -200,8 +205,12 @@ const GLYPHS: &[(f64, &str)] = &[
     (0.875, "⅞"),
 ];
 
-/// "1½", "¾", "2"; falls back to a trimmed decimal when no kitchen fraction fits.
+/// "1½", "¾", "2"; falls back to a trimmed decimal when no kitchen fraction fits. A positive amount never
+/// reads as "0" (some sources record traces such as 0.004 oz).
 pub fn format_amount(a: f64) -> String {
+    if a > 0.0 && a < 0.01 {
+        return "<0.01".to_string();
+    }
     let whole = a.floor();
     let frac = a - whole;
     if frac < 0.01 {
@@ -389,6 +398,7 @@ mod tests {
         assert_eq!(q(0.125, Unit::Tsp).to_string(), "⅛ tsp");
         assert_eq!(q(2.0, Unit::Count("clove".into())).to_string(), "2 cloves");
         assert_eq!(q(0.3, Unit::Oz).to_string(), "0.3 oz");
+        assert_eq!(q(0.004, Unit::Oz).to_string(), "<0.01 oz");
     }
 
     #[test]

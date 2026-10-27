@@ -45,6 +45,9 @@ pub struct GroupStats {
     pub split_from_drift: usize,
     pub merged_as_cross_lineage_twin: usize,
     pub merged_by_decision: usize,
+    /// Dishes that kept their id from the previous run, and how many of those got a different slug.
+    pub dishes_kept: usize,
+    pub slugs_changed: usize,
 }
 
 #[derive(sqlx::FromRow)]
@@ -89,6 +92,20 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let mut stats = GroupStats::default();
     let mut tx = pool.begin().await?;
 
+    // Dishes keep their id and slug across runs (links, and later plans and favourites, point at them): remember
+    // which dish each version was in before starting over.
+    let mut old_dish: HashMap<Uuid, Uuid> = HashMap::new();
+    let mut old_slug: HashMap<Uuid, String> = HashMap::new();
+    for (v, d, slug) in sqlx::query_as::<_, (Uuid, Uuid, String)>(
+        "SELECT v.id, d.id, d.slug FROM variants v JOIN dishes d ON d.id = v.dish_id WHERE d.origin = 'grouped' AND NOT v.dish_pinned",
+    )
+    .fetch_all(&mut *tx)
+    .await?
+    {
+        old_dish.insert(v, d);
+        old_slug.insert(d, slug);
+    }
+
     // Start over for everything the job owns.
     sqlx::query("UPDATE variants v SET dish_id = NULL FROM dishes d WHERE d.id = v.dish_id AND d.origin = 'grouped' AND NOT v.dish_pinned")
         .execute(&mut *tx)
@@ -102,7 +119,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let vs: Vec<V> = sqlx::query_as(
         "SELECT id, title, subtitle, parent_variant_id, coalesce(meta->>'content_type', 'recipe') AS content_type,
                 has_steps, (meta->'media'->>'hero') IS NOT NULL AS has_hero, published_at AS published
-         FROM variants WHERE dish_id IS NULL",
+         FROM variants WHERE dish_id IS NULL ORDER BY id",
     )
     .fetch_all(&mut *tx)
     .await?;
@@ -256,8 +273,12 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         }
         // Largest title groups first, so the anchor is the dish's usual name; each group is represented by
         // its newest version.
-        let mut groups: Vec<Vec<usize>> = groups.into_values().collect();
-        groups.sort_by_key(|g| std::cmp::Reverse((g.len(), g.iter().map(|&m| vs[m].published).max())));
+        // Ties go to the title itself, so a run on the same data always picks the same anchor.
+        let mut groups: Vec<(&str, Vec<usize>)> = groups.into_iter().collect();
+        groups.sort_by(|(ta, a), (tb, b)| {
+            (b.len(), b.iter().map(|&m| vs[m].published).max()).cmp(&(a.len(), a.iter().map(|&m| vs[m].published).max())).then(ta.cmp(tb))
+        });
+        let groups: Vec<Vec<usize>> = groups.into_iter().map(|(_, g)| g).collect();
         let mut clusters: Vec<(usize, Vec<usize>)> = Vec::new(); // (anchor representative, members)
         for g in groups {
             let rep = *g.iter().max_by_key(|&&m| vs[m].published).unwrap();
@@ -290,13 +311,41 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
             joined.entry(cuf.find(c)).or_default().extend(members);
         }
         components = joined.into_values().collect();
+        for members in &mut components {
+            members.sort_unstable();
+        }
     }
 
-    // 4. One dish per component; its default is the most complete, newest version.
+    // 4. One dish per component; its default is the most complete, newest version. Each component takes over
+    //    the previous dish it shares the most versions with (greedily, largest overlap first), keeping its id
+    //    and slug. Larger dishes choose slugs first, so a big family gets the plain slug ahead of a stray.
+    let mut votes: Vec<(usize, usize, Uuid)> = Vec::new(); // (shared versions, component, previous dish)
+    for (c, members) in components.iter().enumerate() {
+        let mut shared: HashMap<Uuid, usize> = HashMap::new();
+        for &m in members {
+            if let Some(d) = old_dish.get(&vs[m].id) {
+                *shared.entry(*d).or_default() += 1;
+            }
+        }
+        votes.extend(shared.into_iter().map(|(d, n)| (n, c, d)));
+    }
+    votes.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+    let mut previous: Vec<Option<Uuid>> = vec![None; components.len()];
+    let mut taken_over = HashSet::new();
+    for (_, c, d) in votes {
+        if previous[c].is_none() && taken_over.insert(d) {
+            previous[c] = Some(d);
+        }
+    }
+    let mut order: Vec<usize> = (0..components.len()).collect();
+    // Variants are loaded in id order, so a component's first member is a stable tie-break.
+    order.sort_by_key(|&c| (std::cmp::Reverse(components[c].len()), components[c].iter().min().copied()));
+
     let mut slugs: HashSet<String> = sqlx::query_scalar::<_, String>("SELECT slug FROM dishes").fetch_all(&mut *tx).await?.into_iter().collect();
     let (mut d_id, mut d_title, mut d_sub, mut d_slug, mut d_type, mut d_default) = (vec![], vec![], vec![], vec![], vec![], vec![]);
     let (mut a_variant, mut a_dish) = (vec![], vec![]);
-    for members in &components {
+    for &c in &order {
+        let members = &components[c];
         let best = *members
             .iter()
             .max_by_key(|&&i| (vs[i].has_steps, vs[i].has_hero, vs[i].published))
@@ -309,15 +358,30 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
             e.0 += 1;
             e.1 = e.1.max(vs[m].published);
         }
-        let title = counts.into_iter().max_by_key(|(_, (n, latest))| (*n, *latest)).map(|(t, _)| t).unwrap_or_default();
+        let title = counts
+            .into_iter()
+            .max_by(|(ta, (na, la)), (tb, (nb, lb))| (na, la).cmp(&(nb, lb)).then(tb.cmp(ta)))
+            .map(|(t, _)| t)
+            .unwrap_or_default();
         let base = slugify(&title);
-        let mut slug = base.clone();
+        let kept = previous[c].and_then(|d| old_slug.get(&d)).cloned();
+        // The previous slug, or the plain one when the previous was a numbered copy of it and it is now free.
+        let mut slug = match &kept {
+            Some(k) if strip_number(k) == base && slugs.contains(&base) => k.clone(),
+            Some(k) if strip_number(k) == base => base.clone(),
+            Some(k) => k.clone(),
+            None => base.clone(),
+        };
         let mut n = 2;
         while !slugs.insert(slug.clone()) {
             slug = format!("{base}-{n}");
             n += 1;
         }
-        let id = Uuid::now_v7();
+        if kept.as_ref().is_some_and(|k| *k != slug) {
+            stats.slugs_changed += 1;
+        }
+        let id = previous[c].unwrap_or_else(Uuid::now_v7);
+        stats.dishes_kept += previous[c].is_some() as usize;
         d_id.push(id);
         d_title.push(title.clone());
         // Subtitle: the most common one among versions that carry the chosen title, so the two read together.
@@ -375,4 +439,12 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
 
     tx.commit().await?;
     Ok(stats)
+}
+
+/// "beef-ragu-2" → "beef-ragu".
+fn strip_number(slug: &str) -> &str {
+    match slug.rsplit_once('-') {
+        Some((head, tail)) if !head.is_empty() && !tail.is_empty() && tail.bytes().all(|b| b.is_ascii_digit()) => head,
+        _ => slug,
+    }
 }

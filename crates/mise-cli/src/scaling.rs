@@ -106,7 +106,7 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path) -
     }
     for (v, key, s, a, u) in sqlx::query_as::<_, (Uuid, String, f64, f64, Option<String>)>(
         "SELECT il.variant_id, il.line_key, la.servings::float8, la.amount::float8, la.unit
-         FROM line_amounts la JOIN ingredient_lines il ON il.id = la.line_id WHERE la.amount IS NOT NULL",
+         FROM line_amounts la JOIN ingredient_lines il ON il.id = la.line_id WHERE la.amount > 0",
     )
     .fetch_all(pool)
     .await

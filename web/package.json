@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "api": "cargo run -q --release -p mise-api -- openapi > openapi.json && openapi-typescript openapi.json -o src/api/schema.d.ts"
+    "api": "cargo run -q --release -p mise-api -- openapi > openapi.json && openapi-typescript openapi.json -o src/api/schema.d.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "openapi-fetch": "^0.17.0",
@@ -22,6 +23,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "openapi-typescript": "^7.13.0",
     "typescript": "~5.9.0",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   }
 }

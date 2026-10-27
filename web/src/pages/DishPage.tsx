@@ -17,6 +17,8 @@ export function DishPage() {
   // ?v=<version id> pins a version; ?s=<servings> keeps the serving count across reloads and shares.
   const pinned = params.get("v");
   const servingsParam = Number(params.get("s")) || undefined;
+  // Servings live in state (so quick taps queue up) and are mirrored to ?s= for reloads and links.
+  const [chosenServings, setChosenServings] = useState<number | undefined>(servingsParam);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -41,7 +43,10 @@ export function DishPage() {
     return dish.variants.find((v) => v.id === pinned) ?? pick(dish.variants, sel) ?? dish.variants.find((v) => v.id === dish.default_variant);
   }, [dish, sel, pinned]);
 
-  const servings = servingsParam ?? (chosen?.yields.includes(2) ? 2 : chosen?.yields[0]) ?? 2;
+  const defaultServings = (chosen?.yields.includes(2) ? 2 : chosen?.yields[0]) ?? 2;
+  const servings = chosenServings ?? defaultServings;
+
+  useEffect(() => setChosenServings(Number(params.get("s")) || undefined), [slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!chosen) return;
@@ -69,10 +74,10 @@ export function DishPage() {
       { replace: true },
     );
   const setServings = (n: number | ((cur: number) => number)) =>
-    update((prev) => {
-      const cur = Number(prev.get("s")) || servings;
-      return { s: String(typeof n === "function" ? n(cur) : n) };
-    });
+    setChosenServings((cur) => (typeof n === "function" ? n(cur ?? defaultServings) : n));
+  useEffect(() => {
+    if (chosenServings !== undefined && String(chosenServings) !== params.get("s")) update(() => ({ s: String(chosenServings) }));
+  }, [chosenServings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (missing) {
     return (
@@ -138,12 +143,7 @@ export function DishPage() {
       )}
 
       <Servings value={servings} published={chosen.yields} onChange={setServings} />
-      {v && !v.official && (
-        <p className="notice">
-          {servings} servings isn't a published size, so amounts marked <span className="approx">≈</span> are scaled from the
-          published ones and rounded to kitchen measures. Check them as you go.
-        </p>
-      )}
+      {v && !v.official && <ScaledNotice v={v} servings={servings} />}
 
       <div className={`cook ${loadingVariant ? "stale" : ""}`}>
         <section className="ingredients" aria-labelledby="ing-h">
@@ -226,3 +226,20 @@ function minutes(iso: unknown): number | undefined {
 const difficulty = (d: number) => ["", "Easy", "Medium", "Hard"][d] ?? "";
 const year = (iso?: string | null) => (iso ? new Date(iso).getFullYear().toString() : "");
 const allergens = (v: Variant) => [...new Set(v.ingredients.flatMap((i) => i.allergens))].sort();
+
+/** Why some amounts on the page are scaled, and which ones. */
+function ScaledNotice({ v, servings }: { v: Variant; servings: number }) {
+  const ingredients = v.ingredients.some((i) => i.scaled);
+  const steps = v.steps.some((s) => s.scaled);
+  const what = ingredients && steps ? "Ingredient amounts marked ≈ and amounts in marked steps" : ingredients ? "Amounts marked ≈" : "Amounts in marked steps";
+  const why = !v.published_yield
+    ? `${servings} servings isn't a published size.`
+    : ingredients
+      ? `Not every amount was published for ${servings} servings.`
+      : `Ingredient amounts are as published, but the step text was only written for other sizes.`;
+  return (
+    <p className="notice">
+      {why} {what} are scaled from the published ones and rounded to kitchen measures. Check them as you go.
+    </p>
+  );
+}

@@ -70,7 +70,11 @@ static SHARE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(half|one-half|a third|one-third|two-thirds|a quarter|one-quarter|a fourth|three-fourths|three-quarters|one|two|three|four|all|whole)\b")
         .unwrap()
 });
-static WE_USED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^we used\s+(.+?)\s*;\s*(.+)$").unwrap());
+/// The largest yield a parenthetical may name.
+const MAX_YIELD: f64 = 100.0;
+
+/// "we used ½ tsp; 1 tsp", "we\nused ¾ tsp, 1½ tsp", "we used 1 tsp kosher salt; use 2 tsp".
+static WE_USED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?is)^we\s+used\s+(.+?)\s*[;,]\s*(?:use\s+)?(.+)$").unwrap());
 
 struct Found {
     start: usize,
@@ -138,6 +142,14 @@ pub fn parse(text: &str, lines: Lines) -> Template {
 
     for (start, end, caps) in &parens {
         let (start, end) = (*start, *end);
+        // Only yields a kitchen cooks for; "(… for 0)" or "(for 99999)" is ordinary text.
+        let named: Option<f64> = match caps {
+            Some(c) => c[2].parse().ok(),
+            None => NOTE.captures(&text[start..end]).and_then(|c| c[1].parse().ok()),
+        };
+        if !named.is_some_and(|n| (1.0..=MAX_YIELD).contains(&n)) {
+            continue;
+        }
         let Some(caps) = caps else {
             let from: f64 = NOTE.captures(&text[start..end]).and_then(|c| c[1].parse().ok()).unwrap_or(4.0);
             reps.push((start, end, Part::Note { from, text: text[start..end].to_string() }));
@@ -148,15 +160,16 @@ pub fn parse(text: &str, lines: Lines) -> Template {
         let servings: f64 = caps[2].parse().unwrap_or(4.0);
 
         // "salt (we used ½ tsp; 1 tsp for 4 servings)": both amounts inside the parentheses.
+        // The words around the base amount stay ("(we used 1 tsp kosher salt)"); the alternative goes.
         if let Some(w) = WE_USED.captures(inner.as_str()) {
-            let base = quantities(w.get(1).unwrap().as_str(), 0);
+            let g1 = w.get(1).unwrap();
+            let base = quantities(g1.as_str(), inner.start() + g1.start());
             let alt = quantities(w.get(2).unwrap().as_str(), 0);
             if let (Some(b), Some(a)) = (base.first(), alt.first()) {
-                let open = text[start..end].find('(').map_or(start, |o| start + o);
-                reps.push((start, end, Part::Text { text: text[start..open + 1].to_string() + "we used " }));
-                // The amount sits inside the replacement; record it as its own part right after the text.
-                reps.push((end, end, Part::Amount { base: b.q.clone(), alts: vec![(servings, a.q.clone())], line: None }));
-                reps.push((end, end, Part::Text { text: ")".into() }));
+                let g1_end = inner.start() + g1.end();
+                reps.push((start, b.start, Part::Text { text: text[start..b.start].to_string() }));
+                reps.push((b.start, b.end, Part::Amount { base: b.q.clone(), alts: vec![(servings, a.q.clone())], line: None }));
+                reps.push((b.end, end, Part::Text { text: text[b.end..g1_end].to_string() + ")" }));
                 prev_end = end;
                 continue;
             }
@@ -343,13 +356,23 @@ pub fn amount_at(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Opt
         }
     }
     let alts: Vec<&(f64, Quantity)> = if use_alts { alts.iter().collect() } else { vec![] };
-    if let Some((s, q)) = alts.iter().min_by(|a, b| (a.0 - target).abs().total_cmp(&(b.0 - target).abs())) {
-        if let Some(a) = q.in_unit(&base.unit) {
-            let v = base.amount + (a - base.amount) * (target - ctx.base) / (s - ctx.base);
-            let unit = if (target - s).abs() < (target - ctx.base).abs() { q.unit.clone() } else { base.unit.clone() };
-            let v = Quantity::new(v.max(0.0), base.unit.clone()).in_unit(&unit).unwrap_or(v);
-            return Some((Quantity::new(v, unit).rounded(), Method::Interpolated));
+    let alts: Vec<&(f64, Quantity)> = alts.into_iter().filter(|(s, _)| (s - ctx.base).abs() > 1e-9).collect();
+    // Between published yields: interpolated. Outside them: in proportion to the nearest one, so an amount
+    // never runs down to nothing below the smallest yield ("½ cup (1½ cups for 4)" at 1 serving is ¼ cup).
+    if !alts.is_empty() && ctx.base > 0.0 {
+        let mut points: Vec<(f64, f64)> = vec![(ctx.base, base.amount)];
+        points.extend(alts.iter().filter_map(|(s, q)| Some((*s, q.in_unit(&base.unit)?))));
+        if points.len() > 1 {
+            if let Some((v, _)) = crate::servings::amount_at(&points, target) {
+                let near = crate::servings::nearest(&points.iter().map(|p| p.0).collect::<Vec<_>>(), target).unwrap_or(ctx.base);
+                let unit = alts.iter().find(|(s, _)| (s - near).abs() < 1e-9).map_or(base.unit.clone(), |(_, q)| q.unit.clone());
+                let v = Quantity::new(v.max(0.0), base.unit.clone()).in_unit(&unit).unwrap_or(v);
+                return Some((Quantity::new(v, unit).rounded(), Method::Interpolated));
+            }
         }
+    }
+    if ctx.base <= 0.0 {
+        return Some((base.clone(), Method::Unchanged));
     }
     if ctx.scale_plain || !alts.is_empty() || !use_alts {
         return Some((base.scaled(target / ctx.base).rounded(), Method::Proportional));
@@ -457,6 +480,25 @@ mod tests {
         assert_eq!(render(&t, 4.0, &c).text, "Stir in all the lime zest and juice from the whole lime.");
         let three = render(&t, 3.0, &c);
         assert!(three.check);
+    }
+
+    #[test]
+    fn we_used_variants_keep_their_words() {
+        let c = ctx(2.0, &none);
+        let t = parse("Season with salt (we
+used 1 tsp kosher salt; use 2 tsp for 4 servings) and pepper.", &lines());
+        assert_eq!(render(&t, 4.0, &c).text, "Season with salt (we
+used 2 tsp kosher salt) and pepper.");
+        let t = parse("Add salt (we used ¾ tsp, 1½ tsp for 4 servings).", &lines());
+        assert_eq!(render(&t, 2.0, &c).text, "Add salt (we used ¾ tsp).");
+    }
+
+    #[test]
+    fn never_runs_to_nothing_below_the_smallest_yield() {
+        let t = parse("Stir in ½ cup water (1½ cups for 4).", &lines());
+        let c = ctx(2.0, &none);
+        assert_eq!(render(&t, 1.0, &c).text, "Stir in ¼ cup water.");
+        assert_eq!(render(&t, 3.0, &c).text, "Stir in 1 cup water.");
     }
 
     #[test]

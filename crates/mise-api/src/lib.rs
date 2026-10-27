@@ -3,6 +3,7 @@
 
 pub mod dishes;
 pub mod error;
+pub mod extract;
 pub mod media;
 pub mod variants;
 
@@ -61,6 +62,7 @@ pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
         .route("/api/dishes/{slug}", get(dishes::get))
         .route("/api/variants/{id}", get(variants::get))
         .route("/api/media/{id}/{size}", get(media::get))
+        .route("/api", any(|| async { error::ApiError::NotFound }))
         .route("/api/{*rest}", any(|| async { error::ApiError::NotFound }))
         .with_state(state);
     if let Some(dir) = web_dir {
@@ -71,8 +73,8 @@ pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
         .layer(TraceLayer::new_for_http())
 }
 
-/// The built web app: its files, with any other path answered by index.html so client-side routes work on
-/// reload.
-fn web_app(dir: &Path) -> ServeDir<tower_http::set_status::SetStatus<ServeFile>> {
-    ServeDir::new(dir).not_found_service(ServeFile::new(dir.join("index.html")))
+/// The built web app: its files, with any other path answered by index.html (status 200) so client-side
+/// routes work on reload and the service worker can keep them for offline use.
+fn web_app(dir: &Path) -> ServeDir<ServeFile> {
+    ServeDir::new(dir).fallback(ServeFile::new(dir.join("index.html")))
 }

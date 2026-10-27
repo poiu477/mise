@@ -197,8 +197,13 @@ export interface components {
             meta: {
                 [key: string]: unknown;
             };
-            /** @description The requested yield is published, so every amount is as published. */
+            /**
+             * @description Every amount shown is as published (a published yield can still lack an amount for a line, or have
+             *     step text written for another yield).
+             */
             official: boolean;
+            /** @description The requested yield is one of the published ones. */
+            published_yield: boolean;
             /** Format: double */
             servings: number;
             steps: components["schemas"]["Step"][];

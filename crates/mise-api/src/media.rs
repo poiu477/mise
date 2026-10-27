@@ -1,7 +1,7 @@
 //! Photos: the stored original or a web-size copy, by media id.
 
 use axum::{
-    extract::{Path, State},
+    extract::State,
     http::header,
     response::IntoResponse,
 };
@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::{
     AppState,
     error::{ApiError, ApiResult},
+    extract::Path,
 };
 
 /// Web-size copies the media job makes (longest side in pixels).
