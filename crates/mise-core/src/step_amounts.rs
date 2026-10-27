@@ -60,7 +60,8 @@ const UNIT: &str = r"(?i:tbsps?|tablespoons?|tsps?|teaspoons?|cups?|fl\.? oz|oz|
 static QTY: LazyLock<Regex> = LazyLock::new(|| Regex::new(&format!(r"({NUM})\s*({UNIT})\b")).unwrap());
 /// "(… for 4 servings)", "(… for 4)".
 static ALT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\s*\(\s*([^()]*?)[\s,;]+for\s+(\d+)(?:\s+(?:servings?|people|portions))?\s*\)").unwrap()
+    // A remark may follow the yield: "(5 TBSP for 4 servings; we sent more)".
+    Regex::new(r"(?i)\s*\(\s*([^()]*?)[\s,;]+for\s+(\d+)(?:\s+(?:servings?|people|portions))?(?:\s*[;,]\s*([^()]*?))?\s*\)").unwrap()
 });
 /// "(For 4 servings, spread squash across the entire sheet.)".
 static NOTE: LazyLock<Regex> =
@@ -209,7 +210,9 @@ pub fn parse(text: &str, lines: Lines) -> Template {
                     ));
                     used_spans.push((b.start, b.end));
                 }
-                reps.push((start, end, Part::Text { text: String::new() }));
+                // The remark after the yield, if any, holds at every yield.
+                let remark = caps.get(3).map(|m| m.as_str().trim()).filter(|r| !r.is_empty());
+                reps.push((start, end, Part::Text { text: remark.map(|r| format!(" ({r})")).unwrap_or_default() }));
             } else {
                 unparsed += 1;
             }
@@ -332,6 +335,39 @@ pub enum Method {
 /// One amount at a yield: the published value when there is one, otherwise derived. `use_alts` false
 /// ignores published alternatives (used to test derivation against them).
 pub fn amount_at(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Option<(Quantity, Method)> {
+    let (q, m) = derive(part, target, ctx, use_alts)?;
+    if matches!(m, Method::Published | Method::Unchanged) {
+        return Some((q, m));
+    }
+    // A derived amount stays between the published amounts on either side of it: rounding, or deriving one
+    // yield from the ingredient and the next from the text, must never give a larger yield less.
+    let Part::Amount { base, alts, .. } = part else { return Some((q, m)) };
+    let mut points: Vec<(f64, &Quantity)> = vec![(ctx.base, base)];
+    if use_alts {
+        points.extend(alts.iter().map(|(s, a)| (*s, a)));
+    }
+    let Some(v) = q.in_unit(&base.unit) else { return Some((q, m)) };
+    let side = |below: bool| {
+        points
+            .iter()
+            .filter(|p| if below { p.0 < target } else { p.0 > target })
+            .min_by(|a, b| (a.0 - target).abs().total_cmp(&(b.0 - target).abs()))
+            .and_then(|p| Some((p.1, p.1.in_unit(&base.unit)?)))
+    };
+    if let Some((lq, lv)) = side(true) {
+        if v < lv - 1e-9 {
+            return Some((lq.clone(), m));
+        }
+    }
+    if let Some((uq, uv)) = side(false) {
+        if v > uv + 1e-9 {
+            return Some((uq.clone(), m));
+        }
+    }
+    Some((q, m))
+}
+
+fn derive(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Option<(Quantity, Method)> {
     let Part::Amount { base, alts, line } = part else { return None };
     if (target - ctx.base).abs() < 1e-9 {
         return Some((base.clone(), Method::Published));
@@ -342,15 +378,21 @@ pub fn amount_at(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Opt
         }
     }
     // The ingredient's official amounts, when they move with the yield the way the text does. Pantry lines
-    // often repeat one amount for every yield ("¼ tsp salt" at 2 and 4) and say nothing about the step.
-    if let Some(line) = line {
+    // often repeat one amount for every yield ("¼ tsp salt" at 2 and 4) and say nothing about the step. Only
+    // for amounts the text varies (or text that never varies): "Reserve ½ cup potato cooking liquid" with no
+    // alternative is the same at every yield, whatever the potatoes do.
+    let varies = !alts.is_empty() || ctx.scale_plain || !use_alts;
+    if let Some(line) = line.as_ref().filter(|_| varies) {
         if let (Some(lb), Some(lt)) = ((ctx.line_amount)(line, ctx.base), (ctx.line_amount)(line, target)) {
             let agrees = |s: f64, q: &Quantity| match ((ctx.line_amount)(line, s), q.in_unit(&base.unit)) {
                 (Some(ls), Some(qa)) if base.amount > 0.0 => ((ls / lb) - (qa / base.amount)).abs() <= 0.15 * (qa / base.amount),
                 _ => true,
             };
             let consistent = !use_alts || alts.iter().all(|(s, q)| agrees(*s, q));
-            if lb > 0.0 && (lt - lb).abs() > 1e-9 && consistent {
+            // The line must move across the yields it is published for (base and its double), not merely when
+            // extended past them: a flat pantry line (1 tsp sugar for 2 and for 4) says nothing about the step.
+            let moves = (ctx.line_amount)(line, ctx.base * 2.0).is_some_and(|l2| (l2 - lb).abs() > 1e-9);
+            if lb > 0.0 && moves && consistent {
                 return Some((base.scaled(lt / lb).rounded(), Method::FromLine));
             }
         }
@@ -499,6 +541,47 @@ used 2 tsp kosher salt) and pepper.");
         let c = ctx(2.0, &none);
         assert_eq!(render(&t, 1.0, &c).text, "Stir in ¼ cup water.");
         assert_eq!(render(&t, 3.0, &c).text, "Stir in 1 cup water.");
+    }
+
+    #[test]
+    fn remarks_after_the_yield_stay() {
+        let t = parse("Stir in 2½ TBSP sweet soy glaze (5 TBSP for 4 servings; we sent more), then serve.", &lines());
+        assert_eq!(t.unparsed, 0);
+        let c = ctx(2.0, &none);
+        assert_eq!(render(&t, 2.0, &c).text, "Stir in 2½ TBSP sweet soy glaze (we sent more), then serve.");
+        assert_eq!(render(&t, 4.0, &c).text, "Stir in 5 TBSP sweet soy glaze (we sent more), then serve.");
+        assert_eq!(render(&t, 5.0, &c).text, "Stir in 6½ TBSP sweet soy glaze (we sent more), then serve.");
+    }
+
+    #[test]
+    fn amounts_the_text_keeps_fixed_ignore_their_line() {
+        let lines = vec![("p".to_string(), "Potatoes".to_string())];
+        let t = parse("Reserve ½ cup potatoes cooking liquid, then drain. Add 1 TBSP butter (2 TBSP for 4).", &lines);
+        let line = |k: &str, s: f64| -> Option<f64> { (k == "p").then_some(s * 6.0) };
+        let c = ctx(2.0, &line);
+        assert!(render(&t, 4.0, &c).text.starts_with("Reserve ½ cup"));
+        assert!(render(&t, 6.0, &c).text.starts_with("Reserve ½ cup"));
+    }
+
+    #[test]
+    fn text_that_never_varies_scales_steadily() {
+        let t = parse("Add remaining Tuscan Heat Spice, 1 tsp sugar, and water.", &lines());
+        let c = Context { base: 2.0, scale_plain: true, line_amount: &none };
+        let at = |n: f64| render(&t, n, &c).text;
+        assert_eq!(at(4.0), "Add remaining Tuscan Heat Spice, 2 tsp sugar, and water.");
+        assert_eq!(at(5.0), "Add remaining Tuscan Heat Spice, 2½ tsp sugar, and water.");
+        assert_eq!(at(6.0), "Add remaining Tuscan Heat Spice, 1 TBSP sugar, and water.");
+    }
+
+    #[test]
+    fn a_flat_pantry_line_does_not_drive_the_step() {
+        let lines = vec![("s".to_string(), "Sugar".to_string())];
+        let t = parse("Add 1 tsp sugar and water.", &lines);
+        // 1 tsp for 2 and for 4, extended past 4 in proportion (as the API's lookup does).
+        let line = |k: &str, sv: f64| -> Option<f64> { (k == "s").then_some(if sv <= 4.0 { 1.0 } else { sv / 4.0 }) };
+        let c = Context { base: 2.0, scale_plain: true, line_amount: &line };
+        assert_eq!(render(&t, 4.0, &c).text, "Add 2 tsp sugar and water.");
+        assert_eq!(render(&t, 5.0, &c).text, "Add 2½ tsp sugar and water.");
     }
 
     #[test]

@@ -125,6 +125,12 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path) -
         steps.entry(v).or_default().push(Step { position, text, template: serde_json::from_value(t)? });
     }
 
+    // As the app does: published amounts that would shrink as servings grow are derived instead.
+    for ((v, _), list) in amounts.iter_mut() {
+        let base = text_base(yields.get(v).map(Vec::as_slice).unwrap_or(&[]), steps.get(v).into_iter().flatten().map(|s| &s.template));
+        servings::keep_consistent(list, &[base, base * 2.0]);
+    }
+
     // Sample: the default version of recipe dishes published at 2, 3, 4 and 6 servings whose steps vary by yield.
     let candidates: Vec<(Uuid, Uuid, String)> = sqlx::query_as(
         "SELECT d.id, d.default_variant_id, v.title FROM dishes d JOIN variants v ON v.id = d.default_variant_id
@@ -334,7 +340,21 @@ fn write_card(
                     }
                     let _ = write!(h, "<td>{cell}</td>");
                 }
-                None => h.push_str("<td class=\"muted\">–</td>"),
+                None => {
+                    // Not published, or left out for shrinking: what the app shows instead.
+                    let all: Vec<(f64, f64)> = list.map(|l| l.iter().map(|x| (x.0, x.1)).collect()).unwrap_or_default();
+                    let unit = list.and_then(|l| l.first()).and_then(|x| x.2.clone());
+                    match servings::amount_at(&all, t) {
+                        Some((d, _)) => {
+                            let shown = match unit.as_deref().and_then(Unit::parse) {
+                                Some(u) => Quantity::new(d, u).rounded().to_string(),
+                                None => fmt_line(d, &unit),
+                            };
+                            let _ = write!(h, "<td><mark title=\"derived: the published amount shrank, or none was published\">≈ {}</mark></td>", esc(&shown));
+                        }
+                        None => h.push_str("<td class=\"muted\">–</td>"),
+                    }
+                }
             }
         }
         h.push_str("</tr>");

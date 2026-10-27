@@ -124,26 +124,6 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
     {
         amounts.entry(line).or_default().push((sv, a, u));
     }
-    let by_key: HashMap<&str, Uuid> = lines.iter().map(|l| (l.1.as_str(), l.0)).collect();
-
-    let ingredients: Vec<Ingredient> = lines
-        .iter()
-        .map(|(line, _, name, food_id, food, shipped, allergens, note, image)| {
-            let (amount, scaled) = amounts.get(line).map_or((None, false), |a| line_text(a, target));
-            Ingredient {
-                name: name.clone(),
-                food_id: *food_id,
-                food: food.clone(),
-                amount,
-                scaled,
-                shipped: *shipped,
-                allergens: allergens.clone(),
-                note: note.clone(),
-                image: image.as_deref().and_then(|m| m.parse().ok()).map(Image::new),
-            }
-        })
-        .collect();
-
     let step_rows: Vec<(Uuid, i32, String, Option<serde_json::Value>)> =
         sqlx::query_as("SELECT id, position, text, template FROM steps WHERE variant_id = $1 ORDER BY position")
             .bind(id)
@@ -167,9 +147,38 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
     // Everything below is synchronous: the renderer's line lookup is not Send.
     let templates: Vec<Option<Template>> = step_rows.iter().map(|r| r.3.clone().and_then(|t| serde_json::from_value(t).ok())).collect();
     let base = step_amounts::text_base(&yields, templates.iter().flatten());
+    // The yield the steps are written for, and its double (the one their parentheses give), are trusted first;
+    // a published amount that would shrink as servings grow is derived instead.
+    for list in amounts.values_mut() {
+        servings::keep_consistent(list, &[base, base * 2.0]);
+    }
+    let by_key: HashMap<&str, Uuid> = lines.iter().map(|l| (l.1.as_str(), l.0)).collect();
+
+    let ingredients: Vec<Ingredient> = lines
+        .iter()
+        .map(|(line, _, name, food_id, food, shipped, allergens, note, image)| {
+            let (amount, scaled) = amounts.get(line).map_or((None, false), |a| line_text(a, target));
+            Ingredient {
+                name: name.clone(),
+                food_id: *food_id,
+                food: food.clone(),
+                amount,
+                scaled,
+                shipped: *shipped,
+                allergens: allergens.clone(),
+                note: note.clone(),
+                image: image.as_deref().and_then(|m| m.parse().ok()).map(Image::new),
+            }
+        })
+        .collect();
+
     let any_alts = templates.iter().flatten().any(Template::has_alts);
+    // A line's amount at any yield: published, or interpolated along its (consistent) published amounts.
     let line_amount = |key: &str, sv: f64| -> Option<f64> {
-        amounts.get(by_key.get(key)?)?.iter().find(|(x, _, _)| (x - sv).abs() < 1e-9).map(|(_, a, _)| *a)
+        let list = amounts.get(by_key.get(key)?)?;
+        let unit = &list.first()?.2;
+        let points: Vec<(f64, f64)> = list.iter().filter(|p| &p.2 == unit).map(|p| (p.0, p.1)).collect();
+        servings::amount_at(&points, sv).map(|(a, _)| a)
     };
     let ctx = Context { base, scale_plain: !any_alts, line_amount: &line_amount };
     let steps: Vec<Step> = step_rows
@@ -223,10 +232,21 @@ fn line_text(published: &[(f64, f64, Option<String>)], target: f64) -> (Option<S
     let Some(near) = servings::nearest(&yields, target) else { return (None, false) };
     let unit = published.iter().find(|p| p.0 == near).and_then(|p| p.2.clone());
     let same_unit: Vec<(f64, f64)> = published.iter().filter(|p| p.2 == unit).map(|p| (p.0, p.1)).collect();
-    match servings::amount_at(&same_unit, target) {
-        Some((a, _)) => (Some(show(a, &unit, true)), true),
-        None => (None, false),
+    let Some((a, _)) = servings::amount_at(&same_unit, target) else { return (None, false) };
+    // Rounded, it must still sit between the published amounts on either side; when it would not, it reads as
+    // that neighbour (13.76 oz published for 2 and 4 is 13¾ oz at 3, not a rounded-up 14 oz).
+    if let Some(u) = unit.as_deref().and_then(Unit::parse) {
+        let r = Quantity::new(a, u).rounded().in_unit(&Unit::parse(unit.as_deref().unwrap_or("")).unwrap()).unwrap_or(a);
+        let below = same_unit.iter().filter(|p| p.0 < target).max_by(|x, y| x.0.total_cmp(&y.0));
+        let above = same_unit.iter().filter(|p| p.0 > target).min_by(|x, y| x.0.total_cmp(&y.0));
+        if let Some(&(_, b)) = below.filter(|p| r < p.1 - 1e-9) {
+            return (Some(show(b, &unit, false)), true);
+        }
+        if let Some(&(_, b)) = above.filter(|p| r > p.1 + 1e-9) {
+            return (Some(show(b, &unit, false)), true);
+        }
     }
+    (Some(show(a, &unit, true)), true)
 }
 
 /// Source metadata worth showing; internal bookkeeping (lineage, media paths) stays out.
@@ -250,6 +270,9 @@ mod tests {
         assert_eq!(line_text(&a, 6.0), (Some("1½ cups".into()), true));
         let counts = vec![(2.0, 1.0, Some("unit".into())), (4.0, 2.0, Some("unit".into()))];
         assert_eq!(line_text(&counts, 5.0), (Some("2½".into()), true));
+        // Rounding never passes a published neighbour.
+        let can = vec![(2.0, 13.76, Some("ounce".into())), (4.0, 13.76, Some("ounce".into()))];
+        assert_eq!(line_text(&can, 3.0), (Some("13¾ oz".into()), true));
         let odd = vec![(2.0, 4.0, Some("nach Geschmack".into()))];
         assert_eq!(line_text(&odd, 2.0), (Some("4 nach Geschmack".into()), false));
     }

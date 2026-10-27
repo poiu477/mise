@@ -141,6 +141,10 @@ impl Quantity {
                 if a >= 3.0 && is_multiple(a / 3.0, 0.5) {
                     return Quantity::new(a / 3.0, Unit::Tbsp).rounded();
                 }
+                // Less than a sixteenth of a teaspoon is a pinch.
+                if a < 0.0625 {
+                    return Quantity::new(1.0, Unit::Pinch);
+                }
                 let step = if a < 1.0 { 0.125 } else { 0.25 };
                 Quantity::new(round_to(a, step).max(0.125), Unit::Tsp)
             }
@@ -161,14 +165,19 @@ impl Quantity {
             }
             // Nothing positive rounds to zero: small amounts move to the next smaller unit or keep the smallest
             // measurable step.
-            Unit::Oz | Unit::FlOz => Quantity::new(round_to(a, if a < 1.0 { 0.25 } else { 0.5 }).max(0.25), self.unit.clone()),
+            // Below a quarter ounce (a few sprigs of herbs) the amount stays as small as it is.
+            Unit::Oz | Unit::FlOz if a < 0.25 => Quantity::new(round_to(a, 0.01).max(0.01), self.unit.clone()),
+            Unit::Oz | Unit::FlOz => Quantity::new(round_to(a, if a < 1.0 { 0.25 } else { 0.5 }), self.unit.clone()),
             Unit::Lb if a < 0.25 => Quantity::new(a * 16.0, Unit::Oz).rounded(),
             Unit::Lb => Quantity::new(round_to(a, 0.25), Unit::Lb),
             Unit::G | Unit::Ml => Quantity::new(round_to(a, if a >= 20.0 { 5.0 } else { 1.0 }).max(1.0), self.unit.clone()),
             Unit::Kg if a < 0.05 => Quantity::new(a * 1000.0, Unit::G).rounded(),
             Unit::L if a < 0.05 => Quantity::new(a * 1000.0, Unit::Ml).rounded(),
             Unit::Kg | Unit::L => Quantity::new(round_to(a, 0.05), self.unit.clone()),
-            Unit::Count(_) => Quantity::new(round_to(a, 0.5).max(0.5), self.unit.clone()),
+            // Whole and half items; quarters below one; slivers (0.07 of a thumb of ginger) as they are.
+            Unit::Count(_) if a < 0.25 => Quantity::new(round_to(a, 0.01).max(0.01), self.unit.clone()),
+            Unit::Count(_) if a < 1.0 => Quantity::new(round_to(a, 0.25), self.unit.clone()),
+            Unit::Count(_) => Quantity::new(round_to(a, 0.5), self.unit.clone()),
             Unit::Pinch => self.clone(),
         }
     }
@@ -213,13 +222,15 @@ pub fn format_amount(a: f64) -> String {
     }
     let whole = a.floor();
     let frac = a - whole;
-    if frac < 0.01 {
+    // Within 2% of a kitchen fraction reads as that fraction (a published 0.99 TBSP is 1 TBSP); a positive
+    // amount never reads as 0.
+    if frac < 0.02 && whole >= 1.0 {
         return format!("{whole}");
     }
-    if frac > 0.99 {
+    if frac > 0.98 {
         return format!("{}", whole + 1.0);
     }
-    match GLYPHS.iter().find(|(v, _)| (v - frac).abs() < 0.01) {
+    match GLYPHS.iter().find(|(v, _)| (v - frac).abs() < 0.021) {
         Some((_, g)) if whole == 0.0 => (*g).to_string(),
         Some((_, g)) => format!("{whole}{g}"),
         None => {
@@ -283,8 +294,13 @@ pub fn parse_number(s: &str) -> Option<(f64, usize)> {
         }
         return Some((s[..j].parse().ok()?, j));
     }
-    // "3/4" or "3⁄4" directly.
+    // "3/4" or "3⁄4" directly. Text extracted from printed cards sometimes loses the space in a mixed number:
+    // "11⁄2" is 1½ and "31⁄4" is 3¼ (a recipe never writes 5½ as eleven halves).
     if let Some((den, used)) = fraction_tail(&s[i..]) {
+        let n = value as u64;
+        if n >= 10 && den <= 16.0 && n % 10 > 0 && ((n % 10) as f64) < den {
+            return Some(((n / 10) as f64 + (n % 10) as f64 / den, i + used));
+        }
         return Some((value / den, i + used));
     }
     // Mixed number: "1½", "1 ½", "1 1⁄2".
@@ -364,6 +380,10 @@ mod tests {
         assert_eq!(parse_number("1 ½ cups").map(|x| x.0), Some(1.5));
         assert_eq!(parse_number("10 oz").map(|x| x.0), Some(10.0));
         assert_eq!(parse_number("cup"), None);
+        assert_eq!(parse_number("11⁄2 tsp").map(|x| x.0), Some(1.5));
+        assert_eq!(parse_number("31⁄4 cups").map(|x| x.0), Some(3.25));
+        assert_eq!(parse_number("12⁄3 cups").map(|x| x.0), Some(1.0 + 2.0 / 3.0));
+        assert_eq!(parse_number("1⁄2 tsp").map(|x| x.0), Some(0.5));
     }
 
     #[test]
@@ -387,7 +407,14 @@ mod tests {
         assert_eq!(q(0.7, Unit::Cup).rounded(), q(2.0 / 3.0, Unit::Cup));
         assert_eq!(q(0.125, Unit::Cup).rounded(), q(2.0, Unit::Tbsp));
         assert_eq!(q(7.3, Unit::Oz).rounded(), q(7.5, Unit::Oz));
+        assert_eq!(q(0.03, Unit::Oz).rounded(), q(0.03, Unit::Oz));
+        assert_eq!(q(0.03, Unit::Tsp).rounded(), q(1.0, Unit::Pinch));
+        assert_eq!(format_amount(0.99), "1");
+        assert_eq!(format_amount(0.016), "0.02");
+        assert_eq!(format_amount(2.52), "2½");
         assert_eq!(q(1.3, Unit::Count("clove".into())).rounded(), q(1.5, Unit::Count("clove".into())));
+        assert_eq!(q(0.7, Unit::Count("lime".into())).rounded(), q(0.75, Unit::Count("lime".into())));
+        assert_eq!(q(0.035, Unit::Count("thumb".into())).rounded(), q(0.04, Unit::Count("thumb".into())));
     }
 
     #[test]
