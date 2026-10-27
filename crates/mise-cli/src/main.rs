@@ -1,5 +1,6 @@
 //! `mise` command-line tool: database setup and data-core jobs.
 
+mod dish;
 mod food;
 mod gate;
 
@@ -69,6 +70,9 @@ enum Command {
     /// Inspect and curate foods, brands and the food tree.
     #[command(subcommand)]
     Food(food::FoodCommand),
+    /// Record decisions about which recipes belong in one dish.
+    #[command(subcommand)]
+    Dish(dish::DishCommand),
     /// Write the phase 1 gate report: a stratified sample of dishes to check grouping by hand (read-only).
     GateReport {
         /// Number of dishes to sample.
@@ -157,6 +161,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Command::Food(cmd) => food::run(&pool, cmd).await?,
+        Command::Dish(cmd) => dish::run(&pool, cmd).await?,
         Command::GateReport { sample, out, seed } => {
             let report = gate::write_report(&pool, sample, seed, &out).await?;
             let bytes = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);

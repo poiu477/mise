@@ -25,3 +25,21 @@ Foods are found by name, any alias, or slug; plurals and brand marks don't matte
   {"op": "add", "name": "Kerrygold Garlic & Herb Butter", "parent": "Garlic Herb Butter", "kind": "brand"}
 ]
 ```
+
+## Dish decisions
+
+`mise dish apply <file>` loads decisions about which recipe records belong in one dish, replacing those recorded
+before; `mise group-dishes` honours them on every run. Records are named by source and id, so decisions survive
+re-imports and a rebuilt database:
+
+```json
+[
+  { "decision": "merge", "a": ["seed:hellofresh-us", "<id>"], "b": ["seed:hellofresh-us", "<id>"],
+    "by": "user", "note": "renamed: same recipe" },
+  { "decision": "keep_apart", "a": ["seed:hellofresh-us", "<id>"], "b": ["seed:hellofresh-us", "<id>"], "by": "claude" }
+]
+```
+
+`merge` joins the two records' dishes after drift splitting, so a split cannot undo it. `keep_apart` stops the pair
+from being proposed for review again. `by` is `user` or `claude` (decided on the person's behalf, from their
+earlier decisions); either can be overridden by editing the file and applying it again.

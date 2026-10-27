@@ -2,8 +2,9 @@
 //!
 //! Variants are joined (union-find) when one was copied from the other and they are recognisably the same
 //! dish, or when separate lineages share the same cleaned title and subtitle. Copies that look like a recipe
-//! reused as a template for a different dish are left apart and queued for review. Variants pinned by a
-//! person, and dishes a person made, are never touched.
+//! reused as a template for a different dish are left apart and queued for review. Decisions recorded in
+//! `dish_decisions` override all of this: decided merges are applied last, and decided pairs are not queued
+//! again. Variants pinned by a person, and dishes a person made, are never touched.
 
 use std::collections::{HashMap, HashSet};
 
@@ -43,6 +44,7 @@ pub struct GroupStats {
     pub kept_apart_for_review: usize,
     pub split_from_drift: usize,
     pub merged_as_cross_lineage_twin: usize,
+    pub merged_by_decision: usize,
 }
 
 #[derive(sqlx::FromRow)]
@@ -134,6 +136,29 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let overlap = |a: Uuid, b: Uuid| jaccard(&shipped, a, b);
     let flavour_overlap = |a: Uuid, b: Uuid| jaccard(&flavour, a, b);
 
+    // Recorded decisions, as pairs of variants still to be grouped (a record can have several versions).
+    let decided: Vec<(String, Uuid, Uuid)> = sqlx::query_as(
+        "SELECT dd.decision, va.id, vb.id FROM dish_decisions dd
+         JOIN sources sa ON sa.key = dd.a_source
+         JOIN source_records ra ON ra.source_id = sa.id AND ra.external_id = dd.a_external
+         JOIN variants va ON va.source_record_id = ra.id
+         JOIN sources sb ON sb.key = dd.b_source
+         JOIN source_records rb ON rb.source_id = sb.id AND rb.external_id = dd.b_external
+         JOIN variants vb ON vb.source_record_id = rb.id",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .context("loading dish decisions")?;
+    let mut decided_pairs: HashSet<(usize, usize)> = HashSet::new();
+    let mut decided_merges: Vec<(usize, usize)> = Vec::new();
+    for (decision, a, b) in &decided {
+        let (Some(&a), Some(&b)) = (index.get(a), index.get(b)) else { continue };
+        decided_pairs.insert((a.min(b), a.max(b)));
+        if decision == "merge" {
+            decided_merges.push((a, b));
+        }
+    }
+
     let clean: Vec<String> = vs.iter().map(|v| title_key(&v.title)).collect();
     let mut uf = UnionFind((0..vs.len()).collect());
     let mut reviews = Vec::new();
@@ -157,7 +182,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         let enough_items = [v.id, vs[p].id].iter().all(|id| shipped.get(id).map_or(0, HashSet::len) >= MIN_SHIPPED_ITEMS);
         if (sim >= MIN_TITLE_SIMILARITY && ov >= MIN_SHIPPED_OVERLAP) || (ov >= STRONG_SHIPPED_OVERLAP && enough_items) {
             stats.merged_by_similarity += uf.union(i, p) as usize;
-        } else {
+        } else if !decided_pairs.contains(&(i.min(p), i.max(p))) {
             reviews.push((v, &vs[p], sim, ov));
         }
     }
@@ -246,6 +271,25 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         }
         stats.split_from_drift -= 1; // the first cluster is the original dish, not a split
         components.extend(clusters.into_iter().map(|(_, ms)| ms));
+    }
+
+    // 3b. Decided merges, after the drift split so that splitting cannot undo them.
+    if !decided_merges.is_empty() {
+        let mut comp_of = vec![0; vs.len()];
+        for (c, members) in components.iter().enumerate() {
+            for &m in members {
+                comp_of[m] = c;
+            }
+        }
+        let mut cuf = UnionFind((0..components.len()).collect());
+        for &(a, b) in &decided_merges {
+            stats.merged_by_decision += cuf.union(comp_of[a], comp_of[b]) as usize;
+        }
+        let mut joined: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (c, members) in components.into_iter().enumerate() {
+            joined.entry(cuf.find(c)).or_default().extend(members);
+        }
+        components = joined.into_values().collect();
     }
 
     // 4. One dish per component; its default is the most complete, newest version.

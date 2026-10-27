@@ -2,6 +2,7 @@
 
 pub mod bundle;
 pub mod curate;
+pub mod dish_decisions;
 pub mod dishes;
 pub mod foods;
 pub mod media;
