@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { api, type Dish, type Variant } from "../api/client";
 import { available, choose, pick, selectionOf, type Selection } from "../choose";
+import { AddToPlan } from "../components/AddToPlan";
 import { Servings } from "../components/Servings";
 import { StepText } from "../components/StepText";
 
@@ -143,6 +144,7 @@ export function DishPage() {
       )}
 
       <Servings value={servings} published={chosen.yields} onChange={setServings} />
+      <AddToPlan variantId={chosen.id} servings={servings} />
       {v && !v.official && <ScaledNotice v={v} servings={servings} />}
 
       <div className={`cook ${loadingVariant ? "stale" : ""}`}>

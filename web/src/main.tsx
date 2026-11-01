@@ -8,6 +8,8 @@ import { NotFound } from "./pages/NotFound";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
 import { AccountPage } from "./pages/AccountPage";
+import { PlanPage } from "./pages/PlanPage";
+import { ShoppingPage } from "./pages/ShoppingPage";
 import { SessionProvider } from "./session";
 import "./styles.css";
 
@@ -17,6 +19,8 @@ const router = createBrowserRouter([
     children: [
       { path: "/", element: <SearchPage /> },
       { path: "/dishes/:slug", element: <DishPage /> },
+      { path: "/plan", element: <PlanPage /> },
+      { path: "/shopping", element: <ShoppingPage /> },
       { path: "/login", element: <LoginPage /> },
       { path: "/setup", element: <SetupPage /> },
       { path: "/account", element: <AccountPage /> },

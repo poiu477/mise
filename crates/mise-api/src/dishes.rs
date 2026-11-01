@@ -42,6 +42,8 @@ pub struct DishSummary {
     pub content_type: String,
     /// Number of published or forked versions.
     pub versions: i64,
+    /// The version the dish opens on.
+    pub default_variant: Option<Uuid>,
     pub image: Option<Image>,
 }
 
@@ -58,9 +60,9 @@ pub async fn list(State(s): State<AppState>, Query(p): Query<ListParams>) -> Api
     let offset = p.offset.unwrap_or(0).max(0);
     let q = p.q.as_deref().map(str::trim).filter(|q| !q.is_empty());
     let ingredient = p.ingredient.as_deref().map(str::trim).filter(|q| !q.is_empty());
-    let rows: Vec<(Uuid, String, String, Option<String>, String, i64, Option<Uuid>, i64)> = sqlx::query_as(
+    let rows: Vec<(Uuid, String, String, Option<String>, String, i64, Option<Uuid>, Option<Uuid>, i64)> = sqlx::query_as(
         "SELECT d.id, d.slug, d.title, d.subtitle, d.content_type::text,
-                (SELECT count(*) FROM variants v WHERE v.dish_id = d.id) AS versions,
+                (SELECT count(*) FROM variants v WHERE v.dish_id = d.id) AS versions, d.default_variant_id,
                 (SELECT vm.media_id FROM variant_media vm
                  WHERE vm.variant_id = d.default_variant_id AND vm.role = 'hero' LIMIT 1) AS hero,
                 count(*) OVER () AS total
@@ -80,16 +82,17 @@ pub async fn list(State(s): State<AppState>, Query(p): Query<ListParams>) -> Api
     .bind(offset)
     .fetch_all(&s.pool)
     .await?;
-    let total = rows.first().map_or(0, |r| r.7);
+    let total = rows.first().map_or(0, |r| r.8);
     let items = rows
         .into_iter()
-        .map(|(id, slug, title, subtitle, content_type, versions, hero, _)| DishSummary {
+        .map(|(id, slug, title, subtitle, content_type, versions, default_variant, hero, _)| DishSummary {
             id,
             slug,
             title,
             subtitle,
             content_type,
             versions,
+            default_variant,
             image: hero.map(Image::new),
         })
         .collect();

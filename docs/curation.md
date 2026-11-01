@@ -21,6 +21,9 @@ Two properties set how a food's bare counts read, for sources that publish only 
 (`packet`, `whole`, `crown`), and `count_size` is how much one is (`1.5 oz`), given only where the source publishes the
 food both ways. Together they read "1 packet (1½ oz)". Without them the amount stays a bare number.
 
+`store_section` places a food on the shopping list (`Produce`, `Dairy & Eggs`); a food without one uses its nearest
+ancestor's, and falls under Other when none has one. The sections and their order are in `mise_core::shopping::SECTIONS`.
+
 ```json
 [
   {"op": "merge", "from": "Oil", "into": "Cooking Oil"},

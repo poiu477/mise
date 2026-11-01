@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useSession } from "../session";
 
 const OPEN = ["/login", "/setup"];
@@ -65,6 +65,12 @@ function TopBar() {
       <form className="search" role="search" onSubmit={submit}>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search dishes" aria-label="Search dishes" enterKeyHint="search" />
       </form>
+      {session.status === "in" && (
+        <nav className="mainnav" aria-label="Main">
+          <NavLink to="/plan">Plan</NavLink>
+          <NavLink to="/shopping">Shopping</NavLink>
+        </nav>
+      )}
       {session.status === "in" && (
         <Link to="/account" className="account-link" title="Account">
           <span className="avatar" aria-hidden="true">

@@ -6,13 +6,15 @@ pub mod dishes;
 pub mod error;
 pub mod extract;
 pub mod media;
+pub mod plan;
+pub mod shopping;
 pub mod variants;
 
 use std::path::{Path, PathBuf};
 
 use axum::{
     Json, Router, middleware,
-    routing::{any, delete, get, patch, post},
+    routing::{any, delete, get, patch, post, put},
 };
 use sqlx::PgPool;
 use tower_http::{
@@ -38,9 +40,12 @@ pub struct AppState {
         auth::routes::config, auth::routes::setup, auth::routes::login, auth::routes::logout, auth::oidc::start, auth::oidc::callback,
         auth::routes::me, auth::routes::change_password, auth::routes::list_tokens, auth::routes::create_token, auth::routes::delete_token,
         auth::routes::list_users, auth::routes::create_user, auth::routes::update_user, auth::routes::list_households, auth::routes::create_household,
+        plan::get, plan::add, plan::update, plan::remove,
+        shopping::get, shopping::mark, shopping::add_extra, shopping::update_extra, shopping::remove_extra, shopping::add_staple, shopping::remove_staple,
     ),
     tags(
         (name = "dishes", description = "Browse and search dishes"), (name = "media", description = "Photos"),
+        (name = "plan", description = "The household's weekly plan"), (name = "shopping", description = "The shopping list worked out from the plan"),
         (name = "auth", description = "Signing in"), (name = "account", description = "The signed-in account"),
         (name = "admin", description = "Accounts and households (admins)"),
     ),
@@ -99,6 +104,15 @@ pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
         .route("/api/dishes/{slug}", get(dishes::get))
         .route("/api/variants/{id}", get(variants::get))
         .route("/api/media/{id}/{size}", get(media::get))
+        .route("/api/plan", get(plan::get))
+        .route("/api/plan/entries", post(plan::add))
+        .route("/api/plan/entries/{id}", patch(plan::update).delete(plan::remove))
+        .route("/api/shopping", get(shopping::get))
+        .route("/api/shopping/marks", put(shopping::mark))
+        .route("/api/shopping/extras", post(shopping::add_extra))
+        .route("/api/shopping/extras/{id}", patch(shopping::update_extra).delete(shopping::remove_extra))
+        .route("/api/pantry-staples", post(shopping::add_staple))
+        .route("/api/pantry-staples/{food_id}", delete(shopping::remove_staple))
         .route("/api", any(|| async { error::ApiError::NotFound }))
         .route("/api/{*rest}", any(|| async { error::ApiError::NotFound }))
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_auth))

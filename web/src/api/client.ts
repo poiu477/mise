@@ -39,3 +39,7 @@ export type Me = components["schemas"]["Me"];
 export type TokenInfo = components["schemas"]["TokenInfo"];
 export type UserInfo = components["schemas"]["UserInfo"];
 export type Household = components["schemas"]["Household"];
+export type Plan = components["schemas"]["Plan"];
+export type PlanEntry = components["schemas"]["PlanEntry"];
+export type ShoppingList = components["schemas"]["ShoppingList"];
+export type ShoppingItem = components["schemas"]["ShoppingItem"];

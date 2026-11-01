@@ -261,6 +261,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pantry-staples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a food as always on hand, leaving it off every list. Answers with the list. */
+        post: operations["add_pantry_staple"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pantry-staples/{food_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Put a food back on the list. Answers with the list. */
+        delete: operations["delete_pantry_staple"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A week's plan. */
+        get: operations["get_plan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plan/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a dish to a week. Answers with the week's plan. */
+        post: operations["add_plan_entry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plan/entries/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take a dish off the plan. Answers with the week's plan. */
+        delete: operations["delete_plan_entry"];
+        options?: never;
+        head?: never;
+        /** Change a planned dish's serving count. Answers with the week's plan. */
+        patch: operations["update_plan_entry"];
+        trace?: never;
+    };
+    "/api/shopping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A week's shopping list. */
+        get: operations["get_shopping"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shopping/extras": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add something to a week's list by hand. Answers with the list. */
+        post: operations["add_shopping_extra"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shopping/extras/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a hand-added item. Answers with the list. */
+        delete: operations["delete_shopping_extra"];
+        options?: never;
+        head?: never;
+        /** Tick a hand-added item off. Answers with the list. */
+        patch: operations["update_shopping_extra"];
+        trace?: never;
+    };
+    "/api/shopping/marks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Tick an item off, or take it off or put it back on this week's list. Answers with the list. */
+        put: operations["mark_shopping_item"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -364,6 +519,11 @@ export interface components {
         };
         DishSummary: {
             content_type: string;
+            /**
+             * Format: uuid
+             * @description The version the dish opens on.
+             */
+            default_variant?: string | null;
             /** Format: uuid */
             id: string;
             image?: null | components["schemas"]["Image"];
@@ -376,8 +536,15 @@ export interface components {
              */
             versions: number;
         };
+        EntryChange: {
+            /** Format: double */
+            servings: number;
+        };
         ErrorBody: {
             error: string;
+        };
+        ExtraChange: {
+            checked: boolean;
         };
         Health: {
             status: string;
@@ -413,9 +580,26 @@ export interface components {
             /** @description Supplied by the source (meal kit) rather than from the pantry. */
             shipped?: boolean | null;
         };
+        /** @description Something left off the list, to put back. */
+        LeftOut: {
+            key: string;
+            name: string;
+        };
         LoginRequest: {
             password: string;
             username: string;
+        };
+        Mark: {
+            /** @description Ticked off. */
+            checked?: boolean | null;
+            /** @description Taken off this week's list. */
+            hidden?: boolean | null;
+            key: string;
+            /**
+             * Format: date
+             * @description Any day in the week (default: today).
+             */
+            week?: string | null;
         };
         Me: {
             display_name: string;
@@ -428,8 +612,39 @@ export interface components {
             is_admin: boolean;
             username: string;
         };
+        NewEntry: {
+            /**
+             * Format: double
+             * @description Default: 2 where published, else the smallest published size.
+             */
+            servings?: number | null;
+            /** Format: uuid */
+            variant_id: string;
+            /**
+             * Format: date
+             * @description Any day in the week (default: today).
+             */
+            week?: string | null;
+        };
+        NewExtra: {
+            name: string;
+            /**
+             * Format: date
+             * @description Any day in the week (default: today).
+             */
+            week?: string | null;
+        };
         NewHousehold: {
             name: string;
+        };
+        NewStaple: {
+            /** Format: uuid */
+            food_id: string;
+            /**
+             * Format: date
+             * @description Any day in the week to answer with (default: today).
+             */
+            week?: string | null;
         };
         NewToken: {
             info: components["schemas"]["TokenInfo"];
@@ -455,12 +670,72 @@ export interface components {
             current?: string | null;
             new: string;
         };
+        Plan: {
+            entries: components["schemas"]["PlanEntry"][];
+            /**
+             * Format: date
+             * @description The Monday.
+             */
+            week: string;
+        };
+        PlanEntry: {
+            dish_slug?: string | null;
+            /** Format: uuid */
+            id: string;
+            image?: null | components["schemas"]["Image"];
+            /** Format: double */
+            servings: number;
+            subtitle?: string | null;
+            title: string;
+            /** Format: uuid */
+            variant_id: string;
+            /** @description Serving counts with published amounts. */
+            yields: number[];
+        };
         SetupRequest: {
             display_name?: string | null;
             /** @description Name for the first household (default "Home"). */
             household?: string | null;
             password: string;
             username: string;
+        };
+        ShoppingExtra: {
+            checked: boolean;
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        ShoppingItem: {
+            /** @description Added up across recipes, e.g. "3 packets (4½ oz)"; absent for "to taste" items like salt. */
+            amount?: string | null;
+            checked: boolean;
+            /** Format: uuid */
+            food_id?: string | null;
+            /** @description Names the item when ticking or removing it. */
+            key: string;
+            name: string;
+            /** @description The dishes that need it. */
+            recipes: string[];
+        };
+        ShoppingList: {
+            extras: components["schemas"]["ShoppingExtra"][];
+            /** @description Dishes planned this week. */
+            meals: number;
+            /** @description Taken off this week's list. */
+            removed: components["schemas"]["LeftOut"][];
+            /** @description In the order a shop is walked. */
+            sections: components["schemas"]["ShoppingSection"][];
+            /** @description Left off because the household always has them; `key` is the food id. */
+            staples: components["schemas"]["LeftOut"][];
+            /**
+             * Format: date
+             * @description The Monday.
+             */
+            week: string;
+        };
+        ShoppingSection: {
+            items: components["schemas"]["ShoppingItem"][];
+            name: string;
         };
         Step: {
             /** @description Some wording came from the nearest published yield; worth a second look. */
@@ -979,6 +1254,314 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    add_pantry_staple: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewStaple"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_pantry_staple: {
+        parameters: {
+            query?: {
+                /** @description Any day in the week (default: today). */
+                week?: string | null;
+            };
+            header?: never;
+            path: {
+                food_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingList"];
+                };
+            };
+        };
+    };
+    get_plan: {
+        parameters: {
+            query?: {
+                /** @description Any day in the week (default: today). */
+                week?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+        };
+    };
+    add_plan_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewEntry"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_plan_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_plan_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntryChange"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_shopping: {
+        parameters: {
+            query?: {
+                /** @description Any day in the week (default: today). */
+                week?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingList"];
+                };
+            };
+        };
+    };
+    add_shopping_extra: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewExtra"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_shopping_extra: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_shopping_extra: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtraChange"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    mark_shopping_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Mark"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingList"];
                 };
             };
         };

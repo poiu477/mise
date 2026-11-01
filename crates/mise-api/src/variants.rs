@@ -20,7 +20,7 @@ use crate::{
 };
 
 /// The largest derived yield; any published yield is allowed, however large (a 40-serving roast turkey).
-const MAX_SERVINGS: f64 = 24.0;
+pub const MAX_SERVINGS: f64 = 24.0;
 
 #[derive(Deserialize, IntoParams)]
 pub struct RenderParams {

@@ -22,6 +22,14 @@ impl CountUnit {
         });
         Some(CountUnit { noun: noun?.to_string(), size })
     }
+
+    /// A counted amount in these words, with how much that is where known: "2 packets (3 oz)".
+    pub fn show(&self, shown: &Quantity) -> String {
+        match &self.size {
+            Some(size) => format!("{shown} ({})", size.scaled(shown.amount).tidied()),
+            None => shown.to_string(),
+        }
+    }
 }
 
 /// The amount at `target` from `(servings, amount)` pairs, and whether it was published.
@@ -97,10 +105,7 @@ pub fn line_text(published: &[(f64, f64, Option<String>)], target: f64, count: O
             let counted = count.filter(|_| u == Unit::Count(String::new()));
             let q = Quantity::new(a, counted.map_or(u, |c| Unit::Count(c.noun.clone())));
             let shown = if round && !in_pinches { q.rounded() } else { q.tidied() };
-            match counted.and_then(|c| c.size.as_ref()) {
-                Some(size) => format!("{shown} ({})", size.scaled(shown.amount).tidied()),
-                None => shown.to_string(),
-            }
+            counted.map_or_else(|| shown.to_string(), |c| c.show(&shown))
         }
         None => format!("{} {}", format_amount(a), unit.as_deref().unwrap_or("")).trim().to_string(),
     };
@@ -131,9 +136,32 @@ pub fn line_text(published: &[(f64, f64, Option<String>)], target: f64, count: O
     (Some(show(a, &unit, true)), true)
 }
 
+/// A line's amount at `target` as a number to add up: published when it is, else derived in the unit of the nearest
+/// published yield. None when it has no amount, or one in a unit mise can't read.
+pub fn line_quantity(published: &[(f64, f64, Option<String>)], target: f64) -> Option<Quantity> {
+    if let Some((_, a, u)) = published.iter().find(|(s, _, _)| (s - target).abs() < 1e-9) {
+        return Some(Quantity::new(*a, Unit::parse(u.as_deref()?)?));
+    }
+    let yields: Vec<f64> = published.iter().map(|p| p.0).collect();
+    let near = nearest(&yields, target)?;
+    let unit = published.iter().find(|p| p.0 == near)?.2.clone();
+    let same_unit: Vec<(f64, f64)> = published.iter().filter(|p| p.2 == unit).map(|p| (p.0, p.1)).collect();
+    let (a, _) = amount_at(&same_unit, target)?;
+    Some(Quantity::new(a, Unit::parse(unit.as_deref()?)?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn line_quantities_are_published_or_derived() {
+        let a = vec![(2.0, 0.5, Some("cup".into())), (4.0, 1.0, Some("cup".into()))];
+        assert_eq!(line_quantity(&a, 4.0), Some(Quantity::new(1.0, Unit::Cup)));
+        assert_eq!(line_quantity(&a, 3.0), Some(Quantity::new(0.75, Unit::Cup)));
+        assert_eq!(line_quantity(&[(2.0, 4.0, Some("nach Geschmack".into()))], 2.0), None);
+        assert_eq!(line_quantity(&[], 2.0), None);
+    }
 
     #[test]
     fn bare_counts_read_in_the_foods_own_words() {
