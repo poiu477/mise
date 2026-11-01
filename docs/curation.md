@@ -47,3 +47,12 @@ re-imports and a rebuilt database:
 `merge` joins the two records' dishes after drift splitting, so a split cannot undo it. `keep_apart` stops the pair
 from being proposed for review again. `by` is `user` or `claude` (decided on the person's behalf, from their
 earlier decisions); either can be overridden by editing the file and applying it again.
+
+`mise dish prefer <file>` loads how often each version has been had, replacing what was recorded before. A dish then
+opens on the version had most, among those with steps, and those versions count for more when naming it:
+
+```json
+[
+  { "record": ["seed:hellofresh-us", "<id>"], "times": 14 }
+]
+```

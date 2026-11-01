@@ -337,6 +337,19 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
             previous[c] = Some(d);
         }
     }
+    // Versions the household has had count for more when choosing a dish's default and name.
+    let times: HashMap<Uuid, usize> = sqlx::query_as::<_, (Uuid, i32)>(
+        "SELECT v.id, p.times FROM preferred_versions p JOIN sources s ON s.key = p.source
+         JOIN source_records sr ON sr.source_id = s.id AND sr.external_id = p.external_id
+         JOIN variants v ON v.source_record_id = sr.id",
+    )
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .map(|(v, n)| (v, n as usize))
+    .collect();
+    let votes = |m: usize| 1 + times.get(&vs[m].id).copied().unwrap_or(0);
+
     let mut order: Vec<usize> = (0..components.len()).collect();
     // Variants are loaded in id order, so a component's first member is a stable tie-break.
     order.sort_by_key(|&c| (std::cmp::Reverse(components[c].len()), components[c].iter().min().copied()));
@@ -348,14 +361,14 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         let members = &components[c];
         let best = *members
             .iter()
-            .max_by_key(|&&i| (vs[i].has_steps, vs[i].has_hero, vs[i].published))
+            .max_by_key(|&&i| (vs[i].has_steps, votes(i), vs[i].has_hero, vs[i].published))
             .expect("components are never empty");
         // The dish is named by its most common cleaned title (ties go to the most recent), not by whichever
         // version happens to be the default: that one may be a protein swap or carry a word like "Organic".
         let mut counts: HashMap<String, (usize, Option<chrono::DateTime<chrono::Utc>>)> = HashMap::new();
         for &m in members {
             let e = counts.entry(clean_title(&vs[m].title)).or_default();
-            e.0 += 1;
+            e.0 += votes(m);
             e.1 = e.1.max(vs[m].published);
         }
         let title = counts
@@ -387,7 +400,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         // Subtitle: the most common one among versions that carry the chosen title, so the two read together.
         let mut subs: HashMap<String, usize> = HashMap::new();
         for &m in members.iter().filter(|&&m| clean_title(&vs[m].title) == title) {
-            *subs.entry(vs[m].subtitle.as_deref().map(clean_title).unwrap_or_default()).or_default() += 1;
+            *subs.entry(vs[m].subtitle.as_deref().map(clean_title).unwrap_or_default()).or_default() += votes(m);
         }
         d_sub.push(subs.into_iter().max_by_key(|(s, n)| (*n, s.clone())).map(|(s, _)| s).filter(|s| !s.is_empty()));
         d_slug.push(slug);

@@ -68,6 +68,7 @@ docker compose exec app mise import-bundle /archive/seed-bundle
 docker compose exec app mise match-foods
 docker compose exec app mise food apply /archive/curation.json
 docker compose exec app mise dish apply /archive/dish-decisions.json
+docker compose exec app mise dish prefer /archive/preferred-versions.json
 docker compose exec app mise group-dishes
 docker compose exec app mise derive-options
 docker compose exec app mise parse-steps

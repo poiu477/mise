@@ -33,6 +33,32 @@ pub struct ApplyStats {
     pub unknown_records: usize,
 }
 
+/// How often a household has had one version.
+#[derive(Deserialize)]
+pub struct Preferred {
+    pub record: Record,
+    pub times: i32,
+}
+
+/// Load a file of preferred versions, replacing those recorded before. Returns how many were loaded.
+pub async fn apply_preferred(pool: &PgPool, path: &Path) -> Result<usize> {
+    let list: Vec<Preferred> =
+        serde_json::from_reader(std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?)
+            .with_context(|| format!("reading {}", path.display()))?;
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM preferred_versions").execute(&mut *tx).await?;
+    for p in &list {
+        sqlx::query("INSERT INTO preferred_versions (source, external_id, times) VALUES ($1, $2, $3)")
+            .bind(&p.record.0)
+            .bind(&p.record.1)
+            .bind(p.times)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(list.len())
+}
+
 pub async fn apply_file(pool: &PgPool, path: &Path) -> Result<ApplyStats> {
     let decisions: Vec<Decision> =
         serde_json::from_reader(std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?)

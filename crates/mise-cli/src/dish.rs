@@ -8,6 +8,8 @@ use sqlx::PgPool;
 pub enum DishCommand {
     /// Load a decisions file (docs/curation.md), replacing the recorded decisions. Run group-dishes after.
     Apply { file: std::path::PathBuf },
+    /// Load how often each version has been had (docs/curation.md), replacing what was recorded. Run group-dishes after.
+    Prefer { file: std::path::PathBuf },
 }
 
 pub async fn run(pool: &PgPool, cmd: DishCommand) -> Result<()> {
@@ -15,6 +17,10 @@ pub async fn run(pool: &PgPool, cmd: DishCommand) -> Result<()> {
         DishCommand::Apply { file } => {
             let stats = mise_ingest::dish_decisions::apply_file(pool, &file).await?;
             tracing::info!(?stats, "dish decisions recorded");
+        }
+        DishCommand::Prefer { file } => {
+            let versions = mise_ingest::dish_decisions::apply_preferred(pool, &file).await?;
+            tracing::info!(versions, "preferred versions recorded");
         }
     }
     Ok(())
