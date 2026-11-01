@@ -17,6 +17,10 @@ rebuilt database can be brought back to the same state.
 
 Foods are found by name, any alias, or slug; plurals and brand marks don't matter.
 
+Two properties set how a food's bare counts read, for sources that publish only "1 unit". `count_unit` is the word
+(`packet`, `whole`, `crown`), and `count_size` is how much one is (`1.5 oz`), given only where the source publishes the
+food both ways. Together they read "1 packet (1½ oz)". Without them the amount stays a bare number.
+
 ```json
 [
   {"op": "merge", "from": "Oil", "into": "Cooking Oil"},

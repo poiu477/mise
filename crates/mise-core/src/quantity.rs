@@ -50,10 +50,10 @@ impl Unit {
             "g" | "gram" | "grams" => Unit::G,
             "kg" | "kilogram" | "kilograms" => Unit::Kg,
             "pinch" | "pinches" => Unit::Pinch,
-            "unit" | "units" | "" => Unit::Count(String::new()),
+            "unit" | "units" | "pick" | "picks" | "" => Unit::Count(String::new()),
             "clove" | "cloves" | "thumb" | "thumbs" | "slice" | "slices" | "piece" | "pieces" | "sprig" | "sprigs"
             | "can" | "cans" | "jar" | "jars" | "box" | "boxes" | "bunch" | "bunches" | "head" | "heads" | "stalk"
-            | "stalks" | "pack" | "packs" | "pick" | "picks" | "bun" | "buns" | "tube" | "tubes" | "wedge" | "wedges" => {
+            | "stalks" | "pack" | "packs" | "bun" | "buns" | "tube" | "tubes" | "wedge" | "wedges" => {
                 Unit::Count(singular(w).to_string())
             }
             _ => return None,
@@ -92,6 +92,15 @@ impl Unit {
             (Unit::Count(a), Unit::Count(b)) => a == b || a.is_empty() || b.is_empty(),
             _ => self.family() == other.family(),
         }
+    }
+}
+
+fn plural(noun: &str) -> String {
+    match noun {
+        "whole" => noun.to_string(),
+        "loaf" => "loaves".to_string(),
+        _ if noun.ends_with("ch") || noun.ends_with('x') => format!("{noun}es"),
+        _ => format!("{noun}s"),
     }
 }
 
@@ -277,7 +286,7 @@ impl fmt::Display for Quantity {
             Unit::Count(noun) if noun.is_empty() => return write!(f, "{n}"),
             Unit::Count(noun) => {
                 if plural {
-                    format!("{noun}s")
+                    self::plural(noun)
                 } else {
                     noun.clone()
                 }
@@ -415,6 +424,7 @@ mod tests {
         assert_eq!(Unit::parse("tablespoon (tbsp)"), Some(Unit::Tbsp));
         assert_eq!(Unit::parse("ounce(oz)"), Some(Unit::Oz));
         assert_eq!(Unit::parse("cloves"), Some(Unit::Count("clove".into())));
+        assert_eq!(Unit::parse("pick"), Some(Unit::Count(String::new())));
         assert_eq!(Unit::parse("minutes"), None);
     }
 
@@ -459,6 +469,10 @@ mod tests {
         assert_eq!(q(2.0, Unit::Cup).to_string(), "2 cups");
         assert_eq!(q(0.125, Unit::Tsp).to_string(), "⅛ tsp");
         assert_eq!(q(2.0, Unit::Count("clove".into())).to_string(), "2 cloves");
+        assert_eq!(q(2.0, Unit::Count("bunch".into())).to_string(), "2 bunches");
+        assert_eq!(q(2.0, Unit::Count("box".into())).to_string(), "2 boxes");
+        assert_eq!(q(1.5, Unit::Count("loaf".into())).to_string(), "1½ loaves");
+        assert_eq!(q(2.0, Unit::Count("whole".into())).to_string(), "2 whole");
         assert_eq!(q(0.3, Unit::Oz).to_string(), "0.3 oz");
         assert_eq!(q(0.004, Unit::Oz).to_string(), "<0.01 oz");
     }

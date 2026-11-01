@@ -16,11 +16,14 @@ use std::path::Path;
 
 use anyhow::{Context as _, Result};
 use mise_core::quantity::{Quantity, Unit};
-use mise_core::servings;
+use mise_core::servings::{self, CountUnit};
 use mise_core::step_amounts::{Context, Method, Part, Template, amount_at, pan_note, pans_needed, text_base};
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+/// How bare counts read per (variant, line key).
+type CountUnits = HashMap<(Uuid, String), CountUnit>;
 
 /// Line amounts per (variant, line key): (servings, amount, unit).
 type LineAmounts = HashMap<(Uuid, String), Vec<(f64, f64, Option<String>)>>;
@@ -82,7 +85,8 @@ pub struct Summary {
     pub whole_line_6: (usize, f64),
 }
 
-pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path) -> Result<Summary> {
+/// `only`: draw the sample from these variants (a seed list) instead of every dish's default version.
+pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path, only: Option<&[Uuid]>) -> Result<Summary> {
     // Load everything the renderer needs.
     let mut yields: HashMap<Uuid, Vec<f64>> = HashMap::new();
     for (v, s) in sqlx::query_as::<_, (Uuid, f64)>("SELECT variant_id, servings::float8 FROM variant_yields").fetch_all(pool).await? {
@@ -90,12 +94,17 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path) -
     }
     let mut amounts: LineAmounts = HashMap::new();
     let mut names: HashMap<Uuid, Vec<(String, String)>> = HashMap::new();
-    for (v, key, name) in sqlx::query_as::<_, (Uuid, String, String)>(
-        "SELECT variant_id, line_key, raw_name FROM ingredient_lines ORDER BY variant_id, position",
+    let mut counts: CountUnits = HashMap::new();
+    for (v, key, name, count_unit, count_size) in sqlx::query_as::<_, (Uuid, String, String, Option<String>, Option<String>)>(
+        "SELECT il.variant_id, il.line_key, il.raw_name, f.props->>'count_unit', f.props->>'count_size'
+         FROM ingredient_lines il LEFT JOIN foods f ON f.id = il.food_id ORDER BY il.variant_id, il.position",
     )
     .fetch_all(pool)
     .await?
     {
+        if let Some(c) = CountUnit::from_props(count_unit.as_deref(), count_size.as_deref()) {
+            counts.insert((v, key.clone()), c);
+        }
         names.entry(v).or_default().push((key, name));
     }
     for (v, key, s, a, u) in sqlx::query_as::<_, (Uuid, String, f64, f64, Option<String>)>(
@@ -126,10 +135,13 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path) -
     }
 
     // Sample: the default version of recipe dishes published at 2, 3, 4 and 6 servings whose steps vary by yield.
-    let candidates: Vec<(Uuid, Uuid, String)> = sqlx::query_as(
-        "SELECT d.id, d.default_variant_id, v.title FROM dishes d JOIN variants v ON v.id = d.default_variant_id
-         WHERE d.content_type = 'recipe'",
-    )
+    let candidates: Vec<(Uuid, Uuid, String)> = match only {
+        Some(ids) => sqlx::query_as("SELECT dish_id, id, title FROM variants WHERE id = ANY($1) AND dish_id IS NOT NULL").bind(ids),
+        None => sqlx::query_as(
+            "SELECT d.id, d.default_variant_id, v.title FROM dishes d JOIN variants v ON v.id = d.default_variant_id
+             WHERE d.content_type = 'recipe'",
+        ),
+    }
     .fetch_all(pool)
     .await?;
     let full = |v: &Uuid| {
@@ -138,9 +150,13 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path) -
     };
     let mut picks: Vec<&(Uuid, Uuid, String)> = candidates
         .iter()
-        .filter(|(_, v, _)| full(v) && steps.get(v).is_some_and(|ss| ss.iter().any(|s| s.template.has_alts())))
+        .filter(|(_, v, _)| match only {
+            Some(_) => steps.contains_key(v),
+            None => full(v) && steps.get(v).is_some_and(|ss| ss.iter().any(|s| s.template.has_alts())),
+        })
         .collect();
-    picks.sort_by_key(|(d, _, _)| stable_hash(seed, *d));
+    picks.sort_by_key(|(d, v, _)| (stable_hash(seed, *d), *v));
+    picks.dedup_by_key(|(d, _, _)| *d);
     picks.truncate(sample);
     let in_sample: HashSet<Uuid> = picks.iter().map(|(_, v, _)| *v).collect();
 
@@ -227,7 +243,7 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path) -
         let line_amount = |key: &str, s: f64| line_value(&amounts, *v, key, s);
         let any_alts = steps.get(v).is_some_and(|ss| ss.iter().any(|s| s.template.has_alts()));
         let ctx = Context { base, scale_plain: !any_alts, line_amount: &line_amount };
-        write_card(&mut cards, no + 1, *dish, title, *v, &names, &amounts, steps.get(v).map(Vec::as_slice).unwrap_or(&[]), &ctx);
+        write_card(&mut cards, no + 1, *dish, title, *v, &names, &amounts, &counts, steps.get(v).map(Vec::as_slice).unwrap_or(&[]), &ctx);
     }
 
     let mut top: Vec<(String, usize)> = misses.into_iter().collect();
@@ -315,6 +331,7 @@ fn write_card(
     v: Uuid,
     names: &HashMap<Uuid, Vec<(String, String)>>,
     amounts: &LineAmounts,
+    counts: &CountUnits,
     steps: &[Step],
     ctx: &Context,
 ) {
@@ -323,17 +340,18 @@ fn write_card(
     h.push_str("<table class=\"ing\"><thead><tr><th>Ingredient</th><th>2</th><th>3</th><th>4</th><th>6</th></tr></thead><tbody>");
     for (key, name) in names.get(&v).map(Vec::as_slice).unwrap_or(&[]) {
         let list = amounts.get(&(v, key.clone()));
+        let count = counts.get(&(v, key.clone()));
         let get = |t: f64| list.and_then(|l| l.iter().find(|(s, _, _)| (s - t).abs() < 1e-9));
         let _ = write!(h, "<tr><td>{}</td>", esc(name));
         // As the app shows it, and as the app would show it knowing only 2 and 4 servings.
         let all: Vec<(f64, f64, Option<String>)> = list.cloned().unwrap_or_default();
         let known: Vec<(f64, f64, Option<String>)> = [2.0, 4.0].iter().filter_map(|&t| get(t).cloned()).collect();
         for t in [2.0, 3.0, 4.0, 6.0] {
-            match servings::line_text(&all, t) {
+            match servings::line_text(&all, t, count) {
                 (Some(shown), false) => {
                     let mut cell = esc(&shown);
                     if t == 3.0 || t == 6.0 {
-                        if let (Some(pred), _) = servings::line_text(&known, t) {
+                        if let (Some(pred), _) = servings::line_text(&known, t, count) {
                             if pred != shown {
                                 let _ = write!(cell, " <span class=\"miss\" title=\"derived from 2 and 4\">≠ {}</span>", esc(&pred));
                             }

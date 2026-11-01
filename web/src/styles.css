@@ -134,7 +134,7 @@ h1, h2 { line-height: 1.2; margin: 0; }
 .cook.stale { opacity: 0.6; }
 .cook h2 { font-size: 20px; margin-bottom: 12px; }
 .ingredients ul { list-style: none; padding: 0; margin: 0; }
-.ingredients li { display: grid; grid-template-columns: 40px 88px 1fr; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.ingredients li { display: grid; grid-template-columns: 40px 104px 1fr; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); }
 .ingredients img, .ingredients .dot { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; background: var(--surface); }
 .ingredients .dot { background: var(--accent-soft); }
 .amount { font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -166,7 +166,7 @@ h1, h2 { line-height: 1.2; margin: 0; }
   .steps > ol > li { grid-template-columns: 1fr; }
   .count { margin-left: 0; width: 100%; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-  .ingredients li { grid-template-columns: 36px 80px 1fr; }
+  .ingredients li { grid-template-columns: 36px 96px 1fr; }
 }
 
 /* Accounts */

@@ -80,7 +80,7 @@ pub struct Variant {
     pub meta: serde_json::Value,
 }
 
-type LineRow = (Uuid, String, String, Option<Uuid>, Option<String>, Option<bool>, Vec<String>, Option<String>, Option<String>);
+type LineRow = (Uuid, String, String, Option<Uuid>, Option<String>, Option<bool>, Vec<String>, Option<String>, Option<String>, Option<String>, Option<String>);
 
 /// A version of a dish at a serving count.
 #[utoipa::path(
@@ -108,7 +108,8 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
     }
 
     let lines: Vec<LineRow> = sqlx::query_as(
-        "SELECT il.id, il.line_key, il.raw_name, il.food_id, f.name, il.shipped, il.allergens, il.note, f.props->>'image_media_id'
+        "SELECT il.id, il.line_key, il.raw_name, il.food_id, f.name, il.shipped, il.allergens, il.note, f.props->>'image_media_id',
+                f.props->>'count_unit', f.props->>'count_size'
          FROM ingredient_lines il LEFT JOIN foods f ON f.id = il.food_id WHERE il.variant_id = $1 ORDER BY il.position",
     )
     .bind(id)
@@ -157,8 +158,9 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
 
     let ingredients: Vec<Ingredient> = lines
         .iter()
-        .map(|(line, _, name, food_id, food, shipped, allergens, note, image)| {
-            let (amount, scaled) = amounts.get(line).map_or((None, false), |a| servings::line_text(a, target));
+        .map(|(line, _, name, food_id, food, shipped, allergens, note, image, count_unit, count_size)| {
+            let count = servings::CountUnit::from_props(count_unit.as_deref(), count_size.as_deref());
+            let (amount, scaled) = amounts.get(line).map_or((None, false), |a| servings::line_text(a, target, count.as_ref()));
             Ingredient {
                 name: name.clone(),
                 food_id: *food_id,

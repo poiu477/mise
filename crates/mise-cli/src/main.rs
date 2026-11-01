@@ -82,6 +82,9 @@ enum Command {
         /// Seed for the sample: the same seed on the same data picks the same recipes.
         #[arg(long, default_value_t = 1)]
         seed: u64,
+        /// Text file of variant ids, one per line: sample from these (one per dish) instead of every dish's default.
+        #[arg(long)]
+        only: Option<std::path::PathBuf>,
     },
     /// Inspect and curate foods, brands and the food tree.
     #[command(subcommand)]
@@ -184,8 +187,9 @@ async fn main() -> anyhow::Result<()> {
             let stats = mise_ingest::steps::parse_steps(&pool).await?;
             tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "steps parsed");
         }
-        Command::ScalingReport { sample, out, seed } => {
-            let s = scaling::write_report(&pool, sample, seed, &out).await?;
+        Command::ScalingReport { sample, out, seed, only } => {
+            let only = only.map(|path| anyhow::Ok(std::fs::read_to_string(path)?.split_whitespace().map(str::parse).collect::<Result<Vec<uuid::Uuid>, _>>()?)).transpose()?;
+            let s = scaling::write_report(&pool, sample, seed, &out, only.as_deref()).await?;
             tracing::info!(cases = s.step_overall.0, right_pct = format!("{:.1}", s.step_overall.1), "step amounts at 4, all recipes");
             tracing::info!(cases = s.step_sample.0, right_pct = format!("{:.1}", s.step_sample.1), "step amounts at 4, sample");
             tracing::info!(cases = s.whole_line_3.0, right_pct = format!("{:.1}", s.whole_line_3.1), "whole-line step amounts at 3");
