@@ -52,6 +52,8 @@ pub struct Step {
     pub scaled: bool,
     /// Some wording came from the nearest published yield; worth a second look.
     pub check: bool,
+    /// The step names a yield mise could not place, so it reads as published: check its amounts.
+    pub check_amounts: bool,
     pub images: Vec<Image>,
 }
 
@@ -188,7 +190,7 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
                 Some(t) => step_amounts::render(t, target, &ctx),
                 None => step_amounts::Rendered { text: text.clone(), ..Default::default() },
             };
-            Step { position: *position, text: r.text, scaled: r.scaled, check: r.check, images: step_images.remove(step).unwrap_or_default() }
+            Step { position: *position, text: r.text, scaled: r.scaled, check: r.check, check_amounts: r.check_amounts, images: step_images.remove(step).unwrap_or_default() }
         })
         .collect();
 

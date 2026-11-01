@@ -465,6 +465,8 @@ export interface components {
         Step: {
             /** @description Some wording came from the nearest published yield; worth a second look. */
             check: boolean;
+            /** @description The step names a yield mise could not place, so it reads as published: check its amounts. */
+            check_amounts: boolean;
             images: components["schemas"]["Image"][];
             /** Format: int32 */
             position: number;

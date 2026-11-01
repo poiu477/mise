@@ -57,9 +57,9 @@ impl Template {
         self.parts.iter().filter(|p| matches!(p, Part::Amount { .. }))
     }
 
-    /// Any part varies by yield in the published text.
+    /// Any part varies by yield in the published text, placed or not.
     pub fn has_alts(&self) -> bool {
-        self.parts.iter().any(|p| match p {
+        self.unparsed > 0 || self.parts.iter().any(|p| match p {
             Part::Amount { alts, .. } => !alts.is_empty(),
             Part::Words { .. } | Part::Note { .. } => true,
             Part::Text { .. } => false,
@@ -407,6 +407,8 @@ pub struct Rendered {
     pub scaled: bool,
     /// Some wording was chosen from the nearest published yield and may not fit exactly.
     pub check: bool,
+    /// The step names a yield mise could not place, so it reads as published: the cook checks its amounts.
+    pub check_amounts: bool,
 }
 
 /// How a derived amount was reached, for the test report.
@@ -585,8 +587,8 @@ fn derive(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Option<(Qu
 }
 
 pub fn render(t: &Template, target: f64, ctx: &Context) -> Rendered {
-    let mut out = Rendered::default();
     let at_base = (target - ctx.base).abs() < 1e-9;
+    let mut out = Rendered { check_amounts: t.unparsed > 0 && !at_base, ..Default::default() };
     for p in &t.parts {
         match p {
             Part::Text { text } => out.text.push_str(text),
@@ -846,6 +848,21 @@ used 2 tsp kosher salt) and pepper.");
         assert!(not_a_pan_sauce("Creamy Tomato Soup"));
         t.drop_boil_off();
         assert_eq!(render(&t, 4.0, &c).text, "Add 1 cup water to the pan and simmer.");
+    }
+
+    #[test]
+    fn a_yield_it_cannot_place_reads_as_published_and_asks_for_a_check() {
+        let t = parse("Add stock and1 TBSP butter (2 TBSP for 4 servings) to the pan.", &lines());
+        assert_eq!(t.unparsed, 1);
+        assert!(t.has_alts());
+        let published = "Add stock and1 TBSP butter (2 TBSP for 4 servings) to the pan.";
+        let c = ctx(2.0, &none);
+        let base = render(&t, 2.0, &c);
+        assert_eq!(base.text, published);
+        assert!(!base.check_amounts);
+        let four = render(&t, 4.0, &c);
+        assert_eq!(four.text, published);
+        assert!(four.check_amounts);
     }
 
     #[test]

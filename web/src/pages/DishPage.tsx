@@ -179,8 +179,14 @@ export function DishPage() {
                 {s.images[0] && <img src={s.images[0].large} alt="" loading="lazy" width={1200} height={800} />}
                 <div className="step-text">
                   <StepText text={s.text} />
-                  {(s.scaled || s.check) && (
-                    <p className="step-flag">{s.scaled ? "Amounts scaled for this serving count." : "Wording follows the nearest published size."}</p>
+                  {(s.check_amounts || s.scaled || s.check) && (
+                    <p className="step-flag">
+                      {s.check_amounts
+                        ? "Check amounts: this step reads as published and may not match this serving count."
+                        : s.scaled
+                          ? "Amounts scaled for this serving count."
+                          : "Wording follows the nearest published size."}
+                    </p>
                   )}
                 </div>
               </li>

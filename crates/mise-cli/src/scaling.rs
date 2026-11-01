@@ -300,6 +300,9 @@ fn render_html(t: &Template, target: f64, ctx: &Context) -> String {
     if let Some(n) = pans_needed(t, target, ctx) {
         let _ = write!(h, "<span class=\"note check\">{}</span>", esc(&pan_note(target, n)));
     }
+    if t.unparsed > 0 && (target - ctx.base).abs() > 1e-9 {
+        h.push_str("<span class=\"note check\"> Check amounts: this step reads as published.</span>");
+    }
     h
 }
 
