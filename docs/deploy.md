@@ -58,16 +58,24 @@ copied rather than hard-linked: allow about 40 GB.
 docker compose exec app mise ingest-media --from /archive
 ```
 
+The curation and dish decision files sit next to the bundle (see [curation.md](curation.md)). A curation file is all or
+nothing, so it may only name foods the bundle contains.
+
 Starting from a seed bundle instead of a database:
 
 ```bash
 docker compose exec app mise import-bundle /archive/seed-bundle
 docker compose exec app mise match-foods
+docker compose exec app mise food apply /archive/curation.json
+docker compose exec app mise dish apply /archive/dish-decisions.json
 docker compose exec app mise group-dishes
 docker compose exec app mise derive-options
 docker compose exec app mise parse-steps
 docker compose exec app mise ingest-media --from /archive
 ```
+
+The curation and dish decision files sit next to the bundle (see [curation.md](curation.md)). A curation file is all or
+nothing, so it may only name foods the bundle contains.
 
 ## 5. Updating
 
