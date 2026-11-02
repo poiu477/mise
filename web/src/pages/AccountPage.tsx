@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, errorText, type Household, type Me, type TokenInfo, type UserInfo } from "../api/client";
+import { api, errorText, type Household, type Me, type TokenInfo, type UserInfo, type Weights } from "../api/client";
 import { useSession } from "../session";
+import { WEIGHTS } from "../weights";
 
 export function AccountPage() {
   const { session, signOut } = useSession();
@@ -20,10 +21,46 @@ export function AccountPage() {
           Sign out
         </button>
       </header>
+      <ShoppingUnits />
       <PasswordForm me={me} />
       <Tokens />
       {me.is_admin && <Admin me={me} />}
     </article>
+  );
+}
+
+/** How weights read on the household's shopping list; each food can still read its own way. */
+function ShoppingUnits() {
+  const [weights, setWeights] = useState<Weights | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    api.GET("/api/shopping/settings").then(({ data }) => data && setWeights(data.weight_unit));
+  }, []);
+  const change = async (next: Weights) => {
+    setWeights(next);
+    setError("");
+    const { data, error: failed } = await api.PUT("/api/shopping/settings", { body: { weight_unit: next } });
+    if (data) setWeights(data.weight_unit);
+    else setError(errorText(failed));
+  };
+  return (
+    <section className="panel">
+      <h2>Shopping list</h2>
+      <p className="sub">How weights read on your household's list. To read one food differently, open it on the list (⋯).</p>
+      <div className="form row">
+        <label>
+          Weights
+          <select value={weights ?? ""} disabled={!weights} onChange={(e) => change(e.target.value as Weights)}>
+            {WEIGHTS.map((w) => (
+              <option key={w.value} value={w.value}>
+                {w.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {error && <p className="form-error">{error}</p>}
+    </section>
   );
 }
 

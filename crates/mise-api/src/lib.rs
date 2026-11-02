@@ -42,6 +42,7 @@ pub struct AppState {
         auth::routes::list_users, auth::routes::create_user, auth::routes::update_user, auth::routes::list_households, auth::routes::create_household,
         plan::get, plan::add, plan::update, plan::remove,
         shopping::get, shopping::mark, shopping::add_extra, shopping::update_extra, shopping::remove_extra, shopping::add_staple, shopping::remove_staple,
+        shopping::settings, shopping::update_settings, shopping::set_food_weights,
     ),
     tags(
         (name = "dishes", description = "Browse and search dishes"), (name = "media", description = "Photos"),
@@ -109,6 +110,8 @@ pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
         .route("/api/plan/entries/{id}", patch(plan::update).delete(plan::remove))
         .route("/api/shopping", get(shopping::get))
         .route("/api/shopping/marks", put(shopping::mark))
+        .route("/api/shopping/settings", get(shopping::settings).put(shopping::update_settings))
+        .route("/api/shopping/food-weights", put(shopping::set_food_weights))
         .route("/api/shopping/extras", post(shopping::add_extra))
         .route("/api/shopping/extras/{id}", patch(shopping::update_extra).delete(shopping::remove_extra))
         .route("/api/pantry-staples", post(shopping::add_staple))

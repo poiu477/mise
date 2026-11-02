@@ -399,6 +399,23 @@ export interface paths {
         patch: operations["update_shopping_extra"];
         trace?: never;
     };
+    "/api/shopping/food-weights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Choose how one food's weight reads on the household's lists. Answers with the list. */
+        put: operations["set_food_weights"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shopping/marks": {
         parameters: {
             query?: never;
@@ -409,6 +426,24 @@ export interface paths {
         get?: never;
         /** Tick an item off, or take it off or put it back on this week's list. Answers with the list. */
         put: operations["mark_shopping_item"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shopping/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The household's shopping list settings. */
+        get: operations["get_shopping_settings"];
+        /** Change the household's shopping list settings, for everyone in it. */
+        put: operations["update_shopping_settings"];
         post?: never;
         delete?: never;
         options?: never;
@@ -545,6 +580,16 @@ export interface components {
         };
         ExtraChange: {
             checked: boolean;
+        };
+        FoodWeights: {
+            /** Format: uuid */
+            food_id: string;
+            /**
+             * Format: date
+             * @description Any day in the week to answer with (default: today).
+             */
+            week?: string | null;
+            weight_unit?: null | components["schemas"]["Weights"];
         };
         Health: {
             status: string;
@@ -706,7 +751,7 @@ export interface components {
             name: string;
         };
         ShoppingItem: {
-            /** @description Added up across recipes, e.g. "3 packets (4½ oz)"; absent for "to taste" items like salt. */
+            /** @description Added up across recipes, exactly, e.g. "3 packets (4½ oz)"; absent for "to taste" items like salt. */
             amount?: string | null;
             checked: boolean;
             /** Format: uuid */
@@ -716,6 +761,9 @@ export interface components {
             name: string;
             /** @description The dishes that need it. */
             recipes: string[];
+            /** @description Some of it is a weight, so the household can choose how it reads. */
+            weighed: boolean;
+            weight_unit?: null | components["schemas"]["Weights"];
         };
         ShoppingList: {
             extras: components["schemas"]["ShoppingExtra"][];
@@ -732,10 +780,16 @@ export interface components {
              * @description The Monday.
              */
             week: string;
+            /** @description How the household reads weights, unless a food says otherwise. */
+            weight_unit: components["schemas"]["Weights"];
         };
         ShoppingSection: {
             items: components["schemas"]["ShoppingItem"][];
             name: string;
+        };
+        ShoppingSettings: {
+            /** @description How the household reads weights on its list. */
+            weight_unit: components["schemas"]["Weights"];
         };
         Step: {
             /** @description Some wording came from the nearest published yield; worth a second look. */
@@ -831,6 +885,11 @@ export interface components {
             /** @description Serving counts with published amounts. */
             yields: number[];
         };
+        /**
+         * @description How weights read: "1 lb 14 oz", "30 oz", "1⅞ lb" or "850 g".
+         * @enum {string}
+         */
+        Weights: "lb_oz" | "oz" | "lb" | "metric";
     };
     responses: never;
     parameters: never;
@@ -1543,6 +1602,37 @@ export interface operations {
             };
         };
     };
+    set_food_weights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FoodWeights"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     mark_shopping_item: {
         parameters: {
             query?: never;
@@ -1562,6 +1652,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShoppingList"];
+                };
+            };
+        };
+    };
+    get_shopping_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingSettings"];
+                };
+            };
+        };
+    };
+    update_shopping_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShoppingSettings"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingSettings"];
                 };
             };
         };

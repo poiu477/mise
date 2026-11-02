@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
-import { api, errorText, type ShoppingItem, type ShoppingList } from "../api/client";
+import { api, errorText, type ShoppingItem, type ShoppingList, type Weights } from "../api/client";
 import { addWeeks, mondayOf, weekLabel } from "../week";
+import { WEIGHTS, shortWeight } from "../weights";
 
 export function ShoppingPage() {
   const [params, setParams] = useSearchParams();
@@ -48,6 +49,7 @@ export function ShoppingPage() {
   };
   const hide = (key: string, hidden: boolean) => run(api.PUT("/api/shopping/marks", { body: { week, key, hidden } }));
   const always = (foodId: string) => run(api.POST("/api/pantry-staples", { body: { week, food_id: foodId } }));
+  const weighIn = (foodId: string, weight_unit: Weights | null) => run(api.PUT("/api/shopping/food-weights", { body: { week, food_id: foodId, weight_unit } }));
   const unstaple = (foodId: string) => run(api.DELETE("/api/pantry-staples/{food_id}", { params: { path: { food_id: foodId }, query: { week } } }));
   const addExtra = (e: FormEvent) => {
     e.preventDefault();
@@ -154,6 +156,19 @@ export function ShoppingPage() {
                 {open === i.key && (
                   <div className="item-more no-print">
                     <span className="item-for">For {i.recipes.join(", ")}</span>
+                    {i.weighed && i.food_id && (
+                      <label className="weigh-in">
+                        Weigh in
+                        <select value={i.weight_unit ?? ""} onChange={(e) => weighIn(i.food_id!, (e.target.value || null) as Weights | null)}>
+                          <option value="">Usual ({shortWeight(list.weight_unit)})</option>
+                          {WEIGHTS.map((w) => (
+                            <option key={w.value} value={w.value}>
+                              {w.short}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <div className="item-actions">
                       {i.food_id && (
                         <button type="button" className="quiet" onClick={() => always(i.food_id!)} title="Leave this off every list" aria-label={`Always have ${i.name}`}>

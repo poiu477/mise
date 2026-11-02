@@ -204,10 +204,117 @@ impl Quantity {
             Unit::Pinch => self.clone(),
         }
     }
+
+    /// The amount as a cook measures it, never less: spoons and cups as one standard measure where that is at
+    /// most 5% over, else the fewest that come closest ("1 tsp + 1 pinch"); weights up to the next half ounce
+    /// (quarter below one), counts up to the next half (quarter below one).
+    pub fn measured(&self) -> Measure {
+        let a = self.amount;
+        if a <= 0.0 {
+            return Measure(vec![self.clone()]);
+        }
+        let up = |step: f64| vec![Quantity::new(ceil_to(a, step), self.unit.clone())];
+        Measure(match &self.unit {
+            Unit::Tsp | Unit::Tbsp | Unit::Cup => spoons(self.in_unit(&Unit::Tsp).unwrap_or(a)),
+            Unit::Pinch => up(1.0),
+            Unit::FlOz => up(0.5),
+            Unit::Ml | Unit::G => up(if a >= 20.0 { 5.0 } else { 1.0 }),
+            Unit::L | Unit::Kg if a < 0.05 => return Quantity::new(a * 1000.0, if self.unit == Unit::L { Unit::Ml } else { Unit::G }).measured(),
+            Unit::L | Unit::Kg => up(0.05),
+            Unit::Lb if a < 0.25 => return Quantity::new(a * 16.0, Unit::Oz).measured(),
+            Unit::Lb => up(0.25),
+            Unit::Oz | Unit::Count(_) if a < 0.25 => up(0.01),
+            Unit::Oz | Unit::Count(_) if a < 1.0 => up(0.25),
+            Unit::Oz | Unit::Count(_) => up(0.5),
+        })
+    }
 }
 
 /// A pinch, as sources convert it: a sixteenth of a teaspoon.
 pub const PINCH_TSP: f64 = 1.0 / 16.0;
+
+/// Sources store some measures a hair over (⅔ cup as 0.67), so an amount this close over one counts as it.
+const SLACK: f64 = 0.006;
+/// How far over one standard measure may go before a smaller one is added to it instead.
+const SIMPLER: f64 = 0.05;
+
+/// An amount as a cook measures it: one standard measure, or a few added up.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Measure(pub Vec<Quantity>);
+
+impl Measure {
+    /// The whole amount in `unit`, when every part converts (a pinch counts as a sixteenth of a teaspoon).
+    pub fn in_unit(&self, unit: &Unit) -> Option<f64> {
+        self.0
+            .iter()
+            .map(|q| match q.unit {
+                Unit::Pinch => Quantity::new(q.amount * PINCH_TSP, Unit::Tsp).in_unit(unit),
+                _ => q.in_unit(unit),
+            })
+            .sum()
+    }
+}
+
+impl fmt::Display for Measure {
+    /// "1 tsp + 1 pinch", "¼ cup + 1 TBSP".
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let parts: Vec<String> = self.0.iter().map(Quantity::to_string).collect();
+        f.write_str(&parts.join(" + "))
+    }
+}
+
+/// `a` up to the next multiple of `step`, at least one step.
+fn ceil_to(a: f64, step: f64) -> f64 {
+    (a * (1.0 - SLACK) / step).ceil().max(1.0) * step
+}
+
+/// Cups, tablespoons, teaspoons and a pinch adding up to at least `tsp`: the fewest measures within 5% over,
+/// else the closest.
+fn spoons(tsp: f64) -> Vec<Quantity> {
+    // Largest first, so that of two equally good answers the one in bigger measures is kept.
+    const CUP_PARTS: [f64; 6] = [0.75, 2.0 / 3.0, 0.5, 1.0 / 3.0, 0.25, 0.0];
+    const TBSP: [f64; 7] = [3.5, 3.0, 2.5, 2.0, 1.5, 1.0, 0.0];
+    const TSP: [f64; 13] = [2.75, 2.5, 2.25, 2.0, 1.75, 1.5, 1.25, 1.0, 0.75, 0.5, 0.25, 0.125, 0.0];
+    if !tsp.is_finite() || tsp > 1e6 {
+        return vec![Quantity::new(tsp / 48.0, Unit::Cup)];
+    }
+    let need = tsp * (1.0 - SLACK);
+    let within = tsp * (1.0 + SIMPLER) + 1e-9;
+    // (parts, total, measures): the best within 5% by fewest parts, and the closest overall.
+    let mut simple: Option<(usize, f64, [f64; 4])> = None;
+    let mut closest: Option<(usize, f64, [f64; 4])> = None;
+    // Fewer whole cups than this can't reach the amount with the smaller measures.
+    let fewest = ((need - 48.0) / 48.0).floor().max(0.0) as u32;
+    for whole in (fewest..=(tsp / 48.0).ceil() as u32).rev() {
+        for frac in CUP_PARTS {
+            let cups = whole as f64 + frac;
+            for t in TBSP {
+                for s in TSP {
+                    for p in [0.0, 1.0] {
+                        let total = cups * 48.0 + t * 3.0 + s + p * PINCH_TSP;
+                        if total < need - 1e-9 || total <= 0.0 {
+                            continue;
+                        }
+                        let m = [cups, t, s, p];
+                        let parts = m.iter().filter(|x| **x > 0.0).count();
+                        if total <= within && simple.is_none_or(|b| (parts, total) < (b.0, b.1 - 1e-9)) {
+                            simple = Some((parts, total, m));
+                        }
+                        if closest.is_none_or(|b| total < b.1 - 1e-9 || (total < b.1 + 1e-9 && parts < b.0)) {
+                            closest = Some((parts, total, m));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let Some((_, _, [cups, t, s, p])) = simple.or(closest) else { return vec![Quantity::new(tsp, Unit::Tsp)] };
+    [(cups, Unit::Cup), (t, Unit::Tbsp), (s, Unit::Tsp), (p, Unit::Pinch)]
+        .into_iter()
+        .filter(|(a, _)| *a > 0.0)
+        .map(|(a, u)| Quantity::new(a, u))
+        .collect()
+}
 
 fn round_to(a: f64, step: f64) -> f64 {
     (a / step).round() * step
@@ -266,10 +373,37 @@ pub fn format_amount(a: f64) -> String {
     }
 }
 
-impl fmt::Display for Quantity {
-    /// In the house style of the seed's step text: "1½ TBSP", "¾ cup", "2 cups", "1 tsp", "10 oz".
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let n = format_amount(self.amount);
+/// The amount as it is: a kitchen fraction only where it is one (within a source's two-decimal rounding, so
+/// 0.33 is ⅓), else up to two decimals.
+pub fn format_exact(a: f64) -> String {
+    let whole = a.floor();
+    let frac = a - whole;
+    if frac < 0.005 || frac > 0.995 {
+        return format!("{}", a.round());
+    }
+    match GLYPHS.iter().find(|(v, _)| (v - frac).abs() < 0.005) {
+        Some((_, g)) if whole == 0.0 => (*g).to_string(),
+        Some((_, g)) => format!("{whole}{g}"),
+        None => decimal(a),
+    }
+}
+
+/// Up to two decimals, trailing zeros dropped; never "0" for a positive amount.
+pub fn decimal(a: f64) -> String {
+    if a > 0.0 && a < 0.005 {
+        return "0.01".to_string();
+    }
+    let s = format!("{a:.2}");
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+impl Quantity {
+    /// Like the display, but the amount exactly as it is: "1.3 cups", "2¼ oz".
+    pub fn exact(&self) -> String {
+        self.worded(format_exact(self.amount))
+    }
+
+    fn worded(&self, n: String) -> String {
         let plural = self.amount > 1.0 + 1e-9;
         let unit = match &self.unit {
             Unit::Tsp => "tsp".to_string(),
@@ -283,7 +417,7 @@ impl fmt::Display for Quantity {
             Unit::G => "g".to_string(),
             Unit::Kg => "kg".to_string(),
             Unit::Pinch => if plural { "pinches" } else { "pinch" }.to_string(),
-            Unit::Count(noun) if noun.is_empty() => return write!(f, "{n}"),
+            Unit::Count(noun) if noun.is_empty() => return n,
             Unit::Count(noun) => {
                 if plural {
                     self::plural(noun)
@@ -292,7 +426,14 @@ impl fmt::Display for Quantity {
                 }
             }
         };
-        write!(f, "{n} {unit}")
+        format!("{n} {unit}")
+    }
+}
+
+impl fmt::Display for Quantity {
+    /// In the house style of the seed's step text: "1½ TBSP", "¾ cup", "2 cups", "1 tsp", "10 oz".
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.worded(format_amount(self.amount)))
     }
 }
 
@@ -447,6 +588,40 @@ mod tests {
         assert_eq!(q(1.3, Unit::Count("clove".into())).rounded(), q(1.5, Unit::Count("clove".into())));
         assert_eq!(q(0.7, Unit::Count("lime".into())).rounded(), q(0.75, Unit::Count("lime".into())));
         assert_eq!(q(0.035, Unit::Count("thumb".into())).rounded(), q(0.04, Unit::Count("thumb".into())));
+    }
+
+    #[test]
+    fn measures_up_in_standard_spoons_and_cups() {
+        let m = |a: f64, u: Unit| q(a, u).measured().to_string();
+        assert_eq!(m(1.05, Unit::Tsp), "1 tsp + 1 pinch");
+        assert_eq!(m(1.0, Unit::Tsp), "1 tsp");
+        assert_eq!(m(0.9, Unit::Tsp), "1 tsp");
+        assert_eq!(m(0.3, Unit::Tsp), "¼ tsp + 1 pinch");
+        assert_eq!(m(4.5, Unit::Tsp), "1½ TBSP");
+        assert_eq!(m(2.6, Unit::Tbsp), "2½ TBSP + ½ tsp");
+        assert_eq!(m(1.1, Unit::Cup), "1 cup + 1½ TBSP");
+        assert_eq!(m(3.7, Unit::Cup), "3¾ cups");
+        assert_eq!(m(0.03, Unit::Tsp), "1 pinch");
+        // Of two that add up the same, the bigger measures.
+        assert_eq!(m(13.0, Unit::Tsp), "¼ cup + 1 tsp");
+        // A source's ⅓ and ⅔ cup stored as 0.33 and 0.67 are those, and 0.495 cup (between them) is ½ cup.
+        assert_eq!(m(0.33, Unit::Cup), "⅓ cup");
+        assert_eq!(m(0.67, Unit::Cup), "⅔ cup");
+        assert_eq!(m(0.495, Unit::Cup), "½ cup");
+        assert_eq!(q(1.05, Unit::Tsp).measured().in_unit(&Unit::Tsp), Some(1.0625));
+    }
+
+    #[test]
+    fn measures_weights_and_counts_up() {
+        let m = |a: f64, u: Unit| q(a, u).measured().to_string();
+        assert_eq!(m(7.3, Unit::Oz), "7½ oz");
+        assert_eq!(m(7.0, Unit::Oz), "7 oz");
+        assert_eq!(m(0.6, Unit::Oz), "¾ oz");
+        assert_eq!(m(1.1, Unit::Lb), "1¼ lb");
+        assert_eq!(m(1.2, Unit::Count("clove".into())), "1½ cloves");
+        assert_eq!(m(0.3, Unit::Count("lime".into())), "½ lime");
+        assert_eq!(m(2.2, Unit::Pinch), "3 pinches");
+        assert_eq!(m(212.0, Unit::G), "215 g");
     }
 
     #[test]

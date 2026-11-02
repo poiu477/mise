@@ -247,7 +247,7 @@ function ScaledNotice({ v, servings }: { v: Variant; servings: number }) {
       : `Ingredient amounts are as published, but the step text was only written for other sizes.`;
   return (
     <p className="notice">
-      {why} {what} are scaled from the published ones and rounded to kitchen measures. Check them as you go.
+      {why} {what} are scaled from the published ones and rounded up to standard measures. Check them as you go.
     </p>
   );
 }

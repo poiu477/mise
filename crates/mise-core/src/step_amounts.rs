@@ -2,14 +2,14 @@
 //! parentheses: "1 TBSP butter (2 TBSP for 4 servings)", "half the lime zest (all for 4)", "(For 4 servings,
 //! spread squash across the entire sheet.)". A step is parsed once into parts, then rendered for any yield:
 //! a published yield reads exactly as published; any other is derived from the ingredient's official amounts
-//! or interpolated between the published ones, rounded to kitchen amounts, and flagged.
+//! or interpolated between the published ones, measured up in standard measures, and flagged.
 
 use std::sync::LazyLock;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::quantity::{Quantity, Unit, parse_number};
+use crate::quantity::{Measure, Quantity, Unit, parse_number};
 use crate::text::normalize_name;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -458,6 +458,26 @@ pub fn amount_at(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Opt
     Some((q, m))
 }
 
+/// An amount as step text shows it: published as published, derived measured up, but never past the next
+/// published amount (13.76 oz at 2 and 4 servings stays 13¾ oz at 3).
+pub fn measure_at(part: &Part, target: f64, ctx: &Context) -> Option<(Measure, Method)> {
+    let (q, m) = amount_at(part, target, ctx, true)?;
+    if matches!(m, Method::Published | Method::Unchanged) {
+        return Some((Measure(vec![q]), m));
+    }
+    let measured = q.measured();
+    let Part::Amount { base, alts, .. } = part else { return Some((measured, m)) };
+    let next = std::iter::once((ctx.base, base)).chain(alts.iter().map(|(s, a)| (*s, a))).filter(|p| p.0 > target).min_by(|a, b| a.0.total_cmp(&b.0));
+    if let Some((_, nq)) = next {
+        if let (Some(v), Some(nv)) = (measured.in_unit(&base.unit), nq.in_unit(&base.unit)) {
+            if v > nv + 1e-9 {
+                return Some((Measure(vec![nq.clone()]), m));
+            }
+        }
+    }
+    Some((measured, m))
+}
+
 /// The published points of an amount as (yield, amount in the base unit, unit as written), by yield.
 fn points(base: &Quantity, alts: &[(f64, Quantity)], ctx: &Context, use_alts: bool) -> Vec<(f64, f64, Unit)> {
     let mut points = vec![(ctx.base, base.amount, base.unit.clone())];
@@ -503,7 +523,7 @@ fn boiled_off_water(points: &[(f64, f64, Unit)], share: f64, target: f64) -> Opt
     let pans = if target > hi.0 { pans(hi.0, target) } else { 1.0 };
     let v = near.1 * (share * pans + (1.0 - share) * target / near.0);
     let v = Quantity::new(v, points[0].2.clone()).in_unit(&near.2)?;
-    Some(Quantity::new(v, near.2.clone()).rounded())
+    Some(Quantity::new(v, near.2.clone()))
 }
 
 /// The pans a step's cooking water assumes at `target`, when more than one.
@@ -557,7 +577,7 @@ fn derive(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Option<(Qu
             // extended past them: a flat pantry line (1 tsp sugar for 2 and for 4) says nothing about the step.
             let moves = (ctx.line_amount)(line, ctx.base * 2.0).is_some_and(|l2| (l2 - lb).abs() > 1e-9);
             if lb > 0.0 && moves && consistent {
-                return Some((base.scaled(lt / lb).rounded(), Method::FromLine));
+                return Some((base.scaled(lt / lb), Method::FromLine));
             }
         }
     }
@@ -573,7 +593,7 @@ fn derive(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Option<(Qu
                 let near = crate::servings::nearest(&points.iter().map(|p| p.0).collect::<Vec<_>>(), target).unwrap_or(ctx.base);
                 let unit = alts.iter().find(|(s, _)| (s - near).abs() < 1e-9).map_or(base.unit.clone(), |(_, q)| q.unit.clone());
                 let v = Quantity::new(v.max(0.0), base.unit.clone()).in_unit(&unit).unwrap_or(v);
-                return Some((Quantity::new(v, unit).rounded(), Method::Interpolated));
+                return Some((Quantity::new(v, unit), Method::Interpolated));
             }
         }
     }
@@ -581,7 +601,7 @@ fn derive(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Option<(Qu
         return Some((base.clone(), Method::Unchanged));
     }
     if ctx.scale_plain || !alts.is_empty() || !use_alts {
-        return Some((base.scaled(target / ctx.base).rounded(), Method::Proportional));
+        return Some((base.scaled(target / ctx.base), Method::Proportional));
     }
     Some((base.clone(), Method::Unchanged))
 }
@@ -593,7 +613,7 @@ pub fn render(t: &Template, target: f64, ctx: &Context) -> Rendered {
         match p {
             Part::Text { text } => out.text.push_str(text),
             Part::Amount { .. } => {
-                let (q, m) = amount_at(p, target, ctx, true).expect("an amount part");
+                let (q, m) = measure_at(p, target, ctx).expect("an amount part");
                 out.scaled |= !matches!(m, Method::Published | Method::Unchanged);
                 out.text.push_str(&q.to_string());
             }
@@ -725,7 +745,7 @@ used 2 tsp kosher salt) and pepper.");
         let c = ctx(2.0, &none);
         assert_eq!(render(&t, 2.0, &c).text, "Stir in 2½ TBSP sweet soy glaze (we sent more), then serve.");
         assert_eq!(render(&t, 4.0, &c).text, "Stir in 5 TBSP sweet soy glaze (we sent more), then serve.");
-        assert_eq!(render(&t, 5.0, &c).text, "Stir in 6½ TBSP sweet soy glaze (we sent more), then serve.");
+        assert_eq!(render(&t, 5.0, &c).text, "Stir in ⅓ cup + 2¾ tsp sweet soy glaze (we sent more), then serve.");
     }
 
     #[test]
@@ -807,7 +827,8 @@ used 2 tsp kosher salt) and pepper.");
         let fixed = ctx(2.0, &none);
         assert_eq!(render(&t, 4.0, &fixed).text, "Add ½ cup water.");
         let scaling = Context { base: 2.0, scale_plain: true, line_amount: &none };
-        assert_eq!(render(&t, 4.0, &scaling).text, "Add 1 cup water.");
+        // Part of the water boils off whatever the batch, so twice the servings is a little under twice the water.
+        assert_eq!(render(&t, 4.0, &scaling).text, "Add ¾ cup + 2½ TBSP water.");
     }
 
     #[test]
@@ -842,7 +863,7 @@ used 2 tsp kosher salt) and pepper.");
         }
         // A slurry is measured per serving.
         let t = parse("Whisk 2 TBSP water with the cornstarch, add to the pan and simmer.", &lines());
-        assert_eq!(render(&t, 4.0, &c).text, "Whisk 4 TBSP water with the cornstarch, add to the pan and simmer.");
+        assert_eq!(render(&t, 4.0, &c).text, "Whisk ¼ cup water with the cornstarch, add to the pan and simmer.");
         // Soups by title.
         let mut t = parse("Add ½ cup water to the pan and simmer.", &lines());
         assert!(not_a_pan_sauce("Creamy Tomato Soup"));

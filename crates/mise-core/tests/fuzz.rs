@@ -62,6 +62,13 @@ fn quantities_round_and_format_sanely() {
         }
         let shown = r.to_string();
         assert!(sane(&shown), "{a} {u:?} shows as {shown:?}");
+        // Measured up, never less (bar a source's hair-over amounts) and never nothing.
+        let m = Quantity::new(a, u.clone()).measured();
+        if a > 0.0 {
+            let total = m.in_unit(&u).unwrap();
+            assert!(total >= a * 0.99 && total > 0.0, "{a} {u:?} measured as {m:?}");
+        }
+        assert!(sane(&m.to_string()), "{a} {u:?} measures as {m}");
     }
 }
 

@@ -19,8 +19,11 @@ They add one more rule: a **standardized recipe is tested at specific yields** (
 100 servings), and a scaled recipe should be tested again before it is trusted.
 
 **mise:** a published yield is used exactly; between published yields amounts are interpolated; outside them they
-are scaled from the nearest one, rounded to kitchen measures (⅛ tsp, ½ TBSP, ¼ and ⅓ cup, ½ oz, half items),
-and marked "≈". Derived servings are capped at 24.
+are scaled from the nearest one, and marked "≈". A derived amount is rounded **up**, never down, into standard
+measures: one cup, spoon or pinch measure where that is at most 5% over, else the fewest that come closest ("1 tsp +
+1 pinch", "¼ cup + 1 TBSP"). Weights go up to the next ½ oz (¼ below one) and counts to the next half (quarter below
+one). Derived servings are capped at 24. The shopping list adds up exact amounts instead, with weights in the
+household's chosen units (pounds and ounces, ounces, pounds, or metric, per food if wanted).
 
 ## Exceptions the sources name
 

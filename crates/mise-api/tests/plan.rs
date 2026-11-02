@@ -146,7 +146,7 @@ async fn a_week_planned_becomes_a_merged_list_by_section() {
     assert_eq!(section_names(&list), ["Produce", "Canned & Jarred", "Check you have"]);
     assert_eq!(item(&list, "Tomato Paste").unwrap()["amount"], "3 packets (4½ oz)");
     assert_eq!(item(&list, "Tomato Paste").unwrap()["recipes"], json!(["Chili", "Ragu"]));
-    assert_eq!(item(&list, "Onion").unwrap()["amount"], "3 whole", "half + 2 picks, rounded up");
+    assert_eq!(item(&list, "Onion").unwrap()["amount"], "2½ whole", "half + 2 picks, exactly");
     assert_eq!(item(&list, "Salt").unwrap()["amount"], "¼ tsp");
 
     // The list follows the plan.
@@ -199,6 +199,41 @@ async fn ticks_and_changes_survive_the_plan_changing() {
     assert_eq!(list["extras"][0]["checked"], true);
     let list = app.call("DELETE", &format!("/api/shopping/extras/{extra}"), None).await;
     assert_eq!(list["extras"], json!([]));
+    app.drop().await;
+}
+
+#[tokio::test]
+async fn weights_read_as_the_household_chooses() {
+    let app = app!();
+    let beef = app.food("Ground Beef", json!({"store_section": "Meat & Seafood"})).await;
+    let cheese = app.food("Cheddar", json!({})).await;
+    let tacos = app.recipe("Tacos", &[(beef, 10.0, "ounce", true), (cheese, 0.5, "cup", true)]).await;
+    let burgers = app.recipe("Burgers", &[(beef, 10.0, "ounce", true)]).await;
+    app.call("POST", "/api/plan/entries", Some(json!({"week": WEEK, "variant_id": tacos, "servings": 4}))).await;
+    app.call("POST", "/api/plan/entries", Some(json!({"week": WEEK, "variant_id": burgers}))).await;
+
+    let list = app.list().await;
+    assert_eq!(list["weight_unit"], "lb_oz");
+    assert_eq!(item(&list, "Ground Beef").unwrap()["amount"], "1 lb 14 oz");
+    assert_eq!(item(&list, "Ground Beef").unwrap()["weighed"], true);
+    assert_eq!(item(&list, "Cheddar").unwrap()["weighed"], false);
+
+    let settings = app.call("PUT", "/api/shopping/settings", Some(json!({"weight_unit": "metric"}))).await;
+    assert_eq!(settings["weight_unit"], "metric");
+    assert_eq!(app.call("GET", "/api/shopping/settings", None).await["weight_unit"], "metric");
+    assert_eq!(item(&app.list().await, "Ground Beef").unwrap()["amount"], "850 g");
+
+    // One food can read its own way, and go back.
+    let list = app.call("PUT", "/api/shopping/food-weights", Some(json!({"week": WEEK, "food_id": beef, "weight_unit": "lb"}))).await;
+    assert_eq!(item(&list, "Ground Beef").unwrap()["amount"], "1⅞ lb");
+    assert_eq!(item(&list, "Ground Beef").unwrap()["weight_unit"], "lb");
+    let list = app.call("PUT", "/api/shopping/food-weights", Some(json!({"week": WEEK, "food_id": beef, "weight_unit": null}))).await;
+    assert_eq!(item(&list, "Ground Beef").unwrap()["amount"], "850 g");
+    assert_eq!(item(&list, "Ground Beef").unwrap()["weight_unit"], Value::Null);
+
+    let cookie = app.cookie.clone();
+    assert_eq!(app.as_user(&cookie, "PUT", "/api/shopping/settings", Some(json!({"weight_unit": "stone"}))).await.0.is_client_error(), true);
+    assert_eq!(app.as_user(&cookie, "PUT", "/api/shopping/food-weights", Some(json!({"food_id": Uuid::now_v7(), "weight_unit": "oz"}))).await.0, StatusCode::NOT_FOUND);
     app.drop().await;
 }
 

@@ -3,7 +3,7 @@
 //! target lies outside them. Published amounts are not always linear (0.25 oz dill for both 2 and 4 servings),
 //! which interpolation keeps.
 
-use crate::quantity::{PINCH_TSP, Quantity, Unit, format_amount, parse_number};
+use crate::quantity::{Measure, PINCH_TSP, Quantity, Unit, format_amount, parse_number};
 
 /// What a food's bare counts mean: sources often publish only "1 unit", which reads here as "1 packet (1½ oz)".
 #[derive(Debug, Clone, PartialEq)]
@@ -91,7 +91,7 @@ pub fn nearest(published: &[f64], target: f64) -> Option<f64> {
 }
 
 /// An ingredient line's amount at `target`: as published when it is (in its clearest words), else derived from
-/// the published yields in the unit of the nearest one and rounded to kitchen amounts, or counted in pinches
+/// the published yields in the unit of the nearest one and measured up in standard measures, or in whole pinches
 /// when that is how the nearest one reads. A bare count takes the food's `count` wording.
 pub fn line_text(published: &[(f64, f64, Option<String>)], target: f64, count: Option<&CountUnit>) -> (Option<String>, bool) {
     let yields: Vec<f64> = published.iter().map(|p| p.0).collect();
@@ -100,40 +100,43 @@ pub fn line_text(published: &[(f64, f64, Option<String>)], target: f64, count: O
         .and_then(|n| published.iter().find(|p| p.0 == n))
         .and_then(|p| Some(Quantity::new(p.1, Unit::parse(p.2.as_deref()?)?).tidied().unit == Unit::Pinch))
         .unwrap_or(false);
-    let show = |a: f64, unit: &Option<String>, round: bool| match unit.as_deref().and_then(Unit::parse) {
+    let worded = |u: Unit| match count.filter(|_| u == Unit::Count(String::new())) {
+        Some(c) => (Unit::Count(c.noun.clone()), Some(c)),
+        None => (u, None),
+    };
+    let show = |m: &Measure, counted: Option<&CountUnit>| match (counted, m.0.as_slice()) {
+        (Some(c), [one]) => c.show(one),
+        _ => m.to_string(),
+    };
+    let published_text = |a: f64, unit: &Option<String>| match unit.as_deref().and_then(Unit::parse) {
         Some(u) => {
-            let counted = count.filter(|_| u == Unit::Count(String::new()));
-            let q = Quantity::new(a, counted.map_or(u, |c| Unit::Count(c.noun.clone())));
-            let shown = if round && !in_pinches { q.rounded() } else { q.tidied() };
-            counted.map_or_else(|| shown.to_string(), |c| c.show(&shown))
+            let (u, counted) = worded(u);
+            show(&Measure(vec![Quantity::new(a, u).tidied()]), counted)
         }
         None => format!("{} {}", format_amount(a), unit.as_deref().unwrap_or("")).trim().to_string(),
     };
     if let Some((_, a, u)) = published.iter().find(|(s, _, _)| (s - target).abs() < 1e-9) {
-        return (Some(show(*a, u, false)), false);
+        return (Some(published_text(*a, u)), false);
     }
     let Some(near) = near else { return (None, false) };
     let unit = published.iter().find(|p| p.0 == near).and_then(|p| p.2.clone());
     let same_unit: Vec<(f64, f64)> = published.iter().filter(|p| p.2 == unit).map(|p| (p.0, p.1)).collect();
     let Some((a, _)) = amount_at(&same_unit, target) else { return (None, false) };
-    // Rounded, it must still sit between the published amounts on either side; when it would not, it reads as
-    // that neighbour (13.76 oz published for 2 and 4 is 13¾ oz at 3, not a rounded-up 14 oz).
-    if let Some(u) = unit.as_deref().and_then(Unit::parse) {
-        let r = match Quantity::new(a, u.clone()).in_unit(&Unit::Tsp).filter(|tsp| in_pinches && *tsp > 0.0) {
-            // Whole pinches, back in the line's unit.
-            Some(tsp) => a * (tsp / PINCH_TSP).round().max(1.0) * PINCH_TSP / tsp,
-            None => Quantity::new(a, u).rounded().in_unit(&Unit::parse(unit.as_deref().unwrap_or("")).unwrap()).unwrap_or(a),
-        };
-        let below = same_unit.iter().filter(|p| p.0 < target).max_by(|x, y| x.0.total_cmp(&y.0));
-        let above = same_unit.iter().filter(|p| p.0 > target).min_by(|x, y| x.0.total_cmp(&y.0));
-        if let Some(&(_, b)) = below.filter(|p| r < p.1 - 1e-9) {
-            return (Some(show(b, &unit, false)), true);
-        }
-        if let Some(&(_, b)) = above.filter(|p| r > p.1 + 1e-9) {
-            return (Some(show(b, &unit, false)), true);
-        }
+    let Some(u) = unit.as_deref().and_then(Unit::parse) else { return (Some(published_text(a, &unit)), true) };
+    let (shown_unit, counted) = worded(u.clone());
+    let measured = match Quantity::new(a, u.clone()).in_unit(&Unit::Tsp).filter(|tsp| in_pinches && *tsp > 0.0) {
+        Some(tsp) => Quantity::new(tsp / PINCH_TSP, Unit::Pinch).measured(),
+        None => Quantity::new(a, shown_unit).measured(),
+    };
+    // Measured up, it must still sit between the published amounts on either side; when it would not, it reads
+    // as that neighbour (13.76 oz published for 2 and 4 is 13¾ oz at 3, not a measured-up 14 oz).
+    let r = measured.in_unit(&u).unwrap_or(a);
+    let below = same_unit.iter().filter(|p| p.0 < target).max_by(|x, y| x.0.total_cmp(&y.0));
+    let above = same_unit.iter().filter(|p| p.0 > target).min_by(|x, y| x.0.total_cmp(&y.0));
+    if let Some(&(_, b)) = below.filter(|p| r < p.1 - 1e-9).or(above.filter(|p| r > p.1 + 1e-9)) {
+        return (Some(published_text(b, &unit)), true);
     }
-    (Some(show(a, &unit, true)), true)
+    (Some(show(&measured, counted)), true)
 }
 
 /// A line's amount at `target` as a number to add up: published when it is, else derived in the unit of the nearest
@@ -182,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn published_amounts_are_exact_and_others_rounded() {
+    fn published_amounts_are_exact_and_others_measured_up() {
         let a = vec![(2.0, 0.5, Some("cup".into())), (4.0, 1.0, Some("cup".into()))];
         assert_eq!(line_text(&a, 2.0, None), (Some("½ cup".into()), false));
         assert_eq!(line_text(&a, 3.0, None), (Some("¾ cup".into()), true));
@@ -199,7 +202,7 @@ mod tests {
         assert_eq!(line_text(&oil, 6.0, None), (Some("2 TBSP".into()), false));
         let sugar = vec![(2.0, 0.06, Some("teaspoon (tsp)".into())), (4.0, 0.12, Some("teaspoon (tsp)".into())), (6.0, 0.18, Some("teaspoon (tsp)".into()))];
         let at = |t: f64| line_text(&sugar, t, None).0.unwrap();
-        assert_eq!([at(1.0), at(2.0), at(3.0), at(4.0), at(5.0), at(6.0)], ["1 pinch", "1 pinch", "1 pinch", "2 pinches", "2 pinches", "3 pinches"]);
+        assert_eq!([at(1.0), at(2.0), at(3.0), at(4.0), at(5.0), at(6.0)], ["1 pinch", "1 pinch", "2 pinches", "2 pinches", "3 pinches", "3 pinches"]);
         let odd = vec![(2.0, 4.0, Some("nach Geschmack".into()))];
         assert_eq!(line_text(&odd, 2.0, None), (Some("4 nach Geschmack".into()), false));
     }

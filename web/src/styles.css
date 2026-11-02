@@ -213,6 +213,8 @@ button.add { border: 1px solid var(--accent); background: none; color: var(--tex
 .shop-section input[type="checkbox"] { flex: none; width: 22px; height: 22px; accent-color: var(--accent); }
 .item-name { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; min-width: 0; font-weight: 600; }
 .item-amount { font-weight: 400; font-variant-numeric: tabular-nums; }
+.weigh-in { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.weigh-in select { min-width: 0; max-width: 100%; font: inherit; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
 .item-for { font-size: 13px; color: var(--muted); }
 .more-toggle { flex: none; width: 36px; height: 36px; border: 0; background: none; color: var(--muted); font-size: 18px; border-radius: 999px; cursor: pointer; }
 .more-toggle[aria-expanded="true"] { background: var(--accent-soft); color: var(--text); }
