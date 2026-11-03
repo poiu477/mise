@@ -52,14 +52,11 @@ docker compose start app
 Then copy the photo folder (`MEDIA_ROOT` there) into `MEDIA_DIR` here; paths in the database are relative to it,
 so nothing else changes. Alternatively, copy the recipe archive instead, set `ARCHIVE_DIR` to it, and rebuild the
 photos on the server. Inside the container the archive and the media folder are separate mounts, so photos are
-copied rather than hard-linked: allow about 40 GB.
+copied rather than hard-linked: allow about 40 GB for the full archive (the launch seed needs far less).
 
 ```bash
 docker compose exec app mise ingest-media --from /archive
 ```
-
-The curation and dish decision files sit next to the bundle (see [curation.md](curation.md)). A curation file is all or
-nothing, so it may only name foods the bundle contains.
 
 Starting from a seed bundle instead of a database:
 
@@ -76,7 +73,9 @@ docker compose exec app mise ingest-media --from /archive
 ```
 
 The curation and dish decision files sit next to the bundle (see [curation.md](curation.md)). A curation file is all or
-nothing, so it may only name foods the bundle contains.
+nothing, so it may only name foods the bundle contains: for the launch seed, copy `seed/mise-seed`,
+`curation-seed.json`, `dish-decisions-seed.json` and `preferred-versions.json` into the archive folder and use those
+names in the commands above.
 
 ## 5. Updating
 

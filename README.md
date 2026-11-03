@@ -1,9 +1,12 @@
 # mise
 
 A self-hosted recipe system: dishes with versions, variant toggles, any-servings scaling, a shared weekly plan and
-shopping list. Recipes come from seed bundles, websites, files, or your own kitchen, and all get the same treatment.
+a shopping list that works offline. Recipes come from seed bundles, websites, files, or your own kitchen, and all get
+the same treatment.
 
-Status: phase 1 (data core) done; phase 2 (browse and cook) in progress. See the design document for the full plan.
+Status: phases 1 to 3 (data core; browse and cook; plan and shop) are done. Next are repeatable test gates, then
+kitchen mode and imports. See [docs/status.md](docs/status.md) for the task list and [CLAUDE.md](CLAUDE.md) for how
+to work on the code.
 
 ## Running it
 
@@ -12,7 +15,8 @@ See [docs/deploy.md](docs/deploy.md).
 
 ## Development
 
-Requirements: Rust (stable), Node 20+, Docker.
+Requirements: Rust (stable), Node 20+, Docker. The full guide, including rebuilding a seed database and running
+the tests, is [docs/development.md](docs/development.md).
 
 ```bash
 cp .env.example .env
@@ -41,13 +45,18 @@ docker compose -f compose.dev.yaml run --rm rust cargo test
 
 | Path | What |
 | --- | --- |
-| `crates/mise-core` | Domain types, quantities and scaling, text helpers |
+| `crates/mise-core` | Quantities, scaling and rounding, step-text amounts, shopping totals, text helpers |
 | `crates/mise-db` | Connection pool and embedded migrations |
-| `crates/mise-ingest` | Importers (seed bundles today) |
+| `crates/mise-ingest` | Importing and curating: seed bundles, food matching, dish grouping, options, media, steps |
 | `crates/mise-api` | The REST API (`mise-server`) |
 | `crates/mise-cli` | The `mise` admin command |
 | `web/` | The web app (installable PWA) |
 | `migrations/` | Postgres schema |
+| `docs/status.md` | Where things stand, the task list, known issues, decisions |
+| `docs/architecture.md` | How the parts fit together |
+| `docs/development.md` | Setup, databases, running, testing |
+| `docs/style.md` | How code, comments, commits and UI text are written |
+| `docs/curation.md` | Food curation files, dish decisions, preferred versions |
 | `docs/seed-bundle.md` | The bulk-import format |
 | `docs/sign-in.md` | Accounts, households, single sign-on, API tokens |
 | `docs/scaling-rules.md` | How recipes scale: established rules, exceptions, the archive's evidence |
