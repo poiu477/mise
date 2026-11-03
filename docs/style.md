@@ -4,9 +4,9 @@ Write like the code around you: match its comment density, naming and idiom. Wha
 
 ## Rust
 
-- **Layout.** Each file opens with a `//!` comment saying what it holds in a sentence or two. Code is dense: one-line
-  closures and chains, lines up to about 160 characters. rustfmt is not enforced yet (adopting it, with a wide
-  `max_width`, is the first task of the testing work); until then, follow the file you're in.
+- **Layout.** Each file opens with a `//!` comment saying what it holds in a sentence or two. rustfmt at its
+  defaults is the target (adopting it is on the task list, as one commit that formats everything); until then,
+  follow the file you're in, and keep new lines under 100 characters.
 - **Comments.** A `///` comment on every public item says what it is or does, in plain English, often with an example
   in quotes: `/// "1½", "¾", "2"; falls back to a trimmed decimal`. Inline comments explain *why* (a source quirk, a
   rule's evidence), never what the next line plainly does. Few of them.
@@ -14,9 +14,11 @@ Write like the code around you: match its comment density, naming and idiom. Wha
   `CountUnit`. No `Manager`, `Helper` or `Util`.
 - **Errors.** `anyhow` with `.context(...)` in the CLI and ingest; `ApiError` (`error.rs`) in the API, whose messages
   are shown to people, so they are sentences ("enter between 1 and 200 characters").
-- **SQL.** Inline strings with `sqlx::query`, `query_as` and `query_scalar` plus `.bind(...)` (no compile-time
-  `query!` macros, so builds don't need a database). Ids are UUID v7 made in Rust (`Uuid::now_v7()`). A long row tuple
-  gets a `type` alias with a comment naming its columns.
+- **SQL.** Today: inline strings with `sqlx::query`, `query_as` and `query_scalar` plus `.bind(...)`, rows as
+  tuples with a `type` alias naming their columns, inside the handlers. The target (on the task list): rows as
+  `#[derive(sqlx::FromRow)]` structs, compile-time checked `query_as!` with the `.sqlx` offline data committed, and
+  SQL in per-domain data modules the handlers call. New code should move that way. Ids are UUID v7 made in Rust
+  (`Uuid::now_v7()`).
 - **Pure logic in `mise-core`.** Anything that can be a function of its inputs lives there with unit tests; the API
   and ingest crates do I/O and call it.
 - **Tests.** Names read as the rule they check (`counts_carry_their_size`, `a_household_sees_only_its_own_plan`), and

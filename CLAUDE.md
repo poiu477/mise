@@ -1,9 +1,10 @@
 # Working on mise
 
-mise is a self-hosted recipe system for one household (Paul's), built to be publishable: dishes with versions,
-option toggles, any serving count, a shared weekly plan and a shopping list that works offline. It runs as a Docker
-Compose stack in a Proxmox LXC. Phases 1 to 3 of the roadmap are done; see [docs/status.md](docs/status.md) for where
-things stand and what's next.
+mise is a self-hosted recipe system: dishes with versions, option toggles, any serving count, a shared weekly plan
+and a shopping list that works offline. It runs as a Docker Compose stack in a Proxmox LXC and Paul's household uses
+it daily, but it is a **portfolio project held to production standards**: code, tests, security, docs and process
+should stand up to a reviewer's reading. "It's only for us" is never a reason to accept a shortcut. Phases 1 to 3
+of the roadmap are done; see [docs/status.md](docs/status.md) for where things stand and what's next.
 
 Read these before changing anything:
 

@@ -21,8 +21,7 @@ The live data is the launch seed: 237 dishes and 308 versions from meals receive
 Agreed direction (design document, "Tests and gates"): every gate becomes a command that passes or fails.
 
 - [ ] `./check`: one command running clippy, all Rust and web tests, TypeScript, the web build, and a check that the
-      generated API types match the server. Adopt rustfmt (choose a wide `max_width`, format once in its own commit)
-      and add a git pre-commit hook that runs it.
+      generated API types match the server, and a git pre-commit hook that runs it (formatting: see below).
 - [ ] Demo bundle: a dozen recipes we write ourselves (no HelloFresh content), in the repo, covering two yields,
       pinches, packets, pan sauces and a dish with two versions.
 - [ ] Pipeline test: import the demo bundle through every stage; check counts and a committed snapshot of every
@@ -36,6 +35,29 @@ Agreed direction (design document, "Tests and gates"): every gate becomes a comm
       "matches HelloFresh" score, which counts every round-up as a miss.
 - [ ] Deploy gate: `docker compose up` on an empty volume, upgrade from the previous release's database, backup and
       restore.
+
+## Production quality (the portfolio bar)
+
+mise is a portfolio project, so it is held to production standards, not "good enough for one household". Recommended
+order: the remote and CI baseline first (it makes everything after it checked), the gates above, then the rest.
+
+- [ ] A public GitHub repository with CI on every push: formatting, clippy with warnings as errors, Rust tests against
+      a Postgres service, web lint and tests, Playwright, `cargo deny` and `npm audit`, the Docker image built and
+      pushed. Work on branches and merge through pull requests.
+- [ ] Standard formatting: rustfmt at its defaults in one commit; ESLint and Prettier for the web app.
+- [ ] Database code a reviewer expects: `#[derive(sqlx::FromRow)]` structs instead of row tuples; compile-time checked
+      queries with the `.sqlx` offline data committed so CI builds without a database; SQL moved out of the HTTP
+      handlers into per-domain data modules.
+- [ ] Architecture decision records in `docs/adr/` for the decisions below, with the alternatives weighed.
+- [ ] Security: response headers (Content-Security-Policy, frame-ancestors, nosniff, referrer policy), the CSRF stance
+      written down (SameSite=Lax cookies plus JSON-only bodies), `SECURITY.md`, dependency audits in CI. Login
+      throttling exists.
+- [ ] Observability: JSON logs as an option, a request id on every log line, a readiness check, basic metrics.
+- [ ] API contract: decide on `/api/v1` and a standard error shape before anything outside the web app depends on it.
+- [ ] Public-repo hygiene: replace the HelloFresh step text quoted in tests (about 23 lines) with our own; decide
+      whether to publish the git history as it is or start the public repo fresh.
+- [ ] Presentation: a README with screenshots and a short demo, a hosted demo running the demo bundle, versioned
+      releases with a changelog.
 
 ## Phase 3, still to build
 
@@ -93,3 +115,4 @@ Agreed direction (design document, "Tests and gates"): every gate becomes a comm
 | 2026-11-02 | Scaled recipe amounts round up, never down, into standard measures (one measure within 5%, else the fewest closest) |
 | 2026-11-03 | The shopping list works offline from a device copy, with ticks and additions queued |
 | 2026-11-03 | Gates become repeatable checks; HelloFresh-free demo data for public tests, the private seed for the seed gate |
+| 2026-11-03 | mise is a portfolio project held to production standards; "only for one household" no longer justifies a shortcut |
