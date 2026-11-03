@@ -44,9 +44,9 @@ pub fn render(r: &Report) -> String {
             "stratum": STRATA[c.stratum].key,
         })).collect::<Vec<_>>(),
     });
-    let _ = write!(
+    let _ = writeln!(
         h,
-        "<script type=\"application/json\" id=\"gate-data\">{}</script><script>{JS}</script></body></html>\n",
+        "<script type=\"application/json\" id=\"gate-data\">{}</script><script>{JS}</script></body></html>",
         script_json(&data)
     );
     h

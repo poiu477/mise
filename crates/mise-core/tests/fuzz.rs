@@ -85,7 +85,7 @@ fn steps_parse_and_render_without_panicking() {
             let ctx = Context { base, scale_plain, line_amount: &line_amount };
             for target in [0.5, 1.0, 2.0, 2.5, 3.0, 4.0, 6.0, 24.0] {
                 let r = render(&t, target, &ctx);
-                assert!(sane(&r.text) || sane(&text) == false, "{text:?} at {target} → {:?}", r.text);
+                assert!(sane(&r.text) || !sane(&text), "{text:?} at {target} → {:?}", r.text);
             }
         }
         // Text outside amounts survives: rendering at the base yield drops only yield parentheticals.

@@ -398,7 +398,7 @@ fn write_card(
 
 fn tally_rows(t: &Tally) -> String {
     let mut rows: Vec<(&&str, &(usize, usize))> = t.by_method.iter().collect();
-    rows.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+    rows.sort_by_key(|r| std::cmp::Reverse(r.1.0));
     rows.iter()
         .map(|(m, (n, ok))| format!("<tr><td>{m}</td><td>{n}</td><td>{:.1}%</td></tr>", 100.0 * *ok as f64 / (*n).max(1) as f64))
         .collect()

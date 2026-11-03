@@ -53,6 +53,9 @@ pub struct DishPage {
     pub items: Vec<DishSummary>,
 }
 
+/// id, slug, title, subtitle, content type, versions, default version, image, total matching.
+type SummaryRow = (Uuid, String, String, Option<String>, String, i64, Option<Uuid>, Option<Uuid>, i64);
+
 /// Search and browse dishes.
 #[utoipa::path(get, path = "/api/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams), responses((status = 200, body = DishPage)))]
 pub async fn list(State(s): State<AppState>, Query(p): Query<ListParams>) -> ApiResult<Json<DishPage>> {
@@ -60,7 +63,7 @@ pub async fn list(State(s): State<AppState>, Query(p): Query<ListParams>) -> Api
     let offset = p.offset.unwrap_or(0).max(0);
     let q = p.q.as_deref().map(str::trim).filter(|q| !q.is_empty());
     let ingredient = p.ingredient.as_deref().map(str::trim).filter(|q| !q.is_empty());
-    let rows: Vec<(Uuid, String, String, Option<String>, String, i64, Option<Uuid>, Option<Uuid>, i64)> = sqlx::query_as(
+    let rows: Vec<SummaryRow> = sqlx::query_as(
         "SELECT d.id, d.slug, d.title, d.subtitle, d.content_type::text,
                 (SELECT count(*) FROM variants v WHERE v.dish_id = d.id) AS versions, d.default_variant_id,
                 (SELECT vm.media_id FROM variant_media vm

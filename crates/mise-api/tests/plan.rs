@@ -232,7 +232,7 @@ async fn weights_read_as_the_household_chooses() {
     assert_eq!(item(&list, "Ground Beef").unwrap()["weight_unit"], Value::Null);
 
     let cookie = app.cookie.clone();
-    assert_eq!(app.as_user(&cookie, "PUT", "/api/shopping/settings", Some(json!({"weight_unit": "stone"}))).await.0.is_client_error(), true);
+    assert!(app.as_user(&cookie, "PUT", "/api/shopping/settings", Some(json!({"weight_unit": "stone"}))).await.0.is_client_error());
     assert_eq!(app.as_user(&cookie, "PUT", "/api/shopping/food-weights", Some(json!({"food_id": Uuid::now_v7(), "weight_unit": "oz"}))).await.0, StatusCode::NOT_FOUND);
     app.drop().await;
 }

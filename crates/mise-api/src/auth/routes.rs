@@ -222,9 +222,12 @@ pub struct NewToken {
 }
 
 /// This account's API tokens.
+/// id, name, scope, created, last used.
+type TokenRow = (Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>);
+
 #[utoipa::path(get, path = "/api/me/tokens", operation_id = "list_tokens", tag = "account", responses((status = 200, body = [TokenInfo])))]
 pub async fn list_tokens(State(s): State<AppState>, Extension(u): Extension<CurrentUser>) -> ApiResult<Json<Vec<TokenInfo>>> {
-    let rows: Vec<(Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>)> =
+    let rows: Vec<TokenRow> =
         sqlx::query_as("SELECT id, name, scope, created_at, last_used_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at")
             .bind(u.id)
             .fetch_all(&s.pool)

@@ -316,7 +316,7 @@ pub fn parse(text: &str, lines: Lines) -> Template {
                 let alt_words = inner.as_str().trim();
                 let alt = if SHARE.find(alt_words).is_some_and(|m| m.start() == 0 && m.end() == alt_words.len()) {
                     // "all" replaces only the share word: "half the lime zest" → "all the lime zest".
-                    format!("{alt_words}{}", &text[window_start + s.end()..start].trim_end())
+                    format!("{alt_words}{}", text[window_start + s.end()..start].trim_end())
                 } else if alt_words.to_lowercase().starts_with("whole") && base.to_lowercase().contains(" the ") {
                     format!("the {alt_words}")
                 } else {
