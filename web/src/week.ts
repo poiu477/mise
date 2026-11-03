@@ -12,6 +12,9 @@ export function mondayOf(day: Date = new Date()): string {
   return iso(d);
 }
 
+/** The Monday of the week holding `day` ("2026-11-05" → "2026-11-02"). */
+export const weekOf = (day: string) => mondayOf(parse(day));
+
 export function addWeeks(week: string, n: number): string {
   const d = parse(week);
   d.setDate(d.getDate() + n * 7);

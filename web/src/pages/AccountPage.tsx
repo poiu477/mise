@@ -5,6 +5,7 @@ import { WEIGHTS } from "../weights";
 
 export function AccountPage() {
   const { session, signOut } = useSession();
+  if (session.status === "offline") return <p className="empty">Account settings need the server. They'll be here when it's back in reach.</p>;
   if (session.status !== "in") return null;
   const me = session.me;
   return (

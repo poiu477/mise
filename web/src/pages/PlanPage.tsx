@@ -14,18 +14,21 @@ export function PlanPage() {
   useEffect(() => {
     const ctrl = new AbortController();
     setPlan(null);
-    api.GET("/api/plan", { params: { query: { week } }, signal: ctrl.signal }).then(({ data, error: failed }) => {
-      if (ctrl.signal.aborted) return;
-      if (data) setPlan(data);
-      else setError(errorText(failed));
-    });
+    api
+      .GET("/api/plan", { params: { query: { week } }, signal: ctrl.signal })
+      .then(({ data, error: failed }) => {
+        if (ctrl.signal.aborted) return;
+        if (data) setPlan(data);
+        else setError(errorText(failed));
+      })
+      .catch(() => !ctrl.signal.aborted && setError("Can't reach the server. Planning needs it; the shopping list works offline."));
     return () => ctrl.abort();
   }, [week]);
 
   const go = (n: number) => setParams({ week: addWeeks(week, n) });
   const run = async (call: Promise<{ data?: Plan; error?: unknown }>) => {
     setError("");
-    const { data, error: failed } = await call;
+    const { data, error: failed } = await call.catch(() => ({ data: undefined, error: { error: "can't reach the server, so that wasn't saved" } }));
     if (data) setPlan(data);
     else setError(errorText(failed));
   };

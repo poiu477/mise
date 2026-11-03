@@ -180,6 +180,7 @@ button.quiet { border: 0; background: none; color: var(--muted); font-size: 13px
 .week-nav button { width: 38px; height: 38px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 20px; line-height: 1; cursor: pointer; }
 .head-actions { display: flex; gap: 12px; align-items: center; }
 .print-only { display: none; }
+.offline-bar { margin: 0; padding: 6px 16px; text-align: center; font-size: 13px; font-weight: 600; background: var(--accent-soft); color: var(--text); }
 
 .plan-list, .add-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .plan-list li, .add-list li {
@@ -225,7 +226,7 @@ button.add { border: 1px solid var(--accent); background: none; color: var(--tex
 .left-out li .meta { margin: 0 auto 0 0; }
 
 @media print {
-  .topbar, .no-print { display: none !important; }
+  .topbar, .offline-bar, .no-print { display: none !important; }
   .print-only { display: block; font-size: 20px; }
   body { background: #fff; color: #000; }
   .shop-section { break-inside: avoid; margin-bottom: 10px; }

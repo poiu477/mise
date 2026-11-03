@@ -1,13 +1,20 @@
 // mise service worker: keeps the app shell, recipes and photos available when the network drops mid-recipe.
 // Photos are content-addressed (a media id never changes), so they are served from cache first; pages and
 // recipe data always try the network and fall back to the last copy. Account data (/api/me, tokens, people)
-// is never cached, so nothing personal outlives signing out on a shared device.
-const SHELL = "mise-shell-v2";
+// is never cached here; the shopping list keeps its own copy in the app, cleared on signing out.
+const SHELL = "mise-shell-v3";
 const PHOTOS = "mise-photos-v1";
 const RECIPE_DATA = ["/api/dishes", "/api/variants/"];
 
+// The page and the scripts and styles it loads, so the app opens offline from the first visit on.
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(SHELL).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icon.svg"])));
+  event.waitUntil(
+    caches.open(SHELL).then(async (c) => {
+      await c.addAll(["/", "/manifest.webmanifest", "/icon.svg"]);
+      const page = await (await c.match("/")).text();
+      await c.addAll([...new Set(page.match(/\/assets\/[^"']+/g) ?? [])]);
+    }),
+  );
   self.skipWaiting();
 });
 

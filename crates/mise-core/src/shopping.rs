@@ -57,6 +57,11 @@ impl WeightUnit {
         WeightUnit::ALL.into_iter().find(|w| w.as_str() == s)
     }
 
+    /// For a package's size: pounds read as pounds and ounces, so a 1 oz packet isn't "0.06 lb".
+    fn for_size(self) -> WeightUnit {
+        if self == WeightUnit::Lb { WeightUnit::LbOz } else { self }
+    }
+
     /// The weight in these units, exactly.
     pub fn show(self, grams: f64) -> String {
         let oz = grams / Quantity::new(1.0, Unit::Oz).in_unit(&Unit::G).unwrap_or(1.0);
@@ -125,7 +130,7 @@ pub fn total(needs: &[Quantity], count: Option<&CountUnit>, weights: WeightUnit)
         let q = Quantity::new(n, Unit::Count(noun.clone()));
         parts.push(match count.filter(|c| c.noun == noun).and_then(|c| c.size.as_ref()) {
             Some(size) if size.unit.family() == Family::Weight => {
-                format!("{} ({})", q.exact(), weights.show(size.scaled(n).in_unit(&Unit::G).unwrap_or(0.0)))
+                format!("{} ({})", q.exact(), weights.for_size().show(size.scaled(n).in_unit(&Unit::G).unwrap_or(0.0)))
             }
             Some(size) => format!("{} ({})", q.exact(), size.scaled(n).exact()),
             None => q.exact(),
@@ -194,6 +199,7 @@ mod tests {
         let paste = CountUnit::from_props(Some("packet"), Some("1.5 oz"));
         assert_eq!(total(&[bare(1.0), bare(2.0)], paste.as_ref(), W).unwrap(), "3 packets (4½ oz)");
         assert_eq!(total(&[bare(1.0), bare(2.0)], paste.as_ref(), WeightUnit::Metric).unwrap(), "3 packets (128 g)");
+        assert_eq!(total(&[bare(1.0), bare(2.0)], paste.as_ref(), WeightUnit::Lb).unwrap(), "3 packets (4½ oz)");
     }
 
     #[test]

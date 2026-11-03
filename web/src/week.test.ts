@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { addWeeks, mondayOf, weekLabel } from "./week";
+import { addWeeks, mondayOf, weekLabel, weekOf } from "./week";
 
 describe("weeks", () => {
   it("finds the Monday of any day", () => {
     expect(mondayOf(new Date(2026, 10, 2))).toBe("2026-11-02"); // a Monday
     expect(mondayOf(new Date(2026, 10, 8))).toBe("2026-11-02"); // a Sunday
     expect(mondayOf(new Date(2026, 0, 1))).toBe("2025-12-29"); // across a year
+    expect(weekOf("2026-11-05")).toBe("2026-11-02");
+    expect(weekOf("2026-11-02")).toBe("2026-11-02");
   });
 
   it("moves by whole weeks across months", () => {

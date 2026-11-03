@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { keepListsOnDevice } from "../pages/ShoppingPage";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useSession } from "../session";
 
@@ -11,7 +12,7 @@ export function Layout() {
   const onOpenPage = OPEN.includes(location.pathname);
 
   if (session.status === "loading") return <p className="empty">Loading…</p>;
-  if (session.status === "offline") return <p className="empty">Can't reach the mise server. Check that it's running and reload.</p>;
+  if (session.status === "offline" && !session.me) return <p className="empty">Can't reach the mise server. Check that it's running and reload.</p>;
   if (session.status === "setup" && location.pathname !== "/setup") return <Navigate to="/setup" replace />;
   if (session.status === "out" && location.pathname !== "/login") {
     return <Navigate to={`/login?return_to=${encodeURIComponent(here)}`} replace />;
@@ -30,6 +31,7 @@ export function Layout() {
   return (
     <div className="app">
       <TopBar />
+      {session.status === "offline" && <p className="offline-bar">Offline: showing what this device has saved.</p>}
       <main className="content">
         <Outlet />
       </main>
@@ -39,6 +41,12 @@ export function Layout() {
 
 function TopBar() {
   const { session } = useSession();
+  const me = session.status === "in" || session.status === "offline" ? session.me : null;
+  // This week's and next week's lists, kept on the device for the shop.
+  const signedIn = session.status === "in" ? session.me.id : null;
+  useEffect(() => {
+    if (signedIn) keepListsOnDevice(signedIn);
+  }, [signedIn]);
   const [params] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -65,18 +73,18 @@ function TopBar() {
       <form className="search" role="search" onSubmit={submit}>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search dishes" aria-label="Search dishes" enterKeyHint="search" />
       </form>
-      {session.status === "in" && (
+      {me && (
         <nav className="mainnav" aria-label="Main">
           <NavLink to="/plan">Plan</NavLink>
           <NavLink to="/shopping">Shopping</NavLink>
         </nav>
       )}
-      {session.status === "in" && (
+      {me && (
         <Link to="/account" className="account-link" title="Account">
           <span className="avatar" aria-hidden="true">
-            {session.me.display_name.slice(0, 1).toUpperCase()}
+            {me.display_name.slice(0, 1).toUpperCase()}
           </span>
-          <span className="account-name">{session.me.display_name}</span>
+          <span className="account-name">{me.display_name}</span>
         </Link>
       )}
     </header>
