@@ -147,6 +147,24 @@ test("ticks survive a reload, and the list keeps working offline", async () => {
   expect(list.extras.map((x: { name: string }) => x.name)).toEqual(["Foil"]);
 });
 
+test("a list left open in one tab keeps saving after another tab signs in", async () => {
+  await page.goto("/shopping");
+  await expect(shoppingItem("Black Beans")).toBeVisible();
+  // Another tab signs in again (as after a session that expired), which starts a new sign-in on this device.
+  const other = await context.newPage();
+  await other.goto("/account");
+  await other.evaluate(() => localStorage.setItem("mise:sign-in", `other-tab-${Date.now()}`));
+  await other.close();
+  // The first tab, still open, ticks something offline; it must survive a reload.
+  await context.setOffline(true);
+  await shoppingItem("Black Beans").getByRole("checkbox").check();
+  await expect(page.getByRole("status")).toContainText("Offline");
+  await page.reload();
+  await expect(shoppingItem("Black Beans").getByRole("checkbox")).toBeChecked();
+  await context.setOffline(false);
+  await expect(page.getByRole("status")).toHaveCount(0, { timeout: 15_000 });
+});
+
 const pages = ["/", "/dishes/weeknight-tomato-pasta", "/plan", "/shopping", "/account"];
 
 test("every page fits a phone without sideways scrolling", async () => {

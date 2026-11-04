@@ -10,9 +10,11 @@ import {
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type ShoppingItem, type ShoppingList, type Weights } from "../api/client";
 import {
+  currentSignIn,
   deviceCopy,
   isLocal,
   localId,
+  onSignInChange,
   queue,
   sendChanges,
   withChanges,
@@ -107,7 +109,11 @@ const when = (t: number) =>
 export function ShoppingPage() {
   const { session, refresh } = useSession();
   const user = session.status === "in" || session.status === "offline" ? session.me?.id : undefined;
-  const copy = useMemo(() => (user ? deviceCopy(user) : null), [user]);
+  // A new sign-in in another tab replaces this page's device copy; work begun under the old one stays blocked.
+  const [signIn, setSignIn] = useState(currentSignIn);
+  useEffect(() => onSignInChange(() => setSignIn(currentSignIn())), []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- signIn isn't read here, but a new one needs a new copy
+  const copy = useMemo(() => (user ? deviceCopy(user) : null), [user, signIn]);
   const [params, setParams] = useSearchParams();
   const week = weekOf(params.get("week") ?? mondayOf());
   const [list, setList] = useState<ShoppingList | null>(null);

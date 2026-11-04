@@ -79,6 +79,19 @@ export const rememberedMe = (store: Store = browserStore) => read<Me>(store, `${
  * ended without signing out), so work begun before it can't write to this device. */
 export const startSignIn = (store: Store = browserStore) => store.set(SIGN_IN, newSignIn());
 
+/** The current sign-in's id, to tell when it changes. */
+export const currentSignIn = (store: Store = browserStore) => store.get(SIGN_IN);
+
+/** Calls `changed` when another tab starts a new sign-in on this device; returns the unsubscribe. A page that
+ * keeps a device copy open makes a new one then, so it keeps saving under the new sign-in. */
+export function onSignInChange(changed: () => void): () => void {
+  const listener = (e: StorageEvent) => {
+    if (e.key === SIGN_IN || e.key === null) changed();
+  };
+  window.addEventListener("storage", listener);
+  return () => window.removeEventListener("storage", listener);
+}
+
 /** Signing out leaves nothing of the household's on the device. */
 export function forgetDevice(store: Store = browserStore) {
   for (const k of store.keys()) if (k.startsWith(PREFIX)) store.remove(k);
