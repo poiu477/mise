@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { api, errorText } from "../api/client";
+import { startSignIn } from "../offline";
 import { useSession } from "../session";
 
 export function LoginPage() {
@@ -28,6 +29,7 @@ export function LoginPage() {
       );
       return;
     }
+    startSignIn();
     await refresh();
   };
 

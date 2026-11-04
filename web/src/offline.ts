@@ -75,6 +75,10 @@ export function rememberMe(me: Me, store: Store = browserStore) {
 }
 export const rememberedMe = (store: Store = browserStore) => read<Me>(store, `${PREFIX}me`);
 
+/** A sign-in on the sign-in page starts a new one, even for the account already remembered here (its session
+ * ended without signing out), so work begun before it can't write to this device. */
+export const startSignIn = (store: Store = browserStore) => store.set(SIGN_IN, newSignIn());
+
 /** Signing out leaves nothing of the household's on the device. */
 export function forgetDevice(store: Store = browserStore) {
   for (const k of store.keys()) if (k.startsWith(PREFIX)) store.remove(k);

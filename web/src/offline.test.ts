@@ -7,6 +7,7 @@ import {
   rememberedMe,
   rememberMe,
   sendChanges,
+  startSignIn,
   withChanges,
   type Change,
   type Sent,
@@ -139,6 +140,21 @@ describe("the device copy", () => {
     signedIn(store);
     now.save(list());
     expect(now.saved(WEEK)?.list).toEqual(list());
+  });
+
+  it("starts a new sign-in when the same account signs in again after its session ended", () => {
+    const store = memory();
+    signedIn(store);
+    const before = deviceCopy("me", store);
+    // The session expired (nothing was cleared), and the same person signs in again on the sign-in page.
+    startSignIn(store);
+    signedIn(store);
+    const now = deviceCopy("me", store);
+    now.setPending([tick("onion", true)]);
+    before.setPending([]);
+    before.save(list());
+    expect(now.pending()).toEqual([tick("onion", true)]);
+    expect(now.saved(WEEK)).toBeNull();
   });
 
   it("keeps working on a device remembered before sign-ins had ids", () => {
