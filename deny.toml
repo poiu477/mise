@@ -1,0 +1,30 @@
+# cargo deny: what CI accepts in the Rust dependency tree. https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+# Every RustSec advisory fails the build unless listed here with a reason.
+ignore = []
+
+[licenses]
+# Permissive licenses only, so the project stays MIT-compatible.
+allow = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[licenses.private]
+# The workspace's own crates are not published.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

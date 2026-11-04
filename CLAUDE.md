@@ -24,7 +24,9 @@ Read these before changing anything:
   stay out of git (HelloFresh Terms of Use §16.8; personal, non-commercial use only). Private material lives in the
   ignored `seed/` and `reports/` folders and in `D:/Recipes` and `../hellofresh-backup/`. Tests use made-up data.
 - **Stage files by name.** `git add <paths>`, never `git add -A` or `git add .`: an env file was committed that way
-  once. Commit straight to `main` (there is no remote yet), only when asked.
+  once. Commit only when asked.
+- **Work on a branch and merge through a pull request.** The repo is `poiu477/mise` on GitHub (private until the
+  public-repo hygiene task is done). CI (`.github/workflows/ci.yml`) must pass before merging; never push to `main`.
 - **LF line endings.** sqlx checksums migrations, so `.gitattributes` pins LF. Scripts that rewrite files must write
   bytes (`Path.write_bytes(s.encode())` in Python), not `write_text`, which writes CRLF on Windows.
 - **Never edit an applied migration.** Add a new numbered file in `migrations/`.
@@ -37,10 +39,13 @@ Read these before changing anything:
 
 ## Everyday commands
 
+What CI runs, so run it before pushing:
+
 ```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                 # needs the dev Postgres (port 5433); API tests make throwaway databases
-cargo clippy --workspace --all-targets # keep it at zero warnings
-cd web && npm test && npx tsc --noEmit -p . && npm run build
+cd web && npm run format:check && npm run lint && npm test && npm run build
 cd web && npm run api                  # regenerate src/api/schema.d.ts after changing the API (needs a release build)
 ```
 

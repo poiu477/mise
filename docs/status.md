@@ -41,10 +41,17 @@ Agreed direction (design document, "Tests and gates"): every gate becomes a comm
 mise is a portfolio project, so it is held to production standards, not "good enough for one household". Recommended
 order: the remote and CI baseline first (it makes everything after it checked), the gates above, then the rest.
 
-- [ ] A public GitHub repository with CI on every push: formatting, clippy with warnings as errors, Rust tests against
-      a Postgres service, web lint and tests, Playwright, `cargo deny` and `npm audit`, the Docker image built and
-      pushed. Work on branches and merge through pull requests.
-- [ ] Standard formatting: rustfmt at its defaults in one commit; ESLint and Prettier for the web app.
+- [x] GitHub repository (`poiu477/mise`, private for now) with CI on every push and pull request: formatting,
+      clippy with warnings as errors, Rust tests against a Postgres service, an API-types check, web format, lint,
+      tests and build, `cargo deny`, `npm audit` of shipped packages, the Docker image built. Dependabot weekly.
+- [x] Standard formatting: rustfmt at its defaults and Prettier, each applied in one commit; ESLint with the React
+      hooks rules.
+- [ ] Protect `main` (require CI and a pull request). Branch rules on a private repo need a paid plan, so this comes
+      with making the repo public.
+- [ ] Move page data loading to a data-fetching layer (TanStack Query or one shared hook), then turn ESLint's
+      `react-hooks/set-state-in-effect` back from a warning (9 places) to an error.
+- [ ] Add Playwright to CI with the browser journeys, and push the Docker image to GitHub's registry on release
+      tags.
 - [ ] Database code a reviewer expects: `#[derive(sqlx::FromRow)]` structs instead of row tuples; compile-time checked
       queries with the `.sqlx` offline data committed so CI builds without a database; SQL moved out of the HTTP
       handlers into per-domain data modules.
