@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# Runs what CI runs (.github/workflows/ci.yml), in the same order, and stops at the first failure, naming it.
+#
+#   ./check          formatting, lints, tests, the API document check, then the web app's format, lint, tests, build
+#   ./check --e2e    all of that, then the browser journeys
+#   ./check --fast   formatting and lints only (what .githooks/pre-commit runs)
+#
+# The Rust tests need Postgres (DATABASE_URL, from the environment or .env; see docs/development.md). Locally the API
+# tests skip when it is missing; here, as in CI, that is a failure.
+#
+# Not run here, though CI runs them: `cargo deny check`, `npm audit` and the Docker image build.
+set -euo pipefail
+
+usage() {
+  sed -n '2,11s/^# \{0,1\}//p' "$0"
+}
+
+fast=false
+e2e=false
+for arg in "$@"; do
+  case "$arg" in
+    --fast) fast=true ;;
+    --e2e) e2e=true ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "check: unknown option '$arg'" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+if $fast && $e2e; then
+  echo "check: --fast and --e2e don't go together" >&2
+  exit 2
+fi
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$root"
+
+if [ -t 1 ]; then
+  bold=$'\e[1m' red=$'\e[31m' green=$'\e[32m' reset=$'\e[0m'
+else
+  bold='' red='' green='' reset=''
+fi
+
+current=''
+started=$SECONDS
+step() {
+  current="$1"
+  printf '\n%s==> %s%s\n' "$bold" "$current" "$reset"
+}
+on_exit() {
+  local status=$?
+  if [ "$status" -ne 0 ] && [ -n "$current" ]; then
+    printf '\n%scheck: failed at "%s"%s\n' "$red$bold" "$current" "$reset" >&2
+  fi
+}
+trap on_exit EXIT
+
+# CI installs the web app's packages with `npm ci` each run. Here that happens only when there are none yet, so a
+# local run doesn't throw away node_modules every time.
+web_packages() {
+  if [ ! -d web/node_modules ]; then
+    step "Web packages (npm ci)"
+    (cd web && npm ci --no-audit --no-fund)
+  fi
+}
+
+# The fast part: formatting and lints.
+step "Rust formatting"
+cargo fmt --all --check
+
+step "Clippy"
+cargo clippy --workspace --all-targets --locked -- -D warnings
+
+if $fast; then
+  web_packages
+  step "Web formatting"
+  (cd web && npm run --silent format:check)
+  step "Web lint"
+  (cd web && npm run --silent lint)
+  current=''
+  printf '\n%scheck --fast: passed in %ss%s\n' "$green$bold" "$((SECONDS - started))" "$reset"
+  exit 0
+fi
+
+step "Rust tests"
+# CI set: the API tests fail, rather than skip, when the database is missing or unreachable.
+CI="${CI:-true}" cargo test --workspace --locked
+
+web_packages
+step "API document is valid and the web types match it"
+cargo run -q --locked -p mise-api -- openapi >web/openapi.json
+(cd web && node scripts/check-openapi.mjs)
+# CI regenerates src/api/schema.d.ts and diffs it against the commit. Here the comparison is with the working copy,
+# so uncommitted work is checked as it stands, and the file is left as it was.
+# The fresh copy goes under node_modules (ignored by git), by a relative path that Git Bash passes to node unchanged.
+generated=node_modules/.cache/mise-check/schema.d.ts
+mkdir -p "web/$(dirname "$generated")"
+(cd web && npx --no-install openapi-typescript openapi.json -o "$generated" >/dev/null)
+if ! cmp -s "web/$generated" web/src/api/schema.d.ts; then
+  diff -u web/src/api/schema.d.ts "web/$generated" | head -40 || true
+  echo "web/src/api/schema.d.ts is out of date: run 'npm run api' in web/" >&2
+  exit 1
+fi
+
+step "Web formatting"
+(cd web && npm run --silent format:check)
+
+step "Web lint"
+(cd web && npm run --silent lint)
+
+step "Web tests"
+(cd web && npm test --silent)
+
+step "Type check and build"
+(cd web && npm run --silent build)
+
+if $e2e; then
+  step "Build mise and mise-server for the browser journeys"
+  cargo build --locked -p mise-cli -p mise-api
+  step "Browser journeys"
+  (cd web && npm run --silent e2e)
+fi
+
+current=''
+printf '\n%scheck: passed in %ss%s\n' "$green$bold" "$((SECONDS - started))" "$reset"
