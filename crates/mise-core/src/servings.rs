@@ -65,10 +65,10 @@ pub fn amount_at(published: &[(f64, f64)], target: f64) -> Option<(f64, bool)> {
 pub fn consistent(published: &[(f64, f64)], trusted: &[f64]) -> Vec<(f64, f64)> {
     let mut order: Vec<(f64, f64)> = Vec::with_capacity(published.len());
     for t in trusted {
-        if let Some(p) = published.iter().find(|(s, _)| (s - t).abs() < 1e-9) {
-            if !order.iter().any(|q| (q.0 - p.0).abs() < 1e-9) {
-                order.push(*p);
-            }
+        if let Some(p) = published.iter().find(|(s, _)| (s - t).abs() < 1e-9)
+            && !order.iter().any(|q| (q.0 - p.0).abs() < 1e-9)
+        {
+            order.push(*p);
         }
     }
     let mut rest: Vec<(f64, f64)> = published

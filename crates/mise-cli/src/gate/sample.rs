@@ -215,7 +215,7 @@ mod tests {
                     "recipe".into()
                 },
                 versions: [1, 1, 1, 2, 3, 5, 12, 30][i as usize % 8],
-                titles: 1 + (i as usize % 5 == 0) as usize * 2,
+                titles: 1 + (i as usize).is_multiple_of(5) as usize * 2,
                 protein_choice: i % 9 == 0,
                 merge_review: i % 50 == 0,
                 lineage_links: (i % 37 == 0) as usize,

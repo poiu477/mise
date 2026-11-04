@@ -2,7 +2,12 @@
 
 [advisories]
 # Every RustSec advisory fails the build unless listed here with a reason.
-ignore = []
+ignore = [
+    # The Marvin attack recovers an RSA private key by timing decryption or signing. mise uses rsa only through
+    # openidconnect, to verify a sign-in provider's ID token signature with its public key, which handles no
+    # secret. No fixed release exists; revisit when rsa 0.10 ships or openidconnect drops it.
+    { id = "RUSTSEC-2023-0071", reason = "rsa is used only for public-key signature verification (openidconnect)" },
+]
 
 [licenses]
 # Permissive licenses only, so the project stays MIT-compatible.

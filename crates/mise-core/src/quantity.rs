@@ -513,7 +513,7 @@ pub fn parse_number(s: &str) -> Option<(f64, usize)> {
     // "11⁄2" is 1½ and "31⁄4" is 3¼ (a recipe never writes 5½ as eleven halves).
     if let Some((den, used)) = fraction_tail(&s[i..]) {
         let n = value as u64;
-        if n >= 10 && den <= 16.0 && n % 10 > 0 && ((n % 10) as f64) < den {
+        if n >= 10 && den <= 16.0 && !n.is_multiple_of(10) && ((n % 10) as f64) < den {
             return Some(((n / 10) as f64 + (n % 10) as f64 / den, i + used));
         }
         return Some((value / den, i + used));
@@ -523,10 +523,10 @@ pub fn parse_number(s: &str) -> Option<(f64, usize)> {
     let trimmed = rest.trim_start_matches(' ');
     let skipped = rest.len() - trimmed.len();
     if skipped <= 1 {
-        if let Some(c) = trimmed.chars().next() {
-            if let Some(v) = glyph(c) {
-                return Some((value + v, i + skipped + c.len_utf8()));
-            }
+        if let Some(c) = trimmed.chars().next()
+            && let Some(v) = glyph(c)
+        {
+            return Some((value + v, i + skipped + c.len_utf8()));
         }
         if skipped == 1 {
             let mut j = 0;
@@ -534,12 +534,12 @@ pub fn parse_number(s: &str) -> Option<(f64, usize)> {
             while j < tb.len() && tb[j].is_ascii_digit() {
                 j += 1;
             }
-            if j > 0 {
-                if let Some((den, used)) = fraction_tail(&trimmed[j..]) {
-                    let num: f64 = trimmed[..j].parse().ok()?;
-                    value += num / den;
-                    return Some((value, i + skipped + j + used));
-                }
+            if j > 0
+                && let Some((den, used)) = fraction_tail(&trimmed[j..])
+            {
+                let num: f64 = trimmed[..j].parse().ok()?;
+                value += num / den;
+                return Some((value, i + skipped + j + used));
             }
         }
     }

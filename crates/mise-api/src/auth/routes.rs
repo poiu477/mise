@@ -306,10 +306,10 @@ pub struct NewToken {
     pub info: TokenInfo,
 }
 
-/// This account's API tokens.
 /// id, name, scope, created, last used.
 type TokenRow = (Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>);
 
+/// This account's API tokens.
 #[utoipa::path(get, path = "/api/me/tokens", operation_id = "list_tokens", tag = "account", responses((status = 200, body = [TokenInfo])))]
 pub async fn list_tokens(
     State(s): State<AppState>,

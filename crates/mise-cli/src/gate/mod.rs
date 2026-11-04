@@ -209,11 +209,10 @@ fn index(snap: &Snapshot) -> Index<'_> {
             .parent_variant_id
             .and_then(|p| variant.get(&p))
             .and_then(|p| dish_at.get(&p.dish_id))
+            && *p != d
         {
-            if *p != d {
-                *lineage[d].entry(*p).or_default() += 1;
-                *lineage[*p].entry(d).or_default() += 1;
-            }
+            *lineage[d].entry(*p).or_default() += 1;
+            *lineage[*p].entry(d).or_default() += 1;
         }
     }
     let group = |key: &dyn Fn(&Dish) -> String| -> Vec<Vec<usize>> {
@@ -243,10 +242,10 @@ fn index(snap: &Snapshot) -> Index<'_> {
     let mut reviews_of = vec![Vec::new(); snap.dishes.len()];
     for (r, item) in snap.merge_reviews.iter().enumerate() {
         for id in [item.dish_id, item.other_dish_id] {
-            if let Some(&d) = dish_at.get(&id) {
-                if !reviews_of[d].contains(&r) {
-                    reviews_of[d].push(r);
-                }
+            if let Some(&d) = dish_at.get(&id)
+                && !reviews_of[d].contains(&r)
+            {
+                reviews_of[d].push(r);
             }
         }
     }

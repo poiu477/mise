@@ -1,6 +1,7 @@
 # Development
 
-Requirements: Rust (stable, edition 2024), Node 20+, Docker, Python 3 for the private seed scripts.
+Requirements: Rust 1.99.1 (pinned in `rust-toolchain.toml`; rustup installs it on first build), Node 24, Docker,
+Python 3 for the private seed scripts. The same Rust builds everywhere: locally, in CI and in the Docker image.
 
 ## First setup
 

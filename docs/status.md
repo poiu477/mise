@@ -123,3 +123,4 @@ order: the remote and CI baseline first (it makes everything after it checked), 
 | 2026-11-03 | The shopping list works offline from a device copy, with ticks and additions queued |
 | 2026-11-03 | Gates become repeatable checks; HelloFresh-free demo data for public tests, the private seed for the seed gate |
 | 2026-11-03 | mise is a portfolio project held to production standards; "only for one household" no longer justifies a shortcut |
+| 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |

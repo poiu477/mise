@@ -352,10 +352,10 @@ fn singular(w: &str) -> String {
 pub fn strip_brand(raw: &str) -> Option<(String, String)> {
     let norm = normalize_name(raw);
     for brand in BRANDS {
-        if let Some(rest) = strip_words(&norm, brand) {
-            if !rest.is_empty() {
-                return Some((brand.to_string(), rest));
-            }
+        if let Some(rest) = strip_words(&norm, brand)
+            && !rest.is_empty()
+        {
+            return Some((brand.to_string(), rest));
         }
     }
     // An unknown mark: take the words before the first ® or ™ as the brand.

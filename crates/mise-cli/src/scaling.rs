@@ -493,16 +493,15 @@ fn write_card(
             match servings::line_text(&all, t, count) {
                 (Some(shown), false) => {
                     let mut cell = esc(&shown);
-                    if t == 3.0 || t == 6.0 {
-                        if let (Some(pred), _) = servings::line_text(&known, t, count) {
-                            if pred != shown {
-                                let _ = write!(
-                                    cell,
-                                    " <span class=\"miss\" title=\"derived from 2 and 4\">≠ {}</span>",
-                                    esc(&pred)
-                                );
-                            }
-                        }
+                    if (t == 3.0 || t == 6.0)
+                        && let (Some(pred), _) = servings::line_text(&known, t, count)
+                        && pred != shown
+                    {
+                        let _ = write!(
+                            cell,
+                            " <span class=\"miss\" title=\"derived from 2 and 4\">≠ {}</span>",
+                            esc(&pred)
+                        );
                     }
                     let _ = write!(h, "<td>{cell}</td>");
                 }
@@ -539,15 +538,15 @@ fn write_card(
                 continue;
             };
             for (at, published) in alts {
-                if let Some((pred, _)) = amount_at(p, *at, ctx, false) {
-                    if !pred.same_as(published) {
-                        let _ = write!(
-                            h,
-                            "<p class=\"miss\">At {at}: would derive {} — published {}</p>",
-                            esc(&pred.to_string()),
-                            esc(&published.to_string())
-                        );
-                    }
+                if let Some((pred, _)) = amount_at(p, *at, ctx, false)
+                    && !pred.same_as(published)
+                {
+                    let _ = write!(
+                        h,
+                        "<p class=\"miss\">At {at}: would derive {} — published {}</p>",
+                        esc(&pred.to_string()),
+                        esc(&published.to_string())
+                    );
                 }
             }
         }

@@ -610,15 +610,15 @@ pub fn amount_at(
             .min_by(|a, b| (a.0 - target).abs().total_cmp(&(b.0 - target).abs()))
             .and_then(|p| Some((p.1, p.1.in_unit(&base.unit)?)))
     };
-    if let Some((lq, lv)) = side(true) {
-        if v < lv - 1e-9 {
-            return Some((lq.clone(), m));
-        }
+    if let Some((lq, lv)) = side(true)
+        && v < lv - 1e-9
+    {
+        return Some((lq.clone(), m));
     }
-    if let Some((uq, uv)) = side(false) {
-        if v > uv + 1e-9 {
-            return Some((uq.clone(), m));
-        }
+    if let Some((uq, uv)) = side(false)
+        && v > uv + 1e-9
+    {
+        return Some((uq.clone(), m));
     }
     Some((q, m))
 }
@@ -638,12 +638,11 @@ pub fn measure_at(part: &Part, target: f64, ctx: &Context) -> Option<(Measure, M
         .chain(alts.iter().map(|(s, a)| (*s, a)))
         .filter(|p| p.0 > target)
         .min_by(|a, b| a.0.total_cmp(&b.0));
-    if let Some((_, nq)) = next {
-        if let (Some(v), Some(nv)) = (measured.in_unit(&base.unit), nq.in_unit(&base.unit)) {
-            if v > nv + 1e-9 {
-                return Some((Measure(vec![nq.clone()]), m));
-            }
-        }
+    if let Some((_, nq)) = next
+        && let (Some(v), Some(nv)) = (measured.in_unit(&base.unit), nq.in_unit(&base.unit))
+        && v > nv + 1e-9
+    {
+        return Some((Measure(vec![nq.clone()]), m));
     }
     Some((measured, m))
 }
@@ -747,44 +746,41 @@ fn derive(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Option<(Qu
     if (target - ctx.base).abs() < 1e-9 {
         return Some((base.clone(), Method::Published));
     }
-    if use_alts {
-        if let Some((_, q)) = alts.iter().find(|(s, _)| (s - target).abs() < 1e-9) {
-            return Some((q.clone(), Method::Published));
-        }
+    if use_alts && let Some((_, q)) = alts.iter().find(|(s, _)| (s - target).abs() < 1e-9) {
+        return Some((q.clone(), Method::Published));
     }
     // Cooking water in a pan sauce, wherever mise would otherwise scale it in proportion.
     if let Some(share) =
         boil_off.filter(|_| ctx.base > 0.0 && (ctx.scale_plain || !alts.is_empty() || !use_alts))
+        && let Some(q) = boiled_off_water(&points(base, alts, ctx, use_alts), share, target)
     {
-        if let Some(q) = boiled_off_water(&points(base, alts, ctx, use_alts), share, target) {
-            return Some((q, Method::BoilOff));
-        }
+        return Some((q, Method::BoilOff));
     }
     // The ingredient's official amounts, when they move with the yield the way the text does. Pantry lines
     // often repeat one amount for every yield ("¼ tsp salt" at 2 and 4) and say nothing about the step. Only
     // for amounts the text varies (or text that never varies): "Reserve ½ cup potato cooking liquid" with no
     // alternative is the same at every yield, whatever the potatoes do.
     let varies = !alts.is_empty() || ctx.scale_plain || !use_alts;
-    if let Some(line) = line.as_ref().filter(|_| varies) {
-        if let (Some(lb), Some(lt)) = (
+    if let Some(line) = line.as_ref().filter(|_| varies)
+        && let (Some(lb), Some(lt)) = (
             (ctx.line_amount)(line, ctx.base),
             (ctx.line_amount)(line, target),
-        ) {
-            let agrees =
-                |s: f64, q: &Quantity| match ((ctx.line_amount)(line, s), q.in_unit(&base.unit)) {
-                    (Some(ls), Some(qa)) if base.amount > 0.0 => {
-                        ((ls / lb) - (qa / base.amount)).abs() <= 0.15 * (qa / base.amount)
-                    }
-                    _ => true,
-                };
-            let consistent = !use_alts || alts.iter().all(|(s, q)| agrees(*s, q));
-            // The line must move across the yields it is published for (base and its double), not merely when
-            // extended past them: a flat pantry line (1 tsp sugar for 2 and for 4) says nothing about the step.
-            let moves =
-                (ctx.line_amount)(line, ctx.base * 2.0).is_some_and(|l2| (l2 - lb).abs() > 1e-9);
-            if lb > 0.0 && moves && consistent {
-                return Some((base.scaled(lt / lb), Method::FromLine));
-            }
+        )
+    {
+        let agrees =
+            |s: f64, q: &Quantity| match ((ctx.line_amount)(line, s), q.in_unit(&base.unit)) {
+                (Some(ls), Some(qa)) if base.amount > 0.0 => {
+                    ((ls / lb) - (qa / base.amount)).abs() <= 0.15 * (qa / base.amount)
+                }
+                _ => true,
+            };
+        let consistent = !use_alts || alts.iter().all(|(s, q)| agrees(*s, q));
+        // The line must move across the yields it is published for (base and its double), not merely when
+        // extended past them: a flat pantry line (1 tsp sugar for 2 and for 4) says nothing about the step.
+        let moves =
+            (ctx.line_amount)(line, ctx.base * 2.0).is_some_and(|l2| (l2 - lb).abs() > 1e-9);
+        if lb > 0.0 && moves && consistent {
+            return Some((base.scaled(lt / lb), Method::FromLine));
         }
     }
     let alts: Vec<&(f64, Quantity)> = if use_alts {
@@ -804,22 +800,20 @@ fn derive(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Option<(Qu
             alts.iter()
                 .filter_map(|(s, q)| Some((*s, q.in_unit(&base.unit)?))),
         );
-        if points.len() > 1 {
-            if let Some((v, _)) = crate::servings::amount_at(&points, target) {
-                let near = crate::servings::nearest(
-                    &points.iter().map(|p| p.0).collect::<Vec<_>>(),
-                    target,
-                )
-                .unwrap_or(ctx.base);
-                let unit = alts
-                    .iter()
-                    .find(|(s, _)| (s - near).abs() < 1e-9)
-                    .map_or(base.unit.clone(), |(_, q)| q.unit.clone());
-                let v = Quantity::new(v.max(0.0), base.unit.clone())
-                    .in_unit(&unit)
-                    .unwrap_or(v);
-                return Some((Quantity::new(v, unit), Method::Interpolated));
-            }
+        if points.len() > 1
+            && let Some((v, _)) = crate::servings::amount_at(&points, target)
+        {
+            let near =
+                crate::servings::nearest(&points.iter().map(|p| p.0).collect::<Vec<_>>(), target)
+                    .unwrap_or(ctx.base);
+            let unit = alts
+                .iter()
+                .find(|(s, _)| (s - near).abs() < 1e-9)
+                .map_or(base.unit.clone(), |(_, q)| q.unit.clone());
+            let v = Quantity::new(v.max(0.0), base.unit.clone())
+                .in_unit(&unit)
+                .unwrap_or(v);
+            return Some((Quantity::new(v, unit), Method::Interpolated));
         }
     }
     if ctx.base <= 0.0 {

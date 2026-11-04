@@ -1,0 +1,6 @@
+# The one Rust every build uses: local, CI and the Docker image (keep the Dockerfile's rust tag and Cargo.toml's
+# rust-version in step when raising it).
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

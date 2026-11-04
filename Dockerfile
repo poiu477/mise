@@ -8,7 +8,8 @@ RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
-FROM rust:1-bookworm AS server
+# The same Rust as rust-toolchain.toml.
+FROM rust:1.99.1-bookworm AS server
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
