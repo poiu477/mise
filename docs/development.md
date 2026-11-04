@@ -1,6 +1,7 @@
 # Development
 
-Requirements: Rust (stable, edition 2024), Node 20+, Docker, Python 3 for the private seed scripts.
+Requirements: Rust 1.99.1 (pinned in `rust-toolchain.toml`; rustup installs it on first build), Node 24, Docker,
+Python 3 for the private seed scripts. The same Rust builds everywhere: locally, in CI and in the Docker image.
 
 ## First setup
 
@@ -68,15 +69,26 @@ Claude desktop app doesn't run it, so offline start-up has to be tried in a real
 
 | What | Command | Notes |
 | --- | --- | --- |
+| Rust formatting | `cargo fmt --all` (CI: `--check`) | rustfmt at its defaults (`rustfmt.toml`) |
+| Rust lints | `cargo clippy --workspace --all-targets -- -D warnings` | Zero warnings |
 | Rust unit, property and integration tests | `cargo test --workspace` | API tests need `DATABASE_URL` and make a throwaway database each; skipped when it isn't set |
-| Lints | `cargo clippy --workspace --all-targets` | Zero warnings |
+| Rust dependencies | `cargo deny check` | Advisories, licenses, bans and sources (`deny.toml`); CI runs it |
+| Web formatting and lints | `cd web && npm run format` and `npm run lint` | Prettier at width 100; ESLint with the React hooks rules |
 | Web unit tests | `cd web && npm test` | Vitest; pure modules (`choose.ts`, `offline.ts`, `week.ts`) |
-| Types and build | `cd web && npx tsc --noEmit -p . && npm run build` | |
+| Types and build | `cd web && npm run build` | Runs the TypeScript check first |
 | Scaling report | `mise scaling-report --sample 300 --out reports/scaling.html` | Compares derived amounts with what the source published; read-only |
 | Grouping report | `mise gate-report` | A stratified sample of dishes to check grouping by hand |
 
 The fuzz suite in `crates/mise-core/tests/fuzz.rs` takes about 25 seconds in a debug build. The plan for repeatable
 gates (a `./check` command, browser journeys, a seed gate) is in [status.md](status.md) and the design document.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request: the Rust job (formatting, clippy,
+tests against a Postgres service, and a check that `web/src/api/schema.d.ts` matches the server), the web job
+(formatting, lint, tests, build, an audit of shipped npm packages), `cargo deny`, and a build of the Docker image.
+Dependabot opens grouped update pull requests weekly. `.git-blame-ignore-revs` lists the formatting-only commits;
+run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once per clone.
 
 ## Changing the API
 

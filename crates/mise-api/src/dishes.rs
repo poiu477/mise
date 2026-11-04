@@ -1,9 +1,6 @@
 //! Dishes: search, and the dish page (its options and versions).
 
-use axum::{
-    Json,
-    extract::State,
-};
+use axum::{Json, extract::State};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -54,15 +51,32 @@ pub struct DishPage {
 }
 
 /// id, slug, title, subtitle, content type, versions, default version, image, total matching.
-type SummaryRow = (Uuid, String, String, Option<String>, String, i64, Option<Uuid>, Option<Uuid>, i64);
+type SummaryRow = (
+    Uuid,
+    String,
+    String,
+    Option<String>,
+    String,
+    i64,
+    Option<Uuid>,
+    Option<Uuid>,
+    i64,
+);
 
 /// Search and browse dishes.
 #[utoipa::path(get, path = "/api/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams), responses((status = 200, body = DishPage)))]
-pub async fn list(State(s): State<AppState>, Query(p): Query<ListParams>) -> ApiResult<Json<DishPage>> {
+pub async fn list(
+    State(s): State<AppState>,
+    Query(p): Query<ListParams>,
+) -> ApiResult<Json<DishPage>> {
     let limit = p.limit.unwrap_or(24).clamp(1, MAX_LIMIT);
     let offset = p.offset.unwrap_or(0).max(0);
     let q = p.q.as_deref().map(str::trim).filter(|q| !q.is_empty());
-    let ingredient = p.ingredient.as_deref().map(str::trim).filter(|q| !q.is_empty());
+    let ingredient = p
+        .ingredient
+        .as_deref()
+        .map(str::trim)
+        .filter(|q| !q.is_empty());
     let rows: Vec<SummaryRow> = sqlx::query_as(
         "SELECT d.id, d.slug, d.title, d.subtitle, d.content_type::text,
                 (SELECT count(*) FROM variants v WHERE v.dish_id = d.id) AS versions, d.default_variant_id,
@@ -88,16 +102,20 @@ pub async fn list(State(s): State<AppState>, Query(p): Query<ListParams>) -> Api
     let total = rows.first().map_or(0, |r| r.8);
     let items = rows
         .into_iter()
-        .map(|(id, slug, title, subtitle, content_type, versions, default_variant, hero, _)| DishSummary {
-            id,
-            slug,
-            title,
-            subtitle,
-            content_type,
-            versions,
-            default_variant,
-            image: hero.map(Image::new),
-        })
+        .map(
+            |(id, slug, title, subtitle, content_type, versions, default_variant, hero, _)| {
+                DishSummary {
+                    id,
+                    slug,
+                    title,
+                    subtitle,
+                    content_type,
+                    versions,
+                    default_variant,
+                    image: hero.map(Image::new),
+                }
+            },
+        )
         .collect();
     Ok(Json(DishPage { total, items }))
 }
@@ -196,5 +214,14 @@ pub async fn get(State(s): State<AppState>, Path(slug): Path<String>) -> ApiResu
         image: hero.map(Image::new),
     })
     .collect();
-    Ok(Json(Dish { id, slug, title, subtitle, content_type, default_variant, options, variants }))
+    Ok(Json(Dish {
+        id,
+        slug,
+        title,
+        subtitle,
+        content_type,
+        default_variant,
+        options,
+        variants,
+    }))
 }

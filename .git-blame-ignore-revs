@@ -1,0 +1,5 @@
+# Formatting-only commits, skipped by `git blame` (git config blame.ignoreRevsFile .git-blame-ignore-revs).
+# rustfmt at its defaults
+66f89b6426b3cfec5c312433a1d7d2a1709f6c31
+# Prettier
+8f1f60035361e8a24e34b17623758642dd0d4517

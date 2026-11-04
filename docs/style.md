@@ -5,8 +5,7 @@ Write like the code around you: match its comment density, naming and idiom. Wha
 ## Rust
 
 - **Layout.** Each file opens with a `//!` comment saying what it holds in a sentence or two. rustfmt at its
-  defaults is the target (adopting it is on the task list, as one commit that formats everything); until then,
-  follow the file you're in, and keep new lines under 100 characters.
+  defaults decides the rest; CI rejects anything `cargo fmt` would change, and clippy runs with warnings as errors.
 - **Comments.** A `///` comment on every public item says what it is or does, in plain English, often with an example
   in quotes: `/// "1½", "¾", "2"; falls back to a trimmed decimal`. Inline comments explain *why* (a source quirk, a
   rule's evidence), never what the next line plainly does. Few of them.
@@ -36,6 +35,8 @@ One numbered file per change, opening with a comment on what it adds, and a comm
   change things answer with the whole updated object, which replaces local state.
 - A ref counter keeps only the latest answer when quick taps race (see `ShoppingPage.tsx`).
 - Pure logic goes in a plain module with a Vitest test next to it (`week.ts`, `offline.ts`, `choose.ts`).
+- Prettier (width 100) formats everything and ESLint (recommended sets plus the React hooks rules) lints it; CI
+  rejects either failing.
 - Styling is one `styles.css` with design tokens as CSS variables (`--accent`, `--line`, `--muted`), light and dark.
   No UI library.
 - Every page works at 375 px wide with no sideways scroll. Icon-only buttons carry an `aria-label`; form fields have

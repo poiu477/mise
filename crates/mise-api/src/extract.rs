@@ -9,7 +9,9 @@ use crate::error::ApiError;
 fn reject_nul(parts: &Parts) -> Result<(), ApiError> {
     let uri = parts.uri.path_and_query().map_or("", |p| p.as_str());
     if uri.contains("%00") || uri.contains('\0') {
-        return Err(ApiError::BadRequest("input may not contain NUL characters".into()));
+        return Err(ApiError::BadRequest(
+            "input may not contain NUL characters".into(),
+        ));
     }
     Ok(())
 }

@@ -59,11 +59,22 @@ struct Security;
 
 impl utoipa::Modify for Security {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityRequirement, SecurityScheme};
+        use utoipa::openapi::security::{
+            ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityRequirement, SecurityScheme,
+        };
         let c = openapi.components.get_or_insert_with(Default::default);
-        c.add_security_scheme("session", SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new(auth::SESSION_COOKIE))));
-        c.add_security_scheme("token", SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer).build()));
-        openapi.security = Some(vec![SecurityRequirement::new("session", Vec::<String>::new()), SecurityRequirement::new("token", Vec::<String>::new())]);
+        c.add_security_scheme(
+            "session",
+            SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new(auth::SESSION_COOKIE))),
+        );
+        c.add_security_scheme(
+            "token",
+            SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Bearer).build()),
+        );
+        openapi.security = Some(vec![
+            SecurityRequirement::new("session", Vec::<String>::new()),
+            SecurityRequirement::new("token", Vec::<String>::new()),
+        ]);
     }
 }
 
@@ -76,7 +87,10 @@ pub struct Health {
 /// Liveness and version.
 #[utoipa::path(get, path = "/api/health", operation_id = "health", responses((status = 200, body = Health)))]
 pub async fn health() -> Json<Health> {
-    Json(Health { status: "ok", version: env!("CARGO_PKG_VERSION") })
+    Json(Health {
+        status: "ok",
+        version: env!("CARGO_PKG_VERSION"),
+    })
 }
 
 async fn openapi() -> Json<utoipa::openapi::OpenApi> {
@@ -95,11 +109,20 @@ pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
         .route("/api/auth/oidc/callback", get(auth::oidc::callback))
         .route("/api/me", get(auth::routes::me))
         .route("/api/me/password", post(auth::routes::change_password))
-        .route("/api/me/tokens", get(auth::routes::list_tokens).post(auth::routes::create_token))
+        .route(
+            "/api/me/tokens",
+            get(auth::routes::list_tokens).post(auth::routes::create_token),
+        )
         .route("/api/me/tokens/{id}", delete(auth::routes::delete_token))
-        .route("/api/users", get(auth::routes::list_users).post(auth::routes::create_user))
+        .route(
+            "/api/users",
+            get(auth::routes::list_users).post(auth::routes::create_user),
+        )
         .route("/api/users/{id}", patch(auth::routes::update_user))
-        .route("/api/households", get(auth::routes::list_households).post(auth::routes::create_household))
+        .route(
+            "/api/households",
+            get(auth::routes::list_households).post(auth::routes::create_household),
+        )
         .route("/api/openapi.json", get(openapi))
         .route("/api/dishes", get(dishes::list))
         .route("/api/dishes/{slug}", get(dishes::get))
@@ -107,23 +130,42 @@ pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
         .route("/api/media/{id}/{size}", get(media::get))
         .route("/api/plan", get(plan::get))
         .route("/api/plan/entries", post(plan::add))
-        .route("/api/plan/entries/{id}", patch(plan::update).delete(plan::remove))
+        .route(
+            "/api/plan/entries/{id}",
+            patch(plan::update).delete(plan::remove),
+        )
         .route("/api/shopping", get(shopping::get))
         .route("/api/shopping/marks", put(shopping::mark))
-        .route("/api/shopping/settings", get(shopping::settings).put(shopping::update_settings))
-        .route("/api/shopping/food-weights", put(shopping::set_food_weights))
+        .route(
+            "/api/shopping/settings",
+            get(shopping::settings).put(shopping::update_settings),
+        )
+        .route(
+            "/api/shopping/food-weights",
+            put(shopping::set_food_weights),
+        )
         .route("/api/shopping/extras", post(shopping::add_extra))
-        .route("/api/shopping/extras/{id}", patch(shopping::update_extra).delete(shopping::remove_extra))
+        .route(
+            "/api/shopping/extras/{id}",
+            patch(shopping::update_extra).delete(shopping::remove_extra),
+        )
         .route("/api/pantry-staples", post(shopping::add_staple))
-        .route("/api/pantry-staples/{food_id}", delete(shopping::remove_staple))
+        .route(
+            "/api/pantry-staples/{food_id}",
+            delete(shopping::remove_staple),
+        )
         .route("/api", any(|| async { error::ApiError::NotFound }))
         .route("/api/{*rest}", any(|| async { error::ApiError::NotFound }))
-        .layer(middleware::from_fn_with_state(state.clone(), auth::require_auth))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::require_auth,
+        ))
         .with_state(state);
     if let Some(dir) = web_dir {
         app = app.fallback_service(web_app(dir));
     }
-    app.layer(CompressionLayer::new()).layer(TraceLayer::new_for_http())
+    app.layer(CompressionLayer::new())
+        .layer(TraceLayer::new_for_http())
 }
 
 /// The built web app: its files, with any other path answered by index.html (status 200) so client-side

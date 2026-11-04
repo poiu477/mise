@@ -1,0 +1,32 @@
+# Weekly update pull requests for Rust crates, npm packages, GitHub Actions and the Docker base images, grouped so
+# each ecosystem arrives as one pull request.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      rust:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    groups:
+      web:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # Rust is raised by hand, in rust-toolchain.toml, the Dockerfile and Cargo.toml together.
+      - dependency-name: rust

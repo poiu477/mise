@@ -54,7 +54,11 @@ pub struct AuthConfig {
 impl AuthConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         let modes = std::env::var("AUTH_MODES").unwrap_or_else(|_| "local".into());
-        let modes: Vec<String> = modes.split(',').map(|m| m.trim().to_lowercase()).filter(|m| !m.is_empty()).collect();
+        let modes: Vec<String> = modes
+            .split(',')
+            .map(|m| m.trim().to_lowercase())
+            .filter(|m| !m.is_empty())
+            .collect();
         for m in &modes {
             if m != "local" && m != "oidc" {
                 bail!("AUTH_MODES: unknown mode {m:?} (expected local, oidc)");
@@ -64,17 +68,34 @@ impl AuthConfig {
             bail!("AUTH_MODES is empty: nobody could sign in");
         }
         let public_base_url = match std::env::var("PUBLIC_BASE_URL") {
-            Ok(u) if !u.trim().is_empty() => Some(Url::parse(u.trim()).context("PUBLIC_BASE_URL is not a URL")?),
+            Ok(u) if !u.trim().is_empty() => {
+                Some(Url::parse(u.trim()).context("PUBLIC_BASE_URL is not a URL")?)
+            }
             _ => None,
         };
-        let oidc = if modes.iter().any(|m| m == "oidc") { Some(oidc::OidcConfig::from_env()?) } else { None };
-        let session_days = std::env::var("SESSION_DAYS").ok().and_then(|d| d.parse().ok()).filter(|d| *d > 0).unwrap_or(30);
-        Ok(AuthConfig { local: modes.iter().any(|m| m == "local"), oidc, public_base_url, session_days })
+        let oidc = if modes.iter().any(|m| m == "oidc") {
+            Some(oidc::OidcConfig::from_env()?)
+        } else {
+            None
+        };
+        let session_days = std::env::var("SESSION_DAYS")
+            .ok()
+            .and_then(|d| d.parse().ok())
+            .filter(|d| *d > 0)
+            .unwrap_or(30);
+        Ok(AuthConfig {
+            local: modes.iter().any(|m| m == "local"),
+            oidc,
+            public_base_url,
+            session_days,
+        })
     }
 
     /// Cookies are marked Secure when the install is served over HTTPS.
     pub fn secure_cookies(&self) -> bool {
-        self.public_base_url.as_ref().is_some_and(|u| u.scheme() == "https")
+        self.public_base_url
+            .as_ref()
+            .is_some_and(|u| u.scheme() == "https")
     }
 }
 
@@ -87,7 +108,11 @@ pub struct Auth {
 
 impl Auth {
     pub fn new(config: AuthConfig) -> Self {
-        Auth { config, limiter: LoginLimiter::default(), oidc: oidc::Provider::default() }
+        Auth {
+            config,
+            limiter: LoginLimiter::default(),
+            oidc: oidc::Provider::default(),
+        }
     }
 }
 
@@ -109,20 +134,30 @@ pub enum Via {
 
 impl CurrentUser {
     pub fn require_admin(&self) -> Result<(), ApiError> {
-        if self.is_admin { Ok(()) } else { Err(ApiError::Forbidden("admins only".into())) }
+        if self.is_admin {
+            Ok(())
+        } else {
+            Err(ApiError::Forbidden("admins only".into()))
+        }
     }
 }
 
 pub fn hash_password(password: &str) -> anyhow::Result<String> {
-    Argon2::default().hash_password(password.as_bytes()).map(|h| h.to_string()).map_err(|e| anyhow::anyhow!("hashing a password: {e}"))
+    Argon2::default()
+        .hash_password(password.as_bytes())
+        .map(|h| h.to_string())
+        .map_err(|e| anyhow::anyhow!("hashing a password: {e}"))
 }
 
 pub fn verify_password(password: &str, hash: &str) -> bool {
-    Argon2::default().verify_password(password.as_bytes(), hash).is_ok()
+    Argon2::default()
+        .verify_password(password.as_bytes(), hash)
+        .is_ok()
 }
 
 /// Verified against when the username does not exist, so a miss takes as long as a wrong password.
-static DUMMY_HASH: LazyLock<String> = LazyLock::new(|| hash_password("not a real password").expect("argon2 works"));
+static DUMMY_HASH: LazyLock<String> =
+    LazyLock::new(|| hash_password("not a real password").expect("argon2 works"));
 
 pub fn check_password(password: &str, hash: Option<&str>) -> bool {
     match hash {
@@ -138,18 +173,30 @@ pub fn check_password(password: &str, hash: Option<&str>) -> bool {
 pub fn validate_password(password: &str) -> Result<(), ApiError> {
     let n = password.chars().count();
     if n < 8 {
-        return Err(ApiError::BadRequest("passwords need at least 8 characters".into()));
+        return Err(ApiError::BadRequest(
+            "passwords need at least 8 characters".into(),
+        ));
     }
     if n > 256 {
-        return Err(ApiError::BadRequest("passwords can have at most 256 characters".into()));
+        return Err(ApiError::BadRequest(
+            "passwords can have at most 256 characters".into(),
+        ));
     }
     Ok(())
 }
 
 pub fn validate_username(username: &str) -> Result<String, ApiError> {
     let u = username.trim();
-    let ok = (1..=64).contains(&u.chars().count()) && u.chars().all(|c| c.is_alphanumeric() || "._-@+".contains(c));
-    if ok { Ok(u.to_string()) } else { Err(ApiError::BadRequest("usernames are 1–64 letters, digits or . _ - @ +".into())) }
+    let ok = (1..=64).contains(&u.chars().count())
+        && u.chars()
+            .all(|c| c.is_alphanumeric() || "._-@+".contains(c));
+    if ok {
+        Ok(u.to_string())
+    } else {
+        Err(ApiError::BadRequest(
+            "usernames are 1–64 letters, digits or . _ - @ +".into(),
+        ))
+    }
 }
 
 /// A random 256-bit secret, URL-safe.
@@ -163,9 +210,16 @@ pub fn secret_hash(secret: &str) -> String {
     hex::encode(Sha256::digest(secret.as_bytes()))
 }
 
-pub async fn create_session(pool: &PgPool, user: Uuid, user_agent: Option<&str>, days: i64) -> Result<String, ApiError> {
+pub async fn create_session(
+    pool: &PgPool,
+    user: Uuid,
+    user_agent: Option<&str>,
+    days: i64,
+) -> Result<String, ApiError> {
     let token = new_secret();
-    sqlx::query("DELETE FROM sessions WHERE expires_at < now()").execute(pool).await?;
+    sqlx::query("DELETE FROM sessions WHERE expires_at < now()")
+        .execute(pool)
+        .await?;
     sqlx::query(
         "INSERT INTO sessions (token_hash, user_id, expires_at, user_agent) VALUES ($1, $2, now() + make_interval(days => $3::int), $4)",
     )
@@ -189,7 +243,12 @@ pub fn session_cookie(token: String, config: &AuthConfig) -> Cookie<'static> {
 }
 
 pub fn removal_cookie(config: &AuthConfig) -> Cookie<'static> {
-    let mut c = Cookie::build((SESSION_COOKIE, "")).path("/").http_only(true).same_site(SameSite::Lax).secure(config.secure_cookies()).build();
+    let mut c = Cookie::build((SESSION_COOKIE, ""))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .secure(config.secure_cookies())
+        .build();
     c.make_removal();
     c
 }
@@ -212,7 +271,9 @@ impl LoginLimiter {
         if *n < FREE_ATTEMPTS {
             return None;
         }
-        let lock = Duration::from_secs(30).saturating_mul(1 << (n - FREE_ATTEMPTS).min(10)).min(MAX_LOCK);
+        let lock = Duration::from_secs(30)
+            .saturating_mul(1 << (n - FREE_ATTEMPTS).min(10))
+            .min(MAX_LOCK);
         let left = lock.checked_sub(at.elapsed())?;
         Some(left.as_secs().max(1))
     }
@@ -233,7 +294,11 @@ impl LoginLimiter {
     }
 }
 
-async fn from_session(pool: &PgPool, token: &str, days: i64) -> Result<Option<CurrentUser>, ApiError> {
+async fn from_session(
+    pool: &PgPool,
+    token: &str,
+    days: i64,
+) -> Result<Option<CurrentUser>, ApiError> {
     let hash = secret_hash(token);
     let row: Option<(Uuid, String, bool, Uuid, DateTime<Utc>)> = sqlx::query_as(
         "SELECT u.id, u.username, u.is_admin, u.household_id, s.last_seen_at FROM sessions s JOIN users u ON u.id = s.user_id
@@ -242,7 +307,9 @@ async fn from_session(pool: &PgPool, token: &str, days: i64) -> Result<Option<Cu
     .bind(&hash)
     .fetch_optional(pool)
     .await?;
-    let Some((id, username, is_admin, household_id, seen)) = row else { return Ok(None) };
+    let Some((id, username, is_admin, household_id, seen)) = row else {
+        return Ok(None);
+    };
     // Sliding expiry, written at most hourly.
     if Utc::now() - seen > chrono::Duration::hours(1) {
         sqlx::query("UPDATE sessions SET last_seen_at = now(), expires_at = now() + make_interval(days => $2::int) WHERE token_hash = $1")
@@ -251,7 +318,13 @@ async fn from_session(pool: &PgPool, token: &str, days: i64) -> Result<Option<Cu
             .execute(pool)
             .await?;
     }
-    Ok(Some(CurrentUser { id, username, is_admin, household_id, via: Via::Session }))
+    Ok(Some(CurrentUser {
+        id,
+        username,
+        is_admin,
+        household_id,
+        via: Via::Session,
+    }))
 }
 
 async fn from_token(pool: &PgPool, token: &str) -> Result<Option<CurrentUser>, ApiError> {
@@ -263,17 +336,32 @@ async fn from_token(pool: &PgPool, token: &str) -> Result<Option<CurrentUser>, A
     .bind(&hash)
     .fetch_optional(pool)
     .await?;
-    let Some((id, username, is_admin, household_id, scope)) = row else { return Ok(None) };
+    let Some((id, username, is_admin, household_id, scope)) = row else {
+        return Ok(None);
+    };
     sqlx::query("UPDATE api_tokens SET last_used_at = now() WHERE token_hash = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')")
         .bind(&hash)
         .execute(pool)
         .await?;
-    Ok(Some(CurrentUser { id, username, is_admin, household_id, via: Via::Token { read_only: scope == "read" } }))
+    Ok(Some(CurrentUser {
+        id,
+        username,
+        is_admin,
+        household_id,
+        via: Via::Token {
+            read_only: scope == "read",
+        },
+    }))
 }
 
 /// Resolve the caller and refuse what they may not do. Paths outside /api (the web app) and the public
 /// routes pass through untouched.
-pub async fn require_auth(State(s): State<AppState>, jar: CookieJar, mut req: Request, next: Next) -> Response {
+pub async fn require_auth(
+    State(s): State<AppState>,
+    jar: CookieJar,
+    mut req: Request,
+    next: Next,
+) -> Response {
     let path = req.uri().path();
     if !(path == "/api" || path.starts_with("/api/")) || PUBLIC.contains(&path) {
         return next.run(req).await;
@@ -298,7 +386,9 @@ pub async fn require_auth(State(s): State<AppState>, jar: CookieJar, mut req: Re
         Ok(None) => return ApiError::Unauthorized.into_response(),
         Err(e) => return e.into_response(),
     };
-    if user.via == (Via::Token { read_only: true }) && !matches!(*req.method(), Method::GET | Method::HEAD) {
+    if user.via == (Via::Token { read_only: true })
+        && !matches!(*req.method(), Method::GET | Method::HEAD)
+    {
         return ApiError::Forbidden("this token can only read".into()).into_response();
     }
     req.extensions_mut().insert(user);

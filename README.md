@@ -1,5 +1,7 @@
 # mise
 
+[![CI](https://github.com/poiu477/mise/actions/workflows/ci.yml/badge.svg)](https://github.com/poiu477/mise/actions/workflows/ci.yml)
+
 A self-hosted recipe system: dishes with versions, variant toggles, any-servings scaling, a shared weekly plan and
 a shopping list that works offline. Recipes come from seed bundles, websites, files, or your own kitchen, and all get
 the same treatment.

@@ -31,7 +31,9 @@ pub struct AuthInfo {
 /// How this install signs people in.
 #[utoipa::path(get, path = "/api/auth/config", operation_id = "auth_config", tag = "auth", responses((status = 200, body = AuthInfo)))]
 pub async fn config(State(s): State<AppState>) -> ApiResult<Json<AuthInfo>> {
-    let users: i64 = sqlx::query_scalar("SELECT count(*) FROM users").fetch_one(&s.pool).await?;
+    let users: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
+        .fetch_one(&s.pool)
+        .await?;
     Ok(Json(AuthInfo {
         local: s.auth.config.local,
         oidc: s.auth.config.oidc.as_ref().map(|o| o.name.clone()),
@@ -67,7 +69,18 @@ pub(crate) async fn load_me(pool: &sqlx::PgPool, id: Uuid) -> ApiResult<Me> {
         .fetch_optional(pool)
         .await?
         .ok_or(ApiError::Unauthorized)?;
-    Ok(Me { id, username, display_name, email, is_admin, household: Household { id: hid, name: hname }, has_password })
+    Ok(Me {
+        id,
+        username,
+        display_name,
+        email,
+        is_admin,
+        household: Household {
+            id: hid,
+            name: hname,
+        },
+        has_password,
+    })
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -82,16 +95,27 @@ pub struct SetupRequest {
 /// Create the first account (an admin) on a fresh install. Refused once any account exists.
 #[utoipa::path(post, path = "/api/auth/setup", operation_id = "setup", tag = "auth", request_body = SetupRequest,
     responses((status = 200, body = Me), (status = 409, body = crate::error::ErrorBody)))]
-pub async fn setup(State(s): State<AppState>, jar: CookieJar, headers: HeaderMap, JsonBody(r): JsonBody<SetupRequest>) -> ApiResult<(CookieJar, Json<Me>)> {
+pub async fn setup(
+    State(s): State<AppState>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    JsonBody(r): JsonBody<SetupRequest>,
+) -> ApiResult<(CookieJar, Json<Me>)> {
     let username = super::validate_username(&r.username)?;
     super::validate_password(&r.password)?;
     let hash = super::hash_password(&r.password)?;
     let mut tx = s.pool.begin().await?;
     // One setup at a time, so two first visitors cannot both become admin.
-    sqlx::query("SELECT pg_advisory_xact_lock(724163)").execute(&mut *tx).await?;
-    let users: i64 = sqlx::query_scalar("SELECT count(*) FROM users").fetch_one(&mut *tx).await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(724163)")
+        .execute(&mut *tx)
+        .await?;
+    let users: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
+        .fetch_one(&mut *tx)
+        .await?;
     if users > 0 {
-        return Err(ApiError::Conflict("this install is already set up; sign in instead".into()));
+        return Err(ApiError::Conflict(
+            "this install is already set up; sign in instead".into(),
+        ));
     }
     let household = Uuid::now_v7();
     sqlx::query("INSERT INTO households (id, name) VALUES ($1, $2)")
@@ -110,8 +134,17 @@ pub async fn setup(State(s): State<AppState>, jar: CookieJar, headers: HeaderMap
         .await?;
     tx.commit().await?;
     tracing::info!(%username, "first account created");
-    let token = super::create_session(&s.pool, id, user_agent(&headers), s.auth.config.session_days).await?;
-    Ok((jar.add(super::session_cookie(token, &s.auth.config)), Json(load_me(&s.pool, id).await?)))
+    let token = super::create_session(
+        &s.pool,
+        id,
+        user_agent(&headers),
+        s.auth.config.session_days,
+    )
+    .await?;
+    Ok((
+        jar.add(super::session_cookie(token, &s.auth.config)),
+        Json(load_me(&s.pool, id).await?),
+    ))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -123,19 +156,31 @@ pub struct LoginRequest {
 /// Sign in with a username and password. Sets the session cookie.
 #[utoipa::path(post, path = "/api/auth/login", operation_id = "login", tag = "auth", request_body = LoginRequest,
     responses((status = 200, body = Me), (status = 401, body = crate::error::ErrorBody), (status = 429, body = crate::error::ErrorBody)))]
-pub async fn login(State(s): State<AppState>, jar: CookieJar, headers: HeaderMap, JsonBody(r): JsonBody<LoginRequest>) -> ApiResult<(CookieJar, Json<Me>)> {
+pub async fn login(
+    State(s): State<AppState>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    JsonBody(r): JsonBody<LoginRequest>,
+) -> ApiResult<(CookieJar, Json<Me>)> {
     if !s.auth.config.local {
-        return Err(ApiError::Forbidden("password sign-in is turned off; use single sign-on".into()));
+        return Err(ApiError::Forbidden(
+            "password sign-in is turned off; use single sign-on".into(),
+        ));
     }
     let key = r.username.trim().to_lowercase();
     if let Some(wait) = s.auth.limiter.locked_for(&key) {
         return Err(ApiError::TooManyRequests(wait));
     }
     let row: Option<(Uuid, Option<String>, bool)> =
-        sqlx::query_as("SELECT id, password_hash, disabled FROM users WHERE lower(username) = $1").bind(&key).fetch_optional(&s.pool).await?;
+        sqlx::query_as("SELECT id, password_hash, disabled FROM users WHERE lower(username) = $1")
+            .bind(&key)
+            .fetch_optional(&s.pool)
+            .await?;
     let password = r.password;
     let hash = row.as_ref().and_then(|r| r.1.clone());
-    let ok = tokio::task::spawn_blocking(move || super::check_password(&password, hash.as_deref())).await.map_err(|e| ApiError::Internal(e.into()))?;
+    let ok = tokio::task::spawn_blocking(move || super::check_password(&password, hash.as_deref()))
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
     let Some((id, _, disabled)) = row.filter(|_| ok) else {
         s.auth.limiter.failed(&key);
         return Err(ApiError::BadCredentials);
@@ -144,22 +189,43 @@ pub async fn login(State(s): State<AppState>, jar: CookieJar, headers: HeaderMap
         return Err(ApiError::Forbidden("this account is turned off".into()));
     }
     s.auth.limiter.succeeded(&key);
-    let token = super::create_session(&s.pool, id, user_agent(&headers), s.auth.config.session_days).await?;
-    Ok((jar.add(super::session_cookie(token, &s.auth.config)), Json(load_me(&s.pool, id).await?)))
+    let token = super::create_session(
+        &s.pool,
+        id,
+        user_agent(&headers),
+        s.auth.config.session_days,
+    )
+    .await?;
+    Ok((
+        jar.add(super::session_cookie(token, &s.auth.config)),
+        Json(load_me(&s.pool, id).await?),
+    ))
 }
 
 /// Sign out of this browser.
 #[utoipa::path(post, path = "/api/auth/logout", operation_id = "logout", tag = "auth", responses((status = 204)))]
-pub async fn logout(State(s): State<AppState>, jar: CookieJar) -> ApiResult<(CookieJar, StatusCode)> {
+pub async fn logout(
+    State(s): State<AppState>,
+    jar: CookieJar,
+) -> ApiResult<(CookieJar, StatusCode)> {
     if let Some(c) = jar.get(SESSION_COOKIE) {
-        sqlx::query("DELETE FROM sessions WHERE token_hash = $1").bind(super::secret_hash(c.value())).execute(&s.pool).await?;
+        sqlx::query("DELETE FROM sessions WHERE token_hash = $1")
+            .bind(super::secret_hash(c.value()))
+            .execute(&s.pool)
+            .await?;
     }
-    Ok((jar.add(super::removal_cookie(&s.auth.config)), StatusCode::NO_CONTENT))
+    Ok((
+        jar.add(super::removal_cookie(&s.auth.config)),
+        StatusCode::NO_CONTENT,
+    ))
 }
 
 /// The signed-in account.
 #[utoipa::path(get, path = "/api/me", operation_id = "me", tag = "account", responses((status = 200, body = Me), (status = 401, body = crate::error::ErrorBody)))]
-pub async fn me(State(s): State<AppState>, Extension(u): Extension<CurrentUser>) -> ApiResult<Json<Me>> {
+pub async fn me(
+    State(s): State<AppState>,
+    Extension(u): Extension<CurrentUser>,
+) -> ApiResult<Json<Me>> {
     Ok(Json(load_me(&s.pool, u.id).await?))
 }
 
@@ -181,19 +247,38 @@ pub async fn change_password(
 ) -> ApiResult<StatusCode> {
     session_only(&u)?;
     super::validate_password(&r.new)?;
-    let current: Option<String> = sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1").bind(u.id).fetch_one(&s.pool).await?;
+    let current: Option<String> =
+        sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1")
+            .bind(u.id)
+            .fetch_one(&s.pool)
+            .await?;
     if let Some(hash) = current {
         let given = r.current.unwrap_or_default();
-        let ok = tokio::task::spawn_blocking(move || super::verify_password(&given, &hash)).await.map_err(|e| ApiError::Internal(e.into()))?;
+        let ok = tokio::task::spawn_blocking(move || super::verify_password(&given, &hash))
+            .await
+            .map_err(|e| ApiError::Internal(e.into()))?;
         if !ok {
             return Err(ApiError::BadRequest("the current password is wrong".into()));
         }
     }
     let new = r.new;
-    let hash = tokio::task::spawn_blocking(move || super::hash_password(&new)).await.map_err(|e| ApiError::Internal(e.into()))??;
-    sqlx::query("UPDATE users SET password_hash = $2 WHERE id = $1").bind(u.id).bind(hash).execute(&s.pool).await?;
-    let keep = jar.get(SESSION_COOKIE).map(|c| super::secret_hash(c.value())).unwrap_or_default();
-    sqlx::query("DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2").bind(u.id).bind(keep).execute(&s.pool).await?;
+    let hash = tokio::task::spawn_blocking(move || super::hash_password(&new))
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))??;
+    sqlx::query("UPDATE users SET password_hash = $2 WHERE id = $1")
+        .bind(u.id)
+        .bind(hash)
+        .execute(&s.pool)
+        .await?;
+    let keep = jar
+        .get(SESSION_COOKIE)
+        .map(|c| super::secret_hash(c.value()))
+        .unwrap_or_default();
+    sqlx::query("DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2")
+        .bind(u.id)
+        .bind(keep)
+        .execute(&s.pool)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -221,28 +306,48 @@ pub struct NewToken {
     pub info: TokenInfo,
 }
 
-/// This account's API tokens.
 /// id, name, scope, created, last used.
 type TokenRow = (Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>);
 
+/// This account's API tokens.
 #[utoipa::path(get, path = "/api/me/tokens", operation_id = "list_tokens", tag = "account", responses((status = 200, body = [TokenInfo])))]
-pub async fn list_tokens(State(s): State<AppState>, Extension(u): Extension<CurrentUser>) -> ApiResult<Json<Vec<TokenInfo>>> {
+pub async fn list_tokens(
+    State(s): State<AppState>,
+    Extension(u): Extension<CurrentUser>,
+) -> ApiResult<Json<Vec<TokenInfo>>> {
     let rows: Vec<TokenRow> =
         sqlx::query_as("SELECT id, name, scope, created_at, last_used_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at")
             .bind(u.id)
             .fetch_all(&s.pool)
             .await?;
-    Ok(Json(rows.into_iter().map(|(id, name, scope, created_at, last_used_at)| TokenInfo { id, name, scope, created_at, last_used_at }).collect()))
+    Ok(Json(
+        rows.into_iter()
+            .map(|(id, name, scope, created_at, last_used_at)| TokenInfo {
+                id,
+                name,
+                scope,
+                created_at,
+                last_used_at,
+            })
+            .collect(),
+    ))
 }
 
 /// Make an API token. Only from a browser session, so one token cannot mint another.
 #[utoipa::path(post, path = "/api/me/tokens", operation_id = "create_token", tag = "account", request_body = TokenRequest, responses((status = 200, body = NewToken)))]
-pub async fn create_token(State(s): State<AppState>, Extension(u): Extension<CurrentUser>, JsonBody(r): JsonBody<TokenRequest>) -> ApiResult<Json<NewToken>> {
+pub async fn create_token(
+    State(s): State<AppState>,
+    Extension(u): Extension<CurrentUser>,
+    JsonBody(r): JsonBody<TokenRequest>,
+) -> ApiResult<Json<NewToken>> {
     session_only(&u)?;
     if r.scope != "read" && r.scope != "read_write" {
-        return Err(ApiError::BadRequest("scope must be read or read_write".into()));
+        return Err(ApiError::BadRequest(
+            "scope must be read or read_write".into(),
+        ));
     }
-    let name = non_empty(Some(r.name)).ok_or_else(|| ApiError::BadRequest("give the token a name".into()))?;
+    let name = non_empty(Some(r.name))
+        .ok_or_else(|| ApiError::BadRequest("give the token a name".into()))?;
     let secret = super::new_secret();
     let id = Uuid::now_v7();
     let created_at: DateTime<Utc> =
@@ -254,15 +359,37 @@ pub async fn create_token(State(s): State<AppState>, Extension(u): Extension<Cur
             .bind(&r.scope)
             .fetch_one(&s.pool)
             .await?;
-    Ok(Json(NewToken { token: format!("{TOKEN_PREFIX}{secret}"), info: TokenInfo { id, name, scope: r.scope, created_at, last_used_at: None } }))
+    Ok(Json(NewToken {
+        token: format!("{TOKEN_PREFIX}{secret}"),
+        info: TokenInfo {
+            id,
+            name,
+            scope: r.scope,
+            created_at,
+            last_used_at: None,
+        },
+    }))
 }
 
 /// Revoke one of this account's tokens.
 #[utoipa::path(delete, path = "/api/me/tokens/{id}", operation_id = "delete_token", tag = "account", params(("id" = Uuid, Path)),
     responses((status = 204), (status = 404, body = crate::error::ErrorBody)))]
-pub async fn delete_token(State(s): State<AppState>, Extension(u): Extension<CurrentUser>, Path(id): Path<Uuid>) -> ApiResult<StatusCode> {
-    let n = sqlx::query("DELETE FROM api_tokens WHERE id = $1 AND user_id = $2").bind(id).bind(u.id).execute(&s.pool).await?.rows_affected();
-    if n == 0 { Err(ApiError::NotFound) } else { Ok(StatusCode::NO_CONTENT) }
+pub async fn delete_token(
+    State(s): State<AppState>,
+    Extension(u): Extension<CurrentUser>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    let n = sqlx::query("DELETE FROM api_tokens WHERE id = $1 AND user_id = $2")
+        .bind(id)
+        .bind(u.id)
+        .execute(&s.pool)
+        .await?
+        .rows_affected();
+    if n == 0 {
+        Err(ApiError::NotFound)
+    } else {
+        Ok(StatusCode::NO_CONTENT)
+    }
 }
 
 #[derive(Serialize, ToSchema)]
@@ -281,9 +408,23 @@ pub struct UserInfo {
 
 /// Every account (admins only).
 #[utoipa::path(get, path = "/api/users", operation_id = "list_users", tag = "admin", responses((status = 200, body = [UserInfo])))]
-pub async fn list_users(State(s): State<AppState>, Extension(u): Extension<CurrentUser>) -> ApiResult<Json<Vec<UserInfo>>> {
+pub async fn list_users(
+    State(s): State<AppState>,
+    Extension(u): Extension<CurrentUser>,
+) -> ApiResult<Json<Vec<UserInfo>>> {
     u.require_admin()?;
-    type Row = (Uuid, String, String, Option<String>, bool, bool, Uuid, String, bool, i64);
+    type Row = (
+        Uuid,
+        String,
+        String,
+        Option<String>,
+        bool,
+        bool,
+        Uuid,
+        String,
+        bool,
+        i64,
+    );
     let rows: Vec<Row> = sqlx::query_as(
         "SELECT u.id, u.username, u.display_name, u.email, u.is_admin, u.disabled, h.id, h.name, u.password_hash IS NOT NULL,
                 (SELECT count(*) FROM user_identities i WHERE i.user_id = u.id)
@@ -293,17 +434,33 @@ pub async fn list_users(State(s): State<AppState>, Extension(u): Extension<Curre
     .await?;
     Ok(Json(
         rows.into_iter()
-            .map(|(id, username, display_name, email, is_admin, disabled, hid, hname, has_password, identities)| UserInfo {
-                id,
-                username,
-                display_name,
-                email,
-                is_admin,
-                disabled,
-                household: Household { id: hid, name: hname },
-                has_password,
-                identities,
-            })
+            .map(
+                |(
+                    id,
+                    username,
+                    display_name,
+                    email,
+                    is_admin,
+                    disabled,
+                    hid,
+                    hname,
+                    has_password,
+                    identities,
+                )| UserInfo {
+                    id,
+                    username,
+                    display_name,
+                    email,
+                    is_admin,
+                    disabled,
+                    household: Household {
+                        id: hid,
+                        name: hname,
+                    },
+                    has_password,
+                    identities,
+                },
+            )
             .collect(),
     ))
 }
@@ -325,7 +482,11 @@ pub struct NewUser {
 /// Add an account (admins only).
 #[utoipa::path(post, path = "/api/users", operation_id = "create_user", tag = "admin", request_body = NewUser,
     responses((status = 200, body = Me), (status = 409, body = crate::error::ErrorBody)))]
-pub async fn create_user(State(s): State<AppState>, Extension(u): Extension<CurrentUser>, JsonBody(r): JsonBody<NewUser>) -> ApiResult<Json<Me>> {
+pub async fn create_user(
+    State(s): State<AppState>,
+    Extension(u): Extension<CurrentUser>,
+    JsonBody(r): JsonBody<NewUser>,
+) -> ApiResult<Json<Me>> {
     u.require_admin()?;
     let id = add_user(&s.pool, r).await?;
     Ok(Json(load_me(&s.pool, id).await?))
@@ -348,11 +509,17 @@ pub async fn add_user(pool: &sqlx::PgPool, r: NewUser) -> ApiResult<Uuid> {
         .fetch_one(&mut *tx)
         .await?;
     if taken {
-        return Err(ApiError::Conflict("that username or email is already in use".into()));
+        return Err(ApiError::Conflict(
+            "that username or email is already in use".into(),
+        ));
     }
     let household = match (r.household_id, non_empty(r.household_name)) {
         (Some(h), _) => {
-            let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM households WHERE id = $1)").bind(h).fetch_one(&mut *tx).await?;
+            let exists: bool =
+                sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM households WHERE id = $1)")
+                    .bind(h)
+                    .fetch_one(&mut *tx)
+                    .await?;
             if !exists {
                 return Err(ApiError::BadRequest("no such household".into()));
             }
@@ -405,21 +572,41 @@ pub async fn update_user(
 ) -> ApiResult<Json<Me>> {
     u.require_admin()?;
     let mut tx = s.pool.begin().await?;
-    sqlx::query("SELECT pg_advisory_xact_lock(724164)").execute(&mut *tx).await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(724164)")
+        .execute(&mut *tx)
+        .await?;
     let (is_admin, disabled): (bool, bool) =
-        sqlx::query_as("SELECT is_admin, disabled FROM users WHERE id = $1").bind(id).fetch_optional(&mut *tx).await?.ok_or(ApiError::NotFound)?;
-    let (new_admin, new_disabled) = (r.is_admin.unwrap_or(is_admin), r.disabled.unwrap_or(disabled));
+        sqlx::query_as("SELECT is_admin, disabled FROM users WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or(ApiError::NotFound)?;
+    let (new_admin, new_disabled) = (
+        r.is_admin.unwrap_or(is_admin),
+        r.disabled.unwrap_or(disabled),
+    );
     if id == u.id && new_disabled {
-        return Err(ApiError::BadRequest("you can't turn off your own account".into()));
+        return Err(ApiError::BadRequest(
+            "you can't turn off your own account".into(),
+        ));
     }
     if is_admin && !disabled && (!new_admin || new_disabled) {
-        let others: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE is_admin AND NOT disabled AND id <> $1").bind(id).fetch_one(&mut *tx).await?;
+        let others: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM users WHERE is_admin AND NOT disabled AND id <> $1",
+        )
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await?;
         if others == 0 {
             return Err(ApiError::BadRequest("this is the last admin".into()));
         }
     }
     if let Some(h) = r.household_id {
-        let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM households WHERE id = $1)").bind(h).fetch_one(&mut *tx).await?;
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM households WHERE id = $1)")
+                .bind(h)
+                .fetch_one(&mut *tx)
+                .await?;
         if !exists {
             return Err(ApiError::BadRequest("no such household".into()));
         }
@@ -442,7 +629,10 @@ pub async fn update_user(
     .execute(&mut *tx)
     .await?;
     if new_disabled || hash.is_some() {
-        sqlx::query("DELETE FROM sessions WHERE user_id = $1").bind(id).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM sessions WHERE user_id = $1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
     }
     tx.commit().await?;
     Ok(Json(load_me(&s.pool, id).await?))
@@ -450,10 +640,19 @@ pub async fn update_user(
 
 /// Every household (admins only).
 #[utoipa::path(get, path = "/api/households", operation_id = "list_households", tag = "admin", responses((status = 200, body = [Household])))]
-pub async fn list_households(State(s): State<AppState>, Extension(u): Extension<CurrentUser>) -> ApiResult<Json<Vec<Household>>> {
+pub async fn list_households(
+    State(s): State<AppState>,
+    Extension(u): Extension<CurrentUser>,
+) -> ApiResult<Json<Vec<Household>>> {
     u.require_admin()?;
-    let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, name FROM households ORDER BY name").fetch_all(&s.pool).await?;
-    Ok(Json(rows.into_iter().map(|(id, name)| Household { id, name }).collect()))
+    let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, name FROM households ORDER BY name")
+        .fetch_all(&s.pool)
+        .await?;
+    Ok(Json(
+        rows.into_iter()
+            .map(|(id, name)| Household { id, name })
+            .collect(),
+    ))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -463,16 +662,31 @@ pub struct NewHousehold {
 
 /// Add a household (admins only).
 #[utoipa::path(post, path = "/api/households", operation_id = "create_household", tag = "admin", request_body = NewHousehold, responses((status = 200, body = Household)))]
-pub async fn create_household(State(s): State<AppState>, Extension(u): Extension<CurrentUser>, JsonBody(r): JsonBody<NewHousehold>) -> ApiResult<Json<Household>> {
+pub async fn create_household(
+    State(s): State<AppState>,
+    Extension(u): Extension<CurrentUser>,
+    JsonBody(r): JsonBody<NewHousehold>,
+) -> ApiResult<Json<Household>> {
     u.require_admin()?;
-    let name = non_empty(Some(r.name)).ok_or_else(|| ApiError::BadRequest("give the household a name".into()))?;
+    let name = non_empty(Some(r.name))
+        .ok_or_else(|| ApiError::BadRequest("give the household a name".into()))?;
     let id = Uuid::now_v7();
-    sqlx::query("INSERT INTO households (id, name) VALUES ($1, $2)").bind(id).bind(&name).execute(&s.pool).await?;
+    sqlx::query("INSERT INTO households (id, name) VALUES ($1, $2)")
+        .bind(id)
+        .bind(&name)
+        .execute(&s.pool)
+        .await?;
     Ok(Json(Household { id, name }))
 }
 
 fn session_only(u: &CurrentUser) -> ApiResult<()> {
-    if u.via == Via::Session { Ok(()) } else { Err(ApiError::Forbidden("sign in from a browser to do this".into())) }
+    if u.via == Via::Session {
+        Ok(())
+    } else {
+        Err(ApiError::Forbidden(
+            "sign in from a browser to do this".into(),
+        ))
+    }
 }
 
 fn non_empty(s: Option<String>) -> Option<String> {
@@ -480,5 +694,7 @@ fn non_empty(s: Option<String>) -> Option<String> {
 }
 
 pub(crate) fn user_agent(headers: &HeaderMap) -> Option<&str> {
-    headers.get(header::USER_AGENT).and_then(|h| h.to_str().ok())
+    headers
+        .get(header::USER_AGENT)
+        .and_then(|h| h.to_str().ok())
 }

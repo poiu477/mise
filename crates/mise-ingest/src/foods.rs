@@ -40,7 +40,8 @@ struct KnowledgeFact {
 
 /// Load `foods.ndjson` from a bundle. Foods that already exist (by slug) are left alone, so re-running is safe.
 pub async fn import_food_knowledge(pool: &PgPool, path: &Path) -> Result<u64> {
-    let reader = BufReader::new(File::open(path).with_context(|| format!("opening {}", path.display()))?);
+    let reader =
+        BufReader::new(File::open(path).with_context(|| format!("opening {}", path.display()))?);
     let mut tx = pool.begin().await?;
     let mut added = 0;
     for (n, line) in reader.lines().enumerate() {
@@ -48,18 +49,24 @@ pub async fn import_food_knowledge(pool: &PgPool, path: &Path) -> Result<u64> {
         if line.trim().is_empty() {
             continue;
         }
-        let food: KnowledgeFood = serde_json::from_str(&line).with_context(|| format!("foods.ndjson line {}", n + 1))?;
+        let food: KnowledgeFood =
+            serde_json::from_str(&line).with_context(|| format!("foods.ndjson line {}", n + 1))?;
 
         // Category path: each level is a 'category' food under the previous one.
         let mut parent: Option<Uuid> = None;
         for depth in 0..food.parent_path.len() {
             let path = &food.parent_path[..=depth];
             let slug = format!("category-{}", slugify(&path.join(" ")));
-            parent = Some(upsert_food(&mut tx, path.last().unwrap(), &slug, parent, "category").await?.0);
+            parent = Some(
+                upsert_food(&mut tx, path.last().unwrap(), &slug, parent, "category")
+                    .await?
+                    .0,
+            );
         }
 
         let kind = food.kind.as_deref().unwrap_or("food");
-        let (food_id, created) = upsert_food(&mut tx, &food.name, &slugify(&food.name), parent, kind).await?;
+        let (food_id, created) =
+            upsert_food(&mut tx, &food.name, &slugify(&food.name), parent, kind).await?;
         add_alias(&mut tx, food_id, &food.name).await?;
         for alias in &food.aliases {
             add_alias(&mut tx, food_id, alias).await?;
@@ -108,7 +115,13 @@ async fn upsert_food(
     .await?;
     match inserted {
         Some(id) => Ok((id, true)),
-        None => Ok((sqlx::query_scalar("SELECT id FROM foods WHERE slug = $1").bind(slug).fetch_one(&mut **tx).await?, false)),
+        None => Ok((
+            sqlx::query_scalar("SELECT id FROM foods WHERE slug = $1")
+                .bind(slug)
+                .fetch_one(&mut **tx)
+                .await?,
+            false,
+        )),
     }
 }
 
@@ -122,7 +135,10 @@ async fn add_alias(tx: &mut Transaction<'_, Postgres>, food_id: Uuid, name: &str
 }
 
 /// Names that mean different foods depending on context; matched normally but flagged for a person.
-const AMBIGUOUS: &[(&str, &str)] = &[("pepper", "black pepper or bell pepper (as a pantry item it is usually black pepper)")];
+const AMBIGUOUS: &[(&str, &str)] = &[(
+    "pepper",
+    "black pepper or bell pepper (as a pantry item it is usually black pepper)",
+)];
 
 #[derive(Debug, Default)]
 pub struct MatchStats {
@@ -150,7 +166,11 @@ pub async fn reset_matching(pool: &PgPool) -> Result<()> {
     )
     .execute(&mut *tx)
     .await?;
-    sqlx::query("DELETE FROM review_items WHERE kind IN ('food_parent', 'food_match') AND status = 'open'").execute(&mut *tx).await?;
+    sqlx::query(
+        "DELETE FROM review_items WHERE kind IN ('food_parent', 'food_match') AND status = 'open'",
+    )
+    .execute(&mut *tx)
+    .await?;
     sqlx::query(
         "DELETE FROM food_relations r USING foods a, foods b
          WHERE a.id = r.from_food AND b.id = r.to_food AND a.origin = 'matched' AND b.origin = 'matched'",
@@ -164,7 +184,9 @@ pub async fn reset_matching(pool: &PgPool) -> Result<()> {
     )
     .execute(&mut *tx)
     .await?;
-    sqlx::query("DELETE FROM foods WHERE origin = 'matched'").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM foods WHERE origin = 'matched'")
+        .execute(&mut *tx)
+        .await?;
     tx.commit().await?;
     Ok(())
 }
@@ -176,12 +198,20 @@ pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
 
     // Existing foods by key.
     let mut by_key: HashMap<String, Food> = HashMap::new();
-    let rows: Vec<(String, Uuid, String)> =
-        sqlx::query_as("SELECT a.alias, f.id, f.name FROM food_aliases a JOIN foods f ON f.id = a.food_id")
-            .fetch_all(pool)
-            .await?;
+    let rows: Vec<(String, Uuid, String)> = sqlx::query_as(
+        "SELECT a.alias, f.id, f.name FROM food_aliases a JOIN foods f ON f.id = a.food_id",
+    )
+    .fetch_all(pool)
+    .await?;
     for (alias, id, name) in rows {
-        by_key.insert(alias, Food { id, name, created: false });
+        by_key.insert(
+            alias,
+            Food {
+                id,
+                name,
+                created: false,
+            },
+        );
     }
 
     // Unmatched names, most frequent spelling first so it becomes the food's display name.
@@ -195,7 +225,11 @@ pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
 
     let mut new_foods: Vec<(Uuid, String, String, &'static str)> = Vec::new(); // id, name, slug, kind
     let mut slugs_taken: std::collections::HashSet<String> =
-        sqlx::query_scalar::<_, String>("SELECT slug FROM foods").fetch_all(pool).await?.into_iter().collect();
+        sqlx::query_scalar::<_, String>("SELECT slug FROM foods")
+            .fetch_all(pool)
+            .await?
+            .into_iter()
+            .collect();
     let mut match_names = Vec::new();
     let mut match_ids = Vec::new();
     for (raw, _) in &names {
@@ -212,9 +246,17 @@ pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
                 n += 1;
             }
             slugs_taken.insert(slug.clone());
-            let kind = if strip_brand(raw).is_some() { "brand" } else { "food" };
+            let kind = if strip_brand(raw).is_some() {
+                "brand"
+            } else {
+                "food"
+            };
             new_foods.push((id, raw.trim().to_string(), slug, kind));
-            Food { id, name: raw.trim().to_string(), created: true }
+            Food {
+                id,
+                name: raw.trim().to_string(),
+                created: true,
+            }
         });
         match_names.push(raw.clone());
         match_ids.push(food.id);
@@ -234,8 +276,11 @@ pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
     .await
     .context("inserting foods")?;
 
-    let (alias_keys, alias_ids): (Vec<String>, Vec<Uuid>) =
-        by_key.iter().filter(|(_, f)| f.created).map(|(k, f)| (k.clone(), f.id)).unzip();
+    let (alias_keys, alias_ids): (Vec<String>, Vec<Uuid>) = by_key
+        .iter()
+        .filter(|(_, f)| f.created)
+        .map(|(k, f)| (k.clone(), f.id))
+        .unzip();
     sqlx::query(
         "INSERT INTO food_aliases (food_id, alias) SELECT f, a FROM UNNEST($1::uuid[], $2::text[]) AS t(f, a)
          ON CONFLICT DO NOTHING",
@@ -288,7 +333,13 @@ async fn propose_tree(
         let (recipe_uses, all_uses) = usage.get(&food.id).copied().unwrap_or((0, 0));
         json!({ "food_id": food.id, "name": food.name, "recipe_uses": recipe_uses, "all_uses": all_uses })
     };
-    let confidence = |food: &Food, base: f32| if usage.get(&food.id).map_or(0, |u| u.0) == 0 { 0.1 } else { base };
+    let confidence = |food: &Food, base: f32| {
+        if usage.get(&food.id).map_or(0, |u| u.0) == 0 {
+            0.1
+        } else {
+            base
+        }
+    };
     let mut parents: Vec<(Uuid, Uuid)> = Vec::new();
     let mut related: Vec<(Uuid, Uuid)> = Vec::new();
     let mut reviews: Vec<(String, Value, Value, f32)> = Vec::new();
@@ -296,13 +347,18 @@ async fn propose_tree(
     for (key, food) in by_key.iter().filter(|(_, f)| f.created) {
         // A branded name links to its unbranded form first.
         let base_key = strip_brand(&food.name).map(|(_, rest)| singular_key(&rest));
-        if let Some(base) = base_key.as_ref().and_then(|k| by_key.get(k)).filter(|b| b.id != food.id) {
+        if let Some(base) = base_key
+            .as_ref()
+            .and_then(|k| by_key.get(k))
+            .filter(|b| b.id != food.id)
+        {
             parents.push((food.id, base.id));
             continue;
         }
 
         let words: Vec<&str> = key.split(' ').collect();
-        let candidates = (1..words.len()).flat_map(|n| [words[..n].join(" "), words[words.len() - n..].join(" ")]);
+        let candidates = (1..words.len())
+            .flat_map(|n| [words[..n].join(" "), words[words.len() - n..].join(" ")]);
         let best = candidates
             .filter_map(|c| by_key.get(&c).map(|b| (c, b)))
             .filter(|(_, b)| b.id != food.id)
@@ -324,7 +380,12 @@ async fn propose_tree(
 
     for (name, note) in AMBIGUOUS {
         if let Some(food) = by_key.get(*name).filter(|f| f.created) {
-            reviews.push(("food_match".into(), subject(food), json!({ "note": note }), confidence(food, 0.3)));
+            reviews.push((
+                "food_match".into(),
+                subject(food),
+                json!({ "note": note }),
+                confidence(food, 0.3),
+            ));
         }
     }
 

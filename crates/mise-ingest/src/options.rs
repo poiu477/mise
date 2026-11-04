@@ -115,23 +115,40 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
         e.1 += 1;
         e.0 += l.shipped.unwrap_or(false) as u32;
     }
-    let pantry: HashSet<Uuid> =
-        shipped_share.iter().filter(|(_, (s, n))| (*s as f64) < PANTRY_SHIPPED_SHARE * *n as f64).map(|(id, _)| *id).collect();
+    let pantry: HashSet<Uuid> = shipped_share
+        .iter()
+        .filter(|(_, (s, n))| (*s as f64) < PANTRY_SHIPPED_SHARE * *n as f64)
+        .map(|(id, _)| *id)
+        .collect();
 
     let mut facts: HashMap<Uuid, Facts> = variants
         .iter()
         .map(|v| {
             let t = v.title.to_lowercase();
-            let titled_double = t.split(|c: char| !c.is_alphanumeric()).any(|w| w == "2x" || w == "double");
-            (v.id, Facts { protein: None, titled_double, signature: BTreeSet::new() })
+            let titled_double = t
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|w| w == "2x" || w == "double");
+            (
+                v.id,
+                Facts {
+                    protein: None,
+                    titled_double,
+                    signature: BTreeSet::new(),
+                },
+            )
         })
         .collect();
     for l in lines.iter().filter(|l| l.shipped.unwrap_or(false)) {
-        let Some(f) = facts.get_mut(&l.variant_id) else { continue };
+        let Some(f) = facts.get_mut(&l.variant_id) else {
+            continue;
+        };
         let name = &foods[&l.food_id].name;
         match protein_of(name) {
             Some(label) => {
-                let oz = l.amount.zip(l.unit.as_deref()).and_then(|(a, u)| ounces(a, u));
+                let oz = l
+                    .amount
+                    .zip(l.unit.as_deref())
+                    .and_then(|(a, u)| ounces(a, u));
                 // The main protein is the one with the largest amount (bacon on top of chicken stays a garnish).
                 let bigger = match (&f.protein, oz) {
                     (None, _) => true,
@@ -160,12 +177,17 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
     stats.dishes = by_dish.len();
 
     let (mut a_variant, mut a_key, mut a_value) = (vec![], vec![], vec![]);
-    let (mut o_dish, mut o_key, mut o_label, mut o_pos, mut o_choices, mut o_default) = (vec![], vec![], vec![], vec![], vec![], vec![]);
+    let (mut o_dish, mut o_key, mut o_label, mut o_pos, mut o_choices, mut o_default) =
+        (vec![], vec![], vec![], vec![], vec![], vec![]);
     // (removed, added) -> (dishes, variants)
     let mut swaps: HashMap<(Uuid, Uuid), (HashSet<Uuid>, usize)> = HashMap::new();
 
     for (dish_id, members) in &by_dish {
-        let default = members.iter().find(|v| v.is_default).copied().unwrap_or(members[0]);
+        let default = members
+            .iter()
+            .find(|v| v.is_default)
+            .copied()
+            .unwrap_or(members[0]);
 
         // Protein and its usual amount (the median) for spotting double portions.
         let mut usual: HashMap<&str, Vec<f64>> = HashMap::new();
@@ -192,8 +214,10 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
             .max_by_key(|(sig, n)| (**n, **sig == &facts[&default.id].signature))
             .map(|(sig, _)| sig)
             .unwrap();
-        let mut version_of: HashMap<&BTreeSet<Uuid>, String> = HashMap::from([(standard, "standard".to_string())]);
-        let mut version_labels: HashMap<String, String> = HashMap::from([("standard".into(), "Standard".into())]);
+        let mut version_of: HashMap<&BTreeSet<Uuid>, String> =
+            HashMap::from([(standard, "standard".to_string())]);
+        let mut version_labels: HashMap<String, String> =
+            HashMap::from([("standard".into(), "Standard".into())]);
         for (sig, n) in &sig_count {
             if version_of.contains_key(sig) {
                 continue;
@@ -206,28 +230,54 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
                 e.0.insert(*dish_id);
                 e.1 += n;
             }
-            version_labels.insert(value.clone(), describe_difference(&added, &removed, &name_of));
+            version_labels.insert(
+                value.clone(),
+                describe_difference(&added, &removed, &name_of),
+            );
             version_of.insert(sig, value);
         }
 
         let mut values: HashMap<&str, HashMap<String, Vec<&VariantRow>>> = HashMap::new();
         for v in members {
             let f = &facts[&v.id];
-            let protein = f.protein.map(|(p, _)| p.to_string()).unwrap_or_else(|| "none".into());
+            let protein = f
+                .protein
+                .map(|(p, _)| p.to_string())
+                .unwrap_or_else(|| "none".into());
             let double = f.titled_double
-                || f.protein.and_then(|(p, oz)| oz.zip(usual.get(p))).is_some_and(|(oz, u)| oz >= u * DOUBLE_RATIO);
+                || f.protein
+                    .and_then(|(p, oz)| oz.zip(usual.get(p)))
+                    .is_some_and(|(oz, u)| oz >= u * DOUBLE_RATIO);
             let portion = if double { "double" } else { "regular" };
             let version = version_of[&f.signature].clone();
-            for (key, value) in [("protein", protein), ("portion", portion.to_string()), ("version", version)] {
+            for (key, value) in [
+                ("protein", protein),
+                ("portion", portion.to_string()),
+                ("version", version),
+            ] {
                 a_variant.push(v.id);
                 a_key.push(key.to_string());
                 a_value.push(value.clone());
-                values.entry(key).or_default().entry(value).or_default().push(v);
+                values
+                    .entry(key)
+                    .or_default()
+                    .entry(value)
+                    .or_default()
+                    .push(v);
             }
         }
 
-        for (pos, (key, label)) in [("protein", "Protein"), ("portion", "Portion"), ("version", "Version")].into_iter().enumerate() {
-            let Some(vals) = values.get(key).filter(|vals| vals.len() > 1) else { continue };
+        for (pos, (key, label)) in [
+            ("protein", "Protein"),
+            ("portion", "Portion"),
+            ("version", "Version"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let Some(vals) = values.get(key).filter(|vals| vals.len() > 1) else {
+                continue;
+            };
             match key {
                 "protein" => stats.with_protein_choice += 1,
                 "portion" => stats.with_double_portion += 1,
@@ -247,7 +297,10 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
                 })
                 .collect();
             choices.sort_by_key(|c| std::cmp::Reverse(c["variants"].as_u64()));
-            let default_value = vals.iter().find(|(_, vs)| vs.iter().any(|v| v.id == default.id)).map(|(k, _)| k.clone());
+            let default_value = vals
+                .iter()
+                .find(|(_, vs)| vs.iter().any(|v| v.id == default.id))
+                .map(|(k, _)| k.clone());
             o_dish.push(*dish_id);
             o_key.push(key.to_string());
             o_label.push(label.to_string());
@@ -259,8 +312,12 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
     stats.attributes = a_variant.len();
 
     let mut tx = pool.begin().await?;
-    sqlx::query("DELETE FROM variant_attributes").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM dish_options").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM variant_attributes")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM dish_options")
+        .execute(&mut *tx)
+        .await?;
     sqlx::query("INSERT INTO variant_attributes (variant_id, key, value) SELECT * FROM UNNEST($1::uuid[], $2::text[], $3::text[])")
         .bind(&a_variant)
         .bind(&a_key)
@@ -286,13 +343,26 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
     // names, others a substitution.
     let mut pairs: HashMap<(Uuid, Uuid), (HashSet<Uuid>, usize, usize)> = HashMap::new(); // dishes, a→b, b→a
     for ((removed, added), (dishes, variants)) in &swaps {
-        let key = if removed < added { (*removed, *added) } else { (*added, *removed) };
+        let key = if removed < added {
+            (*removed, *added)
+        } else {
+            (*added, *removed)
+        };
         let e = pairs.entry(key).or_default();
         e.0.extend(dishes);
-        if key.0 == *removed { e.1 += variants } else { e.2 += variants }
+        if key.0 == *removed {
+            e.1 += variants
+        } else {
+            e.2 += variants
+        }
     }
-    sqlx::query("DELETE FROM review_items WHERE kind = 'food_swap' AND status = 'open'").execute(&mut *tx).await?;
-    for ((removed, added), (dishes, forward, backward)) in pairs.iter().filter(|(_, (d, _, _))| d.len() >= MIN_SWAP_DISHES) {
+    sqlx::query("DELETE FROM review_items WHERE kind = 'food_swap' AND status = 'open'")
+        .execute(&mut *tx)
+        .await?;
+    for ((removed, added), (dishes, forward, backward)) in pairs
+        .iter()
+        .filter(|(_, (d, _, _))| d.len() >= MIN_SWAP_DISHES)
+    {
         let variants = forward + backward;
         let (rn, an) = (name_of(removed), name_of(added));
         let (nr, na) = (normalize_name(&rn), normalize_name(&an));
@@ -312,7 +382,11 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
 }
 
 /// "with Squash instead of Zucchini", "with Broccoli added", "without Feta", or a count when it's many things.
-fn describe_difference(added: &[Uuid], removed: &[Uuid], name_of: &impl Fn(&Uuid) -> String) -> String {
+fn describe_difference(
+    added: &[Uuid],
+    removed: &[Uuid],
+    name_of: &impl Fn(&Uuid) -> String,
+) -> String {
     let added: Vec<String> = added.iter().map(name_of).collect();
     let removed: Vec<String> = removed.iter().map(name_of).collect();
     match (added.as_slice(), removed.as_slice()) {
@@ -327,13 +401,20 @@ fn describe_difference(added: &[Uuid], removed: &[Uuid], name_of: &impl Fn(&Uuid
             if sample.is_empty() {
                 sample = removed.iter().map(String::as_str).take(2).collect();
             }
-            format!("{} ingredient changes, incl. {}", added.len() + removed.len(), sample.join(", "))
+            format!(
+                "{} ingredient changes, incl. {}",
+                added.len() + removed.len(),
+                sample.join(", ")
+            )
         }
     }
 }
 
 fn years(vs: &[&VariantRow]) -> String {
-    let ys: Vec<i32> = vs.iter().filter_map(|v| v.published.map(|p| p.year())).collect();
+    let ys: Vec<i32> = vs
+        .iter()
+        .filter_map(|v| v.published.map(|p| p.year()))
+        .collect();
     match (ys.iter().min(), ys.iter().max()) {
         (Some(a), Some(b)) if a == b => a.to_string(),
         (Some(a), Some(b)) => format!("{a}–{b}"),

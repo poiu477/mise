@@ -35,7 +35,11 @@ pub enum Op {
     /// `from` and `into` are the same food: move everything to `into` and delete `from`.
     Merge { from: String, into: String },
     /// Set a property, e.g. `default_flexibility` = "strict" or `store_section` = "Dairy".
-    Set { food: String, key: String, value: Value },
+    Set {
+        food: String,
+        key: String,
+        value: Value,
+    },
 }
 
 fn default_kind() -> String {
@@ -44,19 +48,27 @@ fn default_kind() -> String {
 
 pub async fn apply(pool: &PgPool, op: &Op) -> Result<String> {
     let mut tx = pool.begin().await?;
-    let done = apply_in(&mut tx, op).await.with_context(|| format!("{op:?}"))?;
+    let done = apply_in(&mut tx, op)
+        .await
+        .with_context(|| format!("{op:?}"))?;
     tx.commit().await?;
     Ok(done)
 }
 
 /// Apply a list of operations from a JSON file (an array of ops), all or nothing.
 pub async fn apply_file(pool: &PgPool, path: &std::path::Path) -> Result<Vec<String>> {
-    let ops: Vec<Op> = serde_json::from_reader(std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?)
-        .with_context(|| format!("reading {}", path.display()))?;
+    let ops: Vec<Op> = serde_json::from_reader(
+        std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?,
+    )
+    .with_context(|| format!("reading {}", path.display()))?;
     let mut tx = pool.begin().await?;
     let mut log = Vec::new();
     for (i, op) in ops.iter().enumerate() {
-        log.push(apply_in(&mut tx, op).await.with_context(|| format!("op {} {op:?}", i + 1))?);
+        log.push(
+            apply_in(&mut tx, op)
+                .await
+                .with_context(|| format!("op {} {op:?}", i + 1))?,
+        );
     }
     tx.commit().await?;
     Ok(log)
@@ -64,7 +76,12 @@ pub async fn apply_file(pool: &PgPool, path: &std::path::Path) -> Result<Vec<Str
 
 async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<String> {
     match op {
-        Op::Add { name, parent, kind, aliases } => {
+        Op::Add {
+            name,
+            parent,
+            kind,
+            aliases,
+        } => {
             if let Some(existing) = try_find(tx, name).await? {
                 adopt(tx, existing).await?;
                 return Ok(format!("{name}: already exists"));
@@ -98,7 +115,11 @@ async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<String>
             if child == parent_id || is_ancestor(tx, child, parent_id).await? {
                 bail!("{parent} is {food} or one of its descendants; that would make a loop");
             }
-            sqlx::query("UPDATE foods SET parent_id = $2 WHERE id = $1").bind(child).bind(parent_id).execute(&mut **tx).await?;
+            sqlx::query("UPDATE foods SET parent_id = $2 WHERE id = $1")
+                .bind(child)
+                .bind(parent_id)
+                .execute(&mut **tx)
+                .await?;
             sqlx::query(
                 "DELETE FROM food_relations WHERE kind = 'related'
                    AND ((from_food = $1 AND to_food = $2) OR (from_food = $2 AND to_food = $1))",
@@ -114,7 +135,10 @@ async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<String>
         }
         Op::Unparent { food } => {
             let id = find(tx, food).await?;
-            sqlx::query("UPDATE foods SET parent_id = NULL WHERE id = $1").bind(id).execute(&mut **tx).await?;
+            sqlx::query("UPDATE foods SET parent_id = NULL WHERE id = $1")
+                .bind(id)
+                .execute(&mut **tx)
+                .await?;
             close_reviews(tx, id, "unparent").await?;
             adopt(tx, id).await?;
             Ok(format!("{food} is now top-level"))
@@ -122,7 +146,9 @@ async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<String>
         Op::Alias { food, alias } => {
             let id = find(tx, food).await?;
             if let Some(other) = try_find(tx, alias).await?.filter(|o| *o != id) {
-                bail!("'{alias}' already names another food ({other}); use merge if they are the same food");
+                bail!(
+                    "'{alias}' already names another food ({other}); use merge if they are the same food"
+                );
             }
             add_alias(tx, id, alias).await?;
             adopt(tx, id).await?;
@@ -144,10 +170,17 @@ async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<String>
                 "UPDATE food_relations SET to_food = $2 WHERE to_food = $1 AND from_food <> $2",
                 "DELETE FROM food_relations WHERE from_food = $1 OR to_food = $1",
             ] {
-                sqlx::query(sql).bind(from_id).bind(into_id).execute(&mut **tx).await?;
+                sqlx::query(sql)
+                    .bind(from_id)
+                    .bind(into_id)
+                    .execute(&mut **tx)
+                    .await?;
             }
             close_reviews(tx, from_id, "merged").await?;
-            sqlx::query("DELETE FROM foods WHERE id = $1").bind(from_id).execute(&mut **tx).await?;
+            sqlx::query("DELETE FROM foods WHERE id = $1")
+                .bind(from_id)
+                .execute(&mut **tx)
+                .await?;
             adopt(tx, into_id).await?;
             Ok(format!("merged {from} into {into}"))
         }
@@ -162,7 +195,9 @@ async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<String>
             .await?
             .rows_affected();
             adopt(tx, a).await?;
-            Ok(format!("{food} and {other}: {removed} related link(s) removed"))
+            Ok(format!(
+                "{food} and {other}: {removed} related link(s) removed"
+            ))
         }
         Op::Set { food, key, value } => {
             let id = find(tx, food).await?;
@@ -191,7 +226,10 @@ async fn try_find(tx: &mut Transaction<'_, Postgres>, name: &str) -> Result<Opti
     match ids.as_slice() {
         [] => Ok(None),
         [id] => Ok(Some(*id)),
-        _ => bail!("'{name}' matches {} foods; merge them first or use a more specific name", ids.len()),
+        _ => bail!(
+            "'{name}' matches {} foods; merge them first or use a more specific name",
+            ids.len()
+        ),
     }
 }
 
@@ -219,7 +257,10 @@ async fn add_alias(tx: &mut Transaction<'_, Postgres>, food: Uuid, name: &str) -
 
 /// A food someone edited is theirs: matching resets leave it alone.
 async fn adopt(tx: &mut Transaction<'_, Postgres>, food: Uuid) -> Result<()> {
-    sqlx::query("UPDATE foods SET origin = 'user' WHERE id = $1 AND origin = 'matched'").bind(food).execute(&mut **tx).await?;
+    sqlx::query("UPDATE foods SET origin = 'user' WHERE id = $1 AND origin = 'matched'")
+        .bind(food)
+        .execute(&mut **tx)
+        .await?;
     Ok(())
 }
 
@@ -239,7 +280,11 @@ async fn unique_slug(tx: &mut Transaction<'_, Postgres>, name: &str) -> Result<S
     let base = slugify(name);
     let mut slug = base.clone();
     let mut n = 2;
-    while sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM foods WHERE slug = $1)").bind(&slug).fetch_one(&mut **tx).await? {
+    while sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM foods WHERE slug = $1)")
+        .bind(&slug)
+        .fetch_one(&mut **tx)
+        .await?
+    {
         slug = format!("{base}-{n}");
         n += 1;
     }

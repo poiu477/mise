@@ -19,7 +19,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     // A weak signal can hang rather than fail: give up after a few seconds and open from the device.
-    const cfg = await api.GET("/api/auth/config", { signal: AbortSignal.timeout(6000) }).catch(() => null);
+    const cfg = await api
+      .GET("/api/auth/config", { signal: AbortSignal.timeout(6000) })
+      .catch(() => null);
     if (!cfg?.data) return setSession({ status: "offline", me: rememberedMe() });
     const info = cfg.data;
     if (info.setup_required) return setSession({ status: "setup", info });
@@ -36,7 +38,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refresh();
-    whenUnauthorized(() => setSession((s) => (s.status === "in" ? { status: "out", info: s.info } : s)));
+    whenUnauthorized(() =>
+      setSession((s) => (s.status === "in" ? { status: "out", info: s.info } : s)),
+    );
   }, [refresh]);
 
   // Back in reach: check again.
@@ -51,7 +55,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, [session.status, refresh]);
 
-  return <SessionContext.Provider value={{ session, refresh, signOut }}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider value={{ session, refresh, signOut }}>
+      {children}
+    </SessionContext.Provider>
+  );
 }
 
 export function useSession(): Ctx {

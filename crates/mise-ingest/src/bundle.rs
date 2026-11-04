@@ -155,11 +155,16 @@ impl Batch {
         self.rec_id.push(variant_id); // a record and its variant share an id; they are 1:1 for imports
         self.rec_external.push(v.external_id.clone());
         self.rec_url.push(v.url.clone());
-        self.rec_raw.push(v.raw.as_ref().unwrap_or(&Value::Null).to_string());
+        self.rec_raw
+            .push(v.raw.as_ref().unwrap_or(&Value::Null).to_string());
         self.rec_hash.push(hash);
 
         let has_steps = v.steps.iter().any(|s| !s.text.trim().is_empty());
-        let mut meta = if v.meta.is_object() { v.meta.clone() } else { json!({}) };
+        let mut meta = if v.meta.is_object() {
+            v.meta.clone()
+        } else {
+            json!({})
+        };
         meta["lineage"] = json!({ "parent_external_id": v.parent_external_id });
         meta["media"] = json!({
             "hero": v.hero_image,
@@ -175,7 +180,8 @@ impl Batch {
         self.var_published.push(v.published_at.clone());
         self.var_has_steps.push(has_steps);
         self.var_meta.push(meta.to_string());
-        self.var_type.push(v.content_type.clone().unwrap_or_else(|| "recipe".into()));
+        self.var_type
+            .push(v.content_type.clone().unwrap_or_else(|| "recipe".into()));
 
         let mut seen_yields = HashSet::new();
         for s in v.yields.iter().copied().filter(|s| *s > 0.0) {
@@ -204,14 +210,24 @@ impl Batch {
             self.line_position.push(pos as i32);
             self.line_name.push(ing.name.clone());
             self.line_shipped.push(ing.shipped);
-            self.line_allergens.push(ing.allergens.iter().flatten().cloned().collect::<Vec<_>>().join("|"));
+            self.line_allergens.push(
+                ing.allergens
+                    .iter()
+                    .flatten()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("|"),
+            );
             self.line_note.push(ing.note.clone());
-            self.line_source_food.push(ing.source_food.as_ref().map(|s| s.to_string()));
+            self.line_source_food
+                .push(ing.source_food.as_ref().map(|s| s.to_string()));
         }
 
         let mut seen_amounts: HashSet<(Uuid, u64)> = HashSet::new();
         for a in &v.amounts {
-            let (Some(line), Some(servings)) = (line_by_key.get(&a.key), a.servings) else { continue };
+            let (Some(line), Some(servings)) = (line_by_key.get(&a.key), a.servings) else {
+                continue;
+            };
             if servings <= 0.0 || !seen_amounts.insert((*line, servings.to_bits())) {
                 continue;
             }
@@ -329,10 +345,15 @@ impl Batch {
 }
 
 pub async fn import_bundle(pool: &PgPool, dir: &Path) -> Result<ImportStats> {
-    let manifest: Manifest = serde_json::from_reader(File::open(dir.join("manifest.json")).context("opening manifest.json")?)
-        .context("reading manifest.json")?;
+    let manifest: Manifest = serde_json::from_reader(
+        File::open(dir.join("manifest.json")).context("opening manifest.json")?,
+    )
+    .context("reading manifest.json")?;
     if manifest.format != FORMAT {
-        bail!("unsupported bundle format {:?} (expected {FORMAT})", manifest.format);
+        bail!(
+            "unsupported bundle format {:?} (expected {FORMAT})",
+            manifest.format
+        );
     }
 
     let source_id: Uuid = sqlx::query_scalar(
@@ -359,7 +380,8 @@ pub async fn import_bundle(pool: &PgPool, dir: &Path) -> Result<ImportStats> {
         latest.insert(ext, (hash, id));
     }
 
-    let reader = BufReader::new(File::open(dir.join("variants.ndjson")).context("opening variants.ndjson")?);
+    let reader =
+        BufReader::new(File::open(dir.join("variants.ndjson")).context("opening variants.ndjson")?);
     let mut stats = ImportStats::default();
     let mut batch = Batch::default();
     for (n, line) in reader.lines().enumerate() {
@@ -367,8 +389,8 @@ pub async fn import_bundle(pool: &PgPool, dir: &Path) -> Result<ImportStats> {
         if line.trim().is_empty() {
             continue;
         }
-        let v: BundleVariant =
-            serde_json::from_str(&line).with_context(|| format!("variants.ndjson line {}", n + 1))?;
+        let v: BundleVariant = serde_json::from_str(&line)
+            .with_context(|| format!("variants.ndjson line {}", n + 1))?;
         stats.read += 1;
         let hash = v.content_hash();
         let parent = match latest.get(&v.external_id) {

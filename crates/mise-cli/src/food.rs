@@ -52,7 +52,17 @@ pub async fn run(pool: &PgPool, cmd: FoodCommand) -> Result<()> {
             }
             return Ok(());
         }
-        FoodCommand::Add { name, parent, kind, aliases } => Op::Add { name, parent, kind, aliases },
+        FoodCommand::Add {
+            name,
+            parent,
+            kind,
+            aliases,
+        } => Op::Add {
+            name,
+            parent,
+            kind,
+            aliases,
+        },
         FoodCommand::SetParent { food, parent } => Op::SetParent { food, parent },
         FoodCommand::Unparent { food } => Op::Unparent { food },
         FoodCommand::Alias { food, alias } => Op::Alias { food, alias },
@@ -68,7 +78,14 @@ pub async fn run(pool: &PgPool, cmd: FoodCommand) -> Result<()> {
 }
 
 async fn show(pool: &PgPool, name: &str) -> Result<()> {
-    let row: Option<(uuid::Uuid, String, String, String, Option<String>, serde_json::Value)> = sqlx::query_as(
+    let row: Option<(
+        uuid::Uuid,
+        String,
+        String,
+        String,
+        Option<String>,
+        serde_json::Value,
+    )> = sqlx::query_as(
         "SELECT f.id, f.name, f.kind::text, f.origin, p.name, f.props FROM foods f
          LEFT JOIN foods p ON p.id = f.parent_id
          LEFT JOIN food_aliases a ON a.food_id = f.id
@@ -83,12 +100,22 @@ async fn show(pool: &PgPool, name: &str) -> Result<()> {
         anyhow::bail!("no food named '{name}'");
     };
     let list = |sql: &'static str| async move {
-        sqlx::query_scalar::<_, String>(sql).bind(id).fetch_all(pool).await.map(|v| v.join(", "))
+        sqlx::query_scalar::<_, String>(sql)
+            .bind(id)
+            .fetch_all(pool)
+            .await
+            .map(|v| v.join(", "))
     };
     println!("{name}  ({kind}, origin {origin})");
     println!("  parent:   {}", parent.unwrap_or_else(|| "—".into()));
-    println!("  children: {}", list("SELECT name FROM foods WHERE parent_id = $1 ORDER BY name").await?);
-    println!("  aliases:  {}", list("SELECT alias FROM food_aliases WHERE food_id = $1 ORDER BY alias").await?);
+    println!(
+        "  children: {}",
+        list("SELECT name FROM foods WHERE parent_id = $1 ORDER BY name").await?
+    );
+    println!(
+        "  aliases:  {}",
+        list("SELECT alias FROM food_aliases WHERE food_id = $1 ORDER BY alias").await?
+    );
     println!(
         "  related:  {}",
         list("SELECT f.name FROM food_relations r JOIN foods f ON f.id = CASE WHEN r.from_food = $1 THEN r.to_food ELSE r.from_food END
@@ -98,16 +125,26 @@ async fn show(pool: &PgPool, name: &str) -> Result<()> {
     if props != serde_json::json!({}) {
         println!("  props:    {props}");
     }
-    let uses: i64 = sqlx::query_scalar("SELECT count(*) FROM ingredient_lines WHERE food_id = $1").bind(id).fetch_one(pool).await?;
+    let uses: i64 = sqlx::query_scalar("SELECT count(*) FROM ingredient_lines WHERE food_id = $1")
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
     println!("  used in:  {uses} ingredient lines");
-    let facts: Vec<(String, String, serde_json::Value)> =
-        sqlx::query_as("SELECT kind, tier::text, value FROM food_facts WHERE food_id = $1 ORDER BY kind, tier")
-            .bind(id)
-            .fetch_all(pool)
-            .await?;
+    let facts: Vec<(String, String, serde_json::Value)> = sqlx::query_as(
+        "SELECT kind, tier::text, value FROM food_facts WHERE food_id = $1 ORDER BY kind, tier",
+    )
+    .bind(id)
+    .fetch_all(pool)
+    .await?;
     for (kind, tier, value) in facts {
-        let text = value.as_str().map(str::to_string).unwrap_or_else(|| value.to_string());
-        println!("  {kind} [{tier}]: {}", text.chars().take(160).collect::<String>());
+        let text = value
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| value.to_string());
+        println!(
+            "  {kind} [{tier}]: {}",
+            text.chars().take(160).collect::<String>()
+        );
     }
     Ok(())
 }

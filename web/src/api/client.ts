@@ -11,14 +11,20 @@ export const whenUnauthorized = (f: () => void) => {
 };
 api.use({
   onResponse({ response }) {
-    if (response.status === 401 && !new URL(response.url).pathname.startsWith("/api/auth/")) onUnauthorized?.();
+    if (response.status === 401 && !new URL(response.url).pathname.startsWith("/api/auth/"))
+      onUnauthorized?.();
     return response;
   },
 });
 
 /** The API's error message, for showing to people. */
 export function errorText(error: unknown, fallback = "Something went wrong. Try again."): string {
-  if (error && typeof error === "object" && "error" in error && typeof (error as { error: unknown }).error === "string") {
+  if (
+    error &&
+    typeof error === "object" &&
+    "error" in error &&
+    typeof (error as { error: unknown }).error === "string"
+  ) {
     const text = (error as { error: string }).error;
     return text.charAt(0).toUpperCase() + text.slice(1) + (/[.!?]$/.test(text) ? "" : ".");
   }

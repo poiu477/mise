@@ -48,13 +48,22 @@ struct Line {
 
 /// Deletes imported variants of the bundle's source whose record the bundle no longer contains.
 pub async fn prune_missing_from(pool: &PgPool, dir: &Path) -> Result<PruneStats> {
-    let manifest: Manifest = serde_json::from_reader(File::open(dir.join("manifest.json")).context("opening manifest.json")?)
-        .context("reading manifest.json")?;
+    let manifest: Manifest = serde_json::from_reader(
+        File::open(dir.join("manifest.json")).context("opening manifest.json")?,
+    )
+    .context("reading manifest.json")?;
     let mut present = HashSet::new();
-    for line in BufReader::new(File::open(dir.join("variants.ndjson")).context("opening variants.ndjson")?).lines() {
+    for line in
+        BufReader::new(File::open(dir.join("variants.ndjson")).context("opening variants.ndjson")?)
+            .lines()
+    {
         let line = line?;
         if !line.trim().is_empty() {
-            present.insert(serde_json::from_str::<Line>(&line).context("reading variants.ndjson")?.external_id);
+            present.insert(
+                serde_json::from_str::<Line>(&line)
+                    .context("reading variants.ndjson")?
+                    .external_id,
+            );
         }
     }
     let present: Vec<String> = present.into_iter().collect();
@@ -84,7 +93,10 @@ async fn delete_pruned(mut tx: Transaction<'_, Postgres>) -> Result<PruneStats> 
     sqlx::query("UPDATE dishes SET default_variant_id = NULL WHERE default_variant_id IN (SELECT id FROM pruned)")
         .execute(&mut *tx)
         .await?;
-    stats.variants = sqlx::query("DELETE FROM variants WHERE id IN (SELECT id FROM pruned)").execute(&mut *tx).await?.rows_affected();
+    stats.variants = sqlx::query("DELETE FROM variants WHERE id IN (SELECT id FROM pruned)")
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
     stats.source_records = sqlx::query(
         "DELETE FROM source_records sr WHERE sr.id IN (SELECT source_record_id FROM pruned)
          AND NOT EXISTS (SELECT 1 FROM variants v WHERE v.source_record_id = sr.id)",

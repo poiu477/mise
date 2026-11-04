@@ -21,7 +21,11 @@ export function LoginPage() {
     setBusy(false);
     if (error) {
       const wait = response.headers.get("retry-after");
-      setError(response.status === 429 && wait ? `Too many attempts. Try again in ${wait} seconds.` : errorText(error));
+      setError(
+        response.status === 429 && wait
+          ? `Too many attempts. Try again in ${wait} seconds.`
+          : errorText(error),
+      );
       return;
     }
     await refresh();
@@ -40,11 +44,23 @@ export function LoginPage() {
         <form className="form" onSubmit={submit}>
           <label>
             Username
-            <input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus />
+            <input
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              autoFocus
+            />
           </label>
           <label>
             Password
-            <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           </label>
           <button type="submit" className="primary" disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
@@ -54,7 +70,10 @@ export function LoginPage() {
       {info?.oidc && (
         <>
           {info.local && <p className="or">or</p>}
-          <a className="button sso" href={`/api/auth/oidc/start?return_to=${encodeURIComponent(returnTo)}`}>
+          <a
+            className="button sso"
+            href={`/api/auth/oidc/start?return_to=${encodeURIComponent(returnTo)}`}
+          >
             Sign in with {info.oidc}
           </a>
         </>
