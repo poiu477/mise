@@ -1,6 +1,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { keepListsOnDevice } from "../pages/ShoppingPage";
-import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
+import {
+  Link,
+  NavLink,
+  Navigate,
+  Outlet,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router";
 import { useSession } from "../session";
 
 const OPEN = ["/login", "/setup"];
@@ -12,14 +20,20 @@ export function Layout() {
   const onOpenPage = OPEN.includes(location.pathname);
 
   if (session.status === "loading") return <p className="empty">Loading…</p>;
-  if (session.status === "offline" && !session.me) return <p className="empty">Can't reach the mise server. Check that it's running and reload.</p>;
-  if (session.status === "setup" && location.pathname !== "/setup") return <Navigate to="/setup" replace />;
+  if (session.status === "offline" && !session.me)
+    return (
+      <p className="empty">Can't reach the mise server. Check that it's running and reload.</p>
+    );
+  if (session.status === "setup" && location.pathname !== "/setup")
+    return <Navigate to="/setup" replace />;
   if (session.status === "out" && location.pathname !== "/login") {
     return <Navigate to={`/login?return_to=${encodeURIComponent(here)}`} replace />;
   }
   if (session.status === "in" && onOpenPage) {
     const back = new URLSearchParams(location.search).get("return_to");
-    return <Navigate to={back && back.startsWith("/") && !back.startsWith("//") ? back : "/"} replace />;
+    return (
+      <Navigate to={back && back.startsWith("/") && !back.startsWith("//") ? back : "/"} replace />
+    );
   }
   if (onOpenPage) {
     return (
@@ -31,7 +45,9 @@ export function Layout() {
   return (
     <div className="app">
       <TopBar />
-      {session.status === "offline" && <p className="offline-bar">Offline: showing what this device has saved.</p>}
+      {session.status === "offline" && (
+        <p className="offline-bar">Offline: showing what this device has saved.</p>
+      )}
       <main className="content">
         <Outlet />
       </main>
@@ -71,7 +87,14 @@ function TopBar() {
         <span>mise</span>
       </Link>
       <form className="search" role="search" onSubmit={submit}>
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search dishes" aria-label="Search dishes" enterKeyHint="search" />
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search dishes"
+          aria-label="Search dishes"
+          enterKeyHint="search"
+        />
       </form>
       {me && (
         <nav className="mainnav" aria-label="Main">

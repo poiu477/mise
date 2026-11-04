@@ -13,7 +13,12 @@ export function pick(variants: VariantSummary[], sel: Selection): VariantSummary
 }
 
 /** Whether choosing `value` for `key` keeps the other choices possible. */
-export function available(variants: VariantSummary[], sel: Selection, key: string, value: string): boolean {
+export function available(
+  variants: VariantSummary[],
+  sel: Selection,
+  key: string,
+  value: string,
+): boolean {
   return variants.some((v) => v.attributes[key] === value && matches(v, sel, key));
 }
 
@@ -31,7 +36,13 @@ export function selectionOf(v: VariantSummary | undefined, options: DishOption[]
  * Choose `value` for `key`. When no version has it together with the other choices, the others follow the
  * newest version that has it, so a toggle never leads nowhere.
  */
-export function choose(variants: VariantSummary[], options: DishOption[], sel: Selection, key: string, value: string): Selection {
+export function choose(
+  variants: VariantSummary[],
+  options: DishOption[],
+  sel: Selection,
+  key: string,
+  value: string,
+): Selection {
   const next = { ...sel, [key]: value };
   if (pick(variants, next)) return next;
   const withIt = variants.filter((v) => v.attributes[key] === value);

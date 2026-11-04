@@ -10,7 +10,11 @@ export default tseslint.config(
   { ignores: ["dist", "src/api/schema.d.ts"] },
   {
     files: ["**/*.{ts,tsx}"],
-    extends: [js.configs.recommended, ...tseslint.configs.recommended, reactHooks.configs.flat.recommended],
+    extends: [
+      js.configs.recommended,
+      ...tseslint.configs.recommended,
+      reactHooks.configs.flat.recommended,
+    ],
     languageOptions: { globals: globals.browser },
     rules: {
       // Pages still reset and load their data inside effects; moving loading to a data-fetching layer is on the task

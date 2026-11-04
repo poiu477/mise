@@ -21,7 +21,15 @@ export function SearchPage() {
   const load = async (offset: number, signal?: AbortSignal) => {
     setState("loading");
     const { data, error } = await api.GET("/api/dishes", {
-      params: { query: { q: q || undefined, ingredient: ingredient || undefined, type: type || undefined, limit: PAGE, offset } },
+      params: {
+        query: {
+          q: q || undefined,
+          ingredient: ingredient || undefined,
+          type: type || undefined,
+          limit: PAGE,
+          offset,
+        },
+      },
       signal,
     });
     if (signal?.aborted) return;
@@ -53,7 +61,13 @@ export function SearchPage() {
       <div className="filters">
         <div className="segmented" role="radiogroup" aria-label="What to show">
           {TYPES.map((t) => (
-            <button key={t.label} type="button" role="radio" aria-checked={type === t.value} onClick={() => setParam("type", t.value || "all")}>
+            <button
+              key={t.label}
+              type="button"
+              role="radio"
+              aria-checked={type === t.value}
+              onClick={() => setParam("type", t.value || "all")}
+            >
               {t.label}
             </button>
           ))}
@@ -64,12 +78,21 @@ export function SearchPage() {
             type="search"
             defaultValue={ingredient}
             placeholder="an ingredient"
-            onKeyDown={(e) => e.key === "Enter" && setParam("ingredient", (e.target as HTMLInputElement).value.trim())}
-            onBlur={(e) => e.target.value.trim() !== ingredient && setParam("ingredient", e.target.value.trim())}
+            onKeyDown={(e) =>
+              e.key === "Enter" &&
+              setParam("ingredient", (e.target as HTMLInputElement).value.trim())
+            }
+            onBlur={(e) =>
+              e.target.value.trim() !== ingredient && setParam("ingredient", e.target.value.trim())
+            }
           />
         </label>
         <p className="count" aria-live="polite">
-          {state === "error" ? "Couldn't reach the server." : state === "ready" || items.length ? `${total.toLocaleString()} dishes` : "Loading…"}
+          {state === "error"
+            ? "Couldn't reach the server."
+            : state === "ready" || items.length
+              ? `${total.toLocaleString()} dishes`
+              : "Loading…"}
         </p>
       </div>
 
@@ -93,7 +116,11 @@ export function SearchPage() {
       </ul>
 
       {state === "ready" && items.length === 0 && (
-        <p className="empty">{q || ingredient ? "No dishes match. Try fewer words." : "No dishes yet. Import a seed bundle or add a recipe to get started."}</p>
+        <p className="empty">
+          {q || ingredient
+            ? "No dishes match. Try fewer words."
+            : "No dishes yet. Import a seed bundle or add a recipe to get started."}
+        </p>
       )}
       {items.length < total && (
         <div className="more">

@@ -25,23 +25,33 @@ export function DishPage() {
     const ctrl = new AbortController();
     setDish(null);
     setMissing(false);
-    api.GET("/api/dishes/{slug}", { params: { path: { slug } }, signal: ctrl.signal }).then(({ data, response }) => {
-      if (ctrl.signal.aborted) return;
-      if (!data) return setMissing(response.status === 404);
-      setDish(data);
-      // Choices in the URL (?protein=Pork) win; the rest come from the pinned or default version.
-      const start = data.variants.find((v) => v.id === pinned) ?? data.variants.find((v) => v.id === data.default_variant);
-      const fromUrl = Object.fromEntries(data.options.flatMap((o) => (params.get(o.key) ? [[o.key, params.get(o.key)!]] : [])));
-      const wanted = { ...selectionOf(start, data.options), ...fromUrl };
-      setSel(pick(data.variants, wanted) ? wanted : selectionOf(start, data.options));
-    });
+    api
+      .GET("/api/dishes/{slug}", { params: { path: { slug } }, signal: ctrl.signal })
+      .then(({ data, response }) => {
+        if (ctrl.signal.aborted) return;
+        if (!data) return setMissing(response.status === 404);
+        setDish(data);
+        // Choices in the URL (?protein=Pork) win; the rest come from the pinned or default version.
+        const start =
+          data.variants.find((v) => v.id === pinned) ??
+          data.variants.find((v) => v.id === data.default_variant);
+        const fromUrl = Object.fromEntries(
+          data.options.flatMap((o) => (params.get(o.key) ? [[o.key, params.get(o.key)!]] : [])),
+        );
+        const wanted = { ...selectionOf(start, data.options), ...fromUrl };
+        setSel(pick(data.variants, wanted) ? wanted : selectionOf(start, data.options));
+      });
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   const chosen = useMemo(() => {
     if (!dish) return undefined;
-    return dish.variants.find((v) => v.id === pinned) ?? pick(dish.variants, sel) ?? dish.variants.find((v) => v.id === dish.default_variant);
+    return (
+      dish.variants.find((v) => v.id === pinned) ??
+      pick(dish.variants, sel) ??
+      dish.variants.find((v) => v.id === dish.default_variant)
+    );
   }, [dish, sel, pinned]);
 
   const defaultServings = (chosen?.yields.includes(2) ? 2 : chosen?.yields[0]) ?? 2;
@@ -53,11 +63,16 @@ export function DishPage() {
     if (!chosen) return;
     const ctrl = new AbortController();
     setLoadingVariant(true);
-    api.GET("/api/variants/{id}", { params: { path: { id: chosen.id }, query: { servings } }, signal: ctrl.signal }).then(({ data }) => {
-      if (ctrl.signal.aborted) return;
-      if (data) setVariant(data);
-      setLoadingVariant(false);
-    });
+    api
+      .GET("/api/variants/{id}", {
+        params: { path: { id: chosen.id }, query: { servings } },
+        signal: ctrl.signal,
+      })
+      .then(({ data }) => {
+        if (ctrl.signal.aborted) return;
+        if (data) setVariant(data);
+        setLoadingVariant(false);
+      });
     return () => ctrl.abort();
   }, [chosen, servings]);
 
@@ -77,7 +92,8 @@ export function DishPage() {
   const setServings = (n: number | ((cur: number) => number)) =>
     setChosenServings((cur) => (typeof n === "function" ? n(cur ?? defaultServings) : n));
   useEffect(() => {
-    if (chosenServings !== undefined && String(chosenServings) !== params.get("s")) update(() => ({ s: String(chosenServings) }));
+    if (chosenServings !== undefined && String(chosenServings) !== params.get("s"))
+      update(() => ({ s: String(chosenServings) }));
   }, [chosenServings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (missing) {
@@ -96,15 +112,25 @@ export function DishPage() {
   return (
     <article className="dish">
       <div className="hero">
-        {image ? <img src={image.large} alt="" width={1200} height={800} /> : <div className="noimg" aria-hidden="true" />}
+        {image ? (
+          <img src={image.large} alt="" width={1200} height={800} />
+        ) : (
+          <div className="noimg" aria-hidden="true" />
+        )}
       </div>
 
       <header className="dish-head">
         <h1>{dish.title}</h1>
-        {(v?.subtitle ?? chosen.subtitle) && <p className="sub">{v?.subtitle ?? chosen.subtitle}</p>}
+        {(v?.subtitle ?? chosen.subtitle) && (
+          <p className="sub">{v?.subtitle ?? chosen.subtitle}</p>
+        )}
         {chosen.title !== dish.title && <p className="meta">This version: {chosen.title}</p>}
         <p className="meta">
-          {[prep && `${prep} min`, typeof v?.meta.difficulty === "number" && difficulty(v.meta.difficulty as number), year(chosen.published_at)]
+          {[
+            prep && `${prep} min`,
+            typeof v?.meta.difficulty === "number" && difficulty(v.meta.difficulty as number),
+            year(chosen.published_at),
+          ]
             .filter(Boolean)
             .join(" · ")}
         </p>
@@ -130,7 +156,12 @@ export function DishPage() {
                       onClick={() => {
                         const next = choose(dish.variants, dish.options, sel, o.key, c.value);
                         setSel(next);
-                        update(() => ({ v: null, ...Object.fromEntries(dish.options.map((x) => [x.key, next[x.key] ?? null])) }));
+                        update(() => ({
+                          v: null,
+                          ...Object.fromEntries(
+                            dish.options.map((x) => [x.key, next[x.key] ?? null]),
+                          ),
+                        }));
                       }}
                     >
                       {c.label}
@@ -154,9 +185,17 @@ export function DishPage() {
             <ul>
               {v.ingredients.map((i, n) => (
                 <li key={n} className={i.shipped === false ? "pantry" : ""}>
-                  {i.image ? <img src={i.image.small} alt="" loading="lazy" width={40} height={40} /> : <span className="dot" aria-hidden="true" />}
+                  {i.image ? (
+                    <img src={i.image.small} alt="" loading="lazy" width={40} height={40} />
+                  ) : (
+                    <span className="dot" aria-hidden="true" />
+                  )}
                   <span className="amount">
-                    {i.scaled && <span className="approx" title="Scaled from the published amounts">≈</span>}
+                    {i.scaled && (
+                      <span className="approx" title="Scaled from the published amounts">
+                        ≈
+                      </span>
+                    )}
                     {i.amount ?? ""}
                   </span>
                   <span className="name">
@@ -169,7 +208,9 @@ export function DishPage() {
           ) : (
             <p className="empty">Loading…</p>
           )}
-          {v && allergens(v).length > 0 && <p className="allergens">Contains: {allergens(v).join(", ")}</p>}
+          {v && allergens(v).length > 0 && (
+            <p className="allergens">Contains: {allergens(v).join(", ")}</p>
+          )}
         </section>
 
         <section className="steps" aria-labelledby="steps-h">
@@ -178,7 +219,9 @@ export function DishPage() {
           <ol>
             {v?.steps.map((s) => (
               <li key={s.position}>
-                {s.images[0] && <img src={s.images[0].large} alt="" loading="lazy" width={1200} height={800} />}
+                {s.images[0] && (
+                  <img src={s.images[0].large} alt="" loading="lazy" width={1200} height={800} />
+                )}
                 <div className="step-text">
                   <StepText text={s.text} />
                   {(s.check_amounts || s.scaled || s.check) && (
@@ -203,10 +246,20 @@ export function DishPage() {
           <ul>
             {dish.variants.map((x) => (
               <li key={x.id}>
-                <button type="button" className={x.id === chosen.id ? "current" : ""} onClick={() => update(() => ({ v: x.id }))}>
+                <button
+                  type="button"
+                  className={x.id === chosen.id ? "current" : ""}
+                  onClick={() => update(() => ({ v: x.id }))}
+                >
                   <span>{x.title}</span>
                   <span className="meta">
-                    {[year(x.published_at), x.yields.length && `serves ${x.yields.join("/")}`, !x.has_steps && "no steps"].filter(Boolean).join(" · ")}
+                    {[
+                      year(x.published_at),
+                      x.yields.length && `serves ${x.yields.join("/")}`,
+                      !x.has_steps && "no steps",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </button>
               </li>
@@ -239,7 +292,12 @@ const allergens = (v: Variant) => [...new Set(v.ingredients.flatMap((i) => i.all
 function ScaledNotice({ v, servings }: { v: Variant; servings: number }) {
   const ingredients = v.ingredients.some((i) => i.scaled);
   const steps = v.steps.some((s) => s.scaled);
-  const what = ingredients && steps ? "Ingredient amounts marked ≈ and amounts in marked steps" : ingredients ? "Amounts marked ≈" : "Amounts in marked steps";
+  const what =
+    ingredients && steps
+      ? "Ingredient amounts marked ≈ and amounts in marked steps"
+      : ingredients
+        ? "Amounts marked ≈"
+        : "Amounts in marked steps";
   const why = !v.published_yield
     ? `${servings} servings isn't a published size.`
     : ingredients
@@ -247,7 +305,8 @@ function ScaledNotice({ v, servings }: { v: Variant; servings: number }) {
       : `Ingredient amounts are as published, but the step text was only written for other sizes.`;
   return (
     <p className="notice">
-      {why} {what} are scaled from the published ones and rounded up to standard measures. Check them as you go.
+      {why} {what} are scaled from the published ones and rounded up to standard measures. Check
+      them as you go.
     </p>
   );
 }

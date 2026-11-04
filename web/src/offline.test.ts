@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
 import type { ShoppingList } from "./api/client";
-import { deviceCopy, forgetDevice, queue, rememberedMe, rememberMe, sendChanges, withChanges, type Change, type Sent, type Store } from "./offline";
+import {
+  deviceCopy,
+  forgetDevice,
+  queue,
+  rememberedMe,
+  rememberMe,
+  sendChanges,
+  withChanges,
+  type Change,
+  type Sent,
+  type Store,
+} from "./offline";
 
 function memory(): Store & { data: Map<string, string> } {
   const data = new Map<string, string>();
-  return { data, get: (k) => data.get(k) ?? null, set: (k, v) => void data.set(k, v), remove: (k) => void data.delete(k), keys: () => [...data.keys()] };
+  return {
+    data,
+    get: (k) => data.get(k) ?? null,
+    set: (k, v) => void data.set(k, v),
+    remove: (k) => void data.delete(k),
+    keys: () => [...data.keys()],
+  };
 }
 
 const WEEK = "2026-11-02";
@@ -19,14 +36,35 @@ const list = (over: Partial<ShoppingList> = {}): ShoppingList => ({
     {
       name: "Produce",
       items: [
-        { key: "onion", food_id: null, name: "Onion", amount: "2 whole", checked: false, recipes: ["Chili"], weighed: false },
-        { key: "lime", food_id: null, name: "Lime", amount: "1 whole", checked: true, recipes: ["Chili"], weighed: false },
+        {
+          key: "onion",
+          food_id: null,
+          name: "Onion",
+          amount: "2 whole",
+          checked: false,
+          recipes: ["Chili"],
+          weighed: false,
+        },
+        {
+          key: "lime",
+          food_id: null,
+          name: "Lime",
+          amount: "1 whole",
+          checked: true,
+          recipes: ["Chili"],
+          weighed: false,
+        },
       ],
     },
   ],
   ...over,
 });
-const tick = (key: string, checked: boolean, week = WEEK): Change => ({ kind: "tick", week, key, checked });
+const tick = (key: string, checked: boolean, week = WEEK): Change => ({
+  kind: "tick",
+  week,
+  key,
+  checked,
+});
 
 describe("the device copy", () => {
   it("keeps each week's list and the waiting changes, per account", () => {
@@ -45,7 +83,18 @@ describe("the device copy", () => {
   it("is forgotten on signing out, along with who was signed in", () => {
     const store = memory();
     store.set("other-app", "kept");
-    rememberMe({ id: "me", username: "paul", display_name: "Paul", email: null, is_admin: true, has_password: true, household: { id: "h", name: "Home" } }, store);
+    rememberMe(
+      {
+        id: "me",
+        username: "paul",
+        display_name: "Paul",
+        email: null,
+        is_admin: true,
+        has_password: true,
+        household: { id: "h", name: "Home" },
+      },
+      store,
+    );
     deviceCopy("me", store).save(list());
     expect(rememberedMe(store)?.username).toBe("paul");
     forgetDevice(store);
@@ -71,8 +120,16 @@ describe("waiting changes", () => {
   });
 
   it("tick something added here as it is sent", () => {
-    const add: Change = { kind: "add_extra", week: WEEK, id: "local-1", name: "Foil", checked: false };
-    expect(queue([add], { kind: "tick_extra", week: WEEK, id: "local-1", checked: true })).toEqual([{ ...add, checked: true }]);
+    const add: Change = {
+      kind: "add_extra",
+      week: WEEK,
+      id: "local-1",
+      name: "Foil",
+      checked: false,
+    };
+    expect(queue([add], { kind: "tick_extra", week: WEEK, id: "local-1", checked: true })).toEqual([
+      { ...add, checked: true },
+    ]);
   });
 
   it("show on the list", () => {
@@ -96,7 +153,12 @@ describe("sending", () => {
   it("goes in order and stops where the server can't be reached", async () => {
     const sent: Change[] = [];
     const answers: Sent[] = [{ list: list({ meals: 2 }) }, "refused", "unreachable"];
-    const changes = [tick("onion", true), tick("gone", true), tick("lime", false), tick("onion", false)];
+    const changes = [
+      tick("onion", true),
+      tick("gone", true),
+      tick("lime", false),
+      tick("onion", false),
+    ];
     const r = await sendChanges(changes, async (c) => {
       sent.push(c);
       return answers.shift()!;
@@ -108,7 +170,13 @@ describe("sending", () => {
   });
 
   it("carries on with what is left of a change", async () => {
-    const add: Change = { kind: "add_extra", week: WEEK, id: "local-1", name: "Foil", checked: true };
+    const add: Change = {
+      kind: "add_extra",
+      week: WEEK,
+      id: "local-1",
+      name: "Foil",
+      checked: true,
+    };
     const then: Change = { kind: "tick_extra", week: WEEK, id: "x9", checked: true };
     const seen: Change[] = [];
     const r = await sendChanges([add], async (c) => {

@@ -20,7 +20,11 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== SHELL && k !== PHOTOS).map((k) => caches.delete(k)))),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== SHELL && k !== PHOTOS).map((k) => caches.delete(k))),
+      ),
   );
   self.clients.claim();
 });
@@ -31,7 +35,12 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   // Account and sign-in requests go straight to the network, never through a cache.
-  if (url.pathname.startsWith("/api/") && !url.pathname.startsWith("/api/media/") && !RECIPE_DATA.some((p) => url.pathname.startsWith(p))) return;
+  if (
+    url.pathname.startsWith("/api/") &&
+    !url.pathname.startsWith("/api/media/") &&
+    !RECIPE_DATA.some((p) => url.pathname.startsWith(p))
+  )
+    return;
 
   if (url.pathname.startsWith("/api/media/")) {
     event.respondWith(
@@ -56,6 +65,8 @@ self.addEventListener("fetch", (event) => {
         }
         return res;
       })
-      .catch(async () => (await caches.match(req.mode === "navigate" ? "/" : req)) || Response.error()),
+      .catch(
+        async () => (await caches.match(req.mode === "navigate" ? "/" : req)) || Response.error(),
+      ),
   );
 });

@@ -47,26 +47,45 @@ describe("available", () => {
 
 describe("choose", () => {
   it("keeps the other selections when the combination exists", () => {
-    expect(choose(variants, options, { protein: "Chicken", version: "lime" }, "protein", "Pork")).toEqual({ protein: "Pork", version: "lime" });
+    expect(
+      choose(variants, options, { protein: "Chicken", version: "lime" }, "protein", "Pork"),
+    ).toEqual({ protein: "Pork", version: "lime" });
   });
   it("moves the other selections when it does not, so a tap never leads nowhere", () => {
-    const next = choose(variants, options, { protein: "Chicken", version: "lime" }, "protein", "Beef");
+    const next = choose(
+      variants,
+      options,
+      { protein: "Chicken", version: "lime" },
+      "protein",
+      "Beef",
+    );
     expect(next).toEqual({ protein: "Beef", version: "std" });
     expect(pick(variants, next)?.id).toBe("beef-std");
   });
   it("selectionOf keeps only the dish's options", () => {
-    expect(selectionOf(v("x", { protein: "Pork", portion: "double" }), [options[0]])).toEqual({ protein: "Pork" });
+    expect(selectionOf(v("x", { protein: "Pork", portion: "double" }), [options[0]])).toEqual({
+      protein: "Pork",
+    });
   });
 });
 
 describe("every tap lands on a version with the tapped choice", () => {
   // Random dishes: up to 3 options with up to 4 values, 1-12 versions with random (often partial) attributes.
   let seed = 7;
-  const rand = (n: number) => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) % n);
+  const rand = (n: number) => (seed = (seed * 1103515245 + 12345) % 2 ** 31) % n;
   for (let dish = 0; dish < 300; dish++) {
-    const opts = Array.from({ length: 1 + rand(3) }, (_, i) => opt(`k${i}`, Array.from({ length: 2 + rand(3) }, (_, j) => `v${j}`)));
+    const opts = Array.from({ length: 1 + rand(3) }, (_, i) =>
+      opt(
+        `k${i}`,
+        Array.from({ length: 2 + rand(3) }, (_, j) => `v${j}`),
+      ),
+    );
     const vs = Array.from({ length: 1 + rand(12) }, (_, i) =>
-      v(`d${dish}-${i}`, Object.fromEntries(opts.map((o) => [o.key, o.choices[rand(o.choices.length)].value])), rand(5) > 0),
+      v(
+        `d${dish}-${i}`,
+        Object.fromEntries(opts.map((o) => [o.key, o.choices[rand(o.choices.length)].value])),
+        rand(5) > 0,
+      ),
     );
     it(`dish ${dish}`, () => {
       for (const start of vs) {

@@ -1,11 +1,24 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, errorText, type Household, type Me, type TokenInfo, type UserInfo, type Weights } from "../api/client";
+import {
+  api,
+  errorText,
+  type Household,
+  type Me,
+  type TokenInfo,
+  type UserInfo,
+  type Weights,
+} from "../api/client";
 import { useSession } from "../session";
 import { WEIGHTS } from "../weights";
 
 export function AccountPage() {
   const { session, signOut } = useSession();
-  if (session.status === "offline") return <p className="empty">Account settings need the server. They'll be here when it's back in reach.</p>;
+  if (session.status === "offline")
+    return (
+      <p className="empty">
+        Account settings need the server. They'll be here when it's back in reach.
+      </p>
+    );
   if (session.status !== "in") return null;
   const me = session.me;
   return (
@@ -40,18 +53,27 @@ function ShoppingUnits() {
   const change = async (next: Weights) => {
     setWeights(next);
     setError("");
-    const { data, error: failed } = await api.PUT("/api/shopping/settings", { body: { weight_unit: next } });
+    const { data, error: failed } = await api.PUT("/api/shopping/settings", {
+      body: { weight_unit: next },
+    });
     if (data) setWeights(data.weight_unit);
     else setError(errorText(failed));
   };
   return (
     <section className="panel">
       <h2>Shopping list</h2>
-      <p className="sub">How weights read on your household's list. To read one food differently, open it on the list (⋯).</p>
+      <p className="sub">
+        How weights read on your household's list. To read one food differently, open it on the list
+        (⋯).
+      </p>
       <div className="form row">
         <label>
           Weights
-          <select value={weights ?? ""} disabled={!weights} onChange={(e) => change(e.target.value as Weights)}>
+          <select
+            value={weights ?? ""}
+            disabled={!weights}
+            onChange={(e) => change(e.target.value as Weights)}
+          >
             {WEIGHTS.map((w) => (
               <option key={w.value} value={w.value}>
                 {w.label}
@@ -70,8 +92,11 @@ function PasswordForm({ me }: { me: Me }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (form.next !== form.confirm) return setMsg({ ok: false, text: "The new passwords don't match." });
-    const { error } = await api.POST("/api/me/password", { body: { current: me.has_password ? form.current : undefined, new: form.next } });
+    if (form.next !== form.confirm)
+      return setMsg({ ok: false, text: "The new passwords don't match." });
+    const { error } = await api.POST("/api/me/password", {
+      body: { current: me.has_password ? form.current : undefined, new: form.next },
+    });
     if (error) return setMsg({ ok: false, text: errorText(error) });
     setForm({ current: "", next: "", confirm: "" });
     setMsg({ ok: true, text: "Password changed. Other browsers were signed out." });
@@ -79,21 +104,44 @@ function PasswordForm({ me }: { me: Me }) {
   return (
     <section className="panel">
       <h2>{me.has_password ? "Change password" : "Set a password"}</h2>
-      {!me.has_password && <p className="sub">You sign in with single sign-on. A password lets you sign in without it too.</p>}
+      {!me.has_password && (
+        <p className="sub">
+          You sign in with single sign-on. A password lets you sign in without it too.
+        </p>
+      )}
       <form className="form row" onSubmit={submit}>
         {me.has_password && (
           <label>
             Current password
-            <input type="password" autoComplete="current-password" value={form.current} onChange={(e) => setForm({ ...form, current: e.target.value })} required />
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={form.current}
+              onChange={(e) => setForm({ ...form, current: e.target.value })}
+              required
+            />
           </label>
         )}
         <label>
           New password
-          <input type="password" autoComplete="new-password" minLength={8} value={form.next} onChange={(e) => setForm({ ...form, next: e.target.value })} required />
+          <input
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            value={form.next}
+            onChange={(e) => setForm({ ...form, next: e.target.value })}
+            required
+          />
         </label>
         <label>
           Again
-          <input type="password" autoComplete="new-password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} required />
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={form.confirm}
+            onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+            required
+          />
         </label>
         <button type="submit">Save</button>
       </form>
@@ -129,7 +177,10 @@ function Tokens() {
   return (
     <section className="panel">
       <h2>API tokens</h2>
-      <p className="sub">For scripts and integrations: send as <code>Authorization: Bearer …</code>. Read tokens can't change anything.</p>
+      <p className="sub">
+        For scripts and integrations: send as <code>Authorization: Bearer …</code>. Read tokens
+        can't change anything.
+      </p>
       {fresh && (
         <div className="fresh-token">
           <p>Copy this now; it won't be shown again.</p>
@@ -170,7 +221,12 @@ function Tokens() {
       <form className="form row" onSubmit={create}>
         <label>
           Name
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Grocy sync" required />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Grocy sync"
+            required
+          />
         </label>
         <label>
           Access
@@ -190,7 +246,14 @@ function Admin({ me }: { me: Me }) {
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [households, setHouseholds] = useState<Household[]>([]);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ username: "", display_name: "", email: "", password: "", household: me.household.id, is_admin: false });
+  const [form, setForm] = useState({
+    username: "",
+    display_name: "",
+    email: "",
+    password: "",
+    household: me.household.id,
+    is_admin: false,
+  });
   const [newHousehold, setNewHousehold] = useState("");
   const load = () => {
     api.GET("/api/users").then(({ data }) => data && setUsers(data));
@@ -198,8 +261,14 @@ function Admin({ me }: { me: Me }) {
   };
   useEffect(load, []);
 
-  const update = async (u: UserInfo, change: { is_admin?: boolean; disabled?: boolean; household_id?: string }) => {
-    const { error } = await api.PATCH("/api/users/{id}", { params: { path: { id: u.id } }, body: change });
+  const update = async (
+    u: UserInfo,
+    change: { is_admin?: boolean; disabled?: boolean; household_id?: string },
+  ) => {
+    const { error } = await api.PATCH("/api/users/{id}", {
+      params: { path: { id: u.id } },
+      body: change,
+    });
     setError(error ? errorText(error) : "");
     load();
   };
@@ -250,7 +319,11 @@ function Admin({ me }: { me: Me }) {
                 <span className="meta"> {u.username}</span>
               </td>
               <td>
-                <select value={u.household.id} onChange={(e) => update(u, { household_id: e.target.value })} aria-label={`Household of ${u.username}`}>
+                <select
+                  value={u.household.id}
+                  onChange={(e) => update(u, { household_id: e.target.value })}
+                  aria-label={`Household of ${u.username}`}
+                >
                   {households.map((h) => (
                     <option key={h.id} value={h.id}>
                       {h.name}
@@ -258,9 +331,18 @@ function Admin({ me }: { me: Me }) {
                   ))}
                 </select>
               </td>
-              <td>{[u.has_password && "password", u.identities > 0 && "single sign-on"].filter(Boolean).join(", ") || "nothing yet"}</td>
               <td>
-                <input type="checkbox" checked={u.is_admin} onChange={(e) => update(u, { is_admin: e.target.checked })} aria-label={`${u.username} is admin`} />
+                {[u.has_password && "password", u.identities > 0 && "single sign-on"]
+                  .filter(Boolean)
+                  .join(", ") || "nothing yet"}
+              </td>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={u.is_admin}
+                  onChange={(e) => update(u, { is_admin: e.target.checked })}
+                  aria-label={`${u.username} is admin`}
+                />
               </td>
               <td>
                 <input
@@ -280,23 +362,42 @@ function Admin({ me }: { me: Me }) {
       <form className="form row" onSubmit={add}>
         <label>
           Username
-          <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
+          <input
+            value={form.username}
+            onChange={(e) => setForm({ ...form, username: e.target.value })}
+            required
+          />
         </label>
         <label>
           Name
-          <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} />
+          <input
+            value={form.display_name}
+            onChange={(e) => setForm({ ...form, display_name: e.target.value })}
+          />
         </label>
         <label>
           Email <span className="hint">links single sign-on</span>
-          <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <input
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
         </label>
         <label>
           Password <span className="hint">optional</span>
-          <input type="password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+          />
         </label>
         <label>
           Household
-          <select value={form.household} onChange={(e) => setForm({ ...form, household: e.target.value })}>
+          <select
+            value={form.household}
+            onChange={(e) => setForm({ ...form, household: e.target.value })}
+          >
             {households.map((h) => (
               <option key={h.id} value={h.id}>
                 {h.name}
@@ -306,7 +407,12 @@ function Admin({ me }: { me: Me }) {
           </select>
         </label>
         <label className="check">
-          <input type="checkbox" checked={form.is_admin} onChange={(e) => setForm({ ...form, is_admin: e.target.checked })} /> Admin
+          <input
+            type="checkbox"
+            checked={form.is_admin}
+            onChange={(e) => setForm({ ...form, is_admin: e.target.checked })}
+          />{" "}
+          Admin
         </label>
         <button type="submit">Add</button>
       </form>

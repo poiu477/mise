@@ -64,7 +64,8 @@ function read<T>(store: Store, key: string): T | null {
 }
 
 /** The signed-in account, remembered so the app opens without the server. */
-export const rememberMe = (me: Me, store: Store = browserStore) => store.set(`${PREFIX}me`, JSON.stringify(me));
+export const rememberMe = (me: Me, store: Store = browserStore) =>
+  store.set(`${PREFIX}me`, JSON.stringify(me));
 export const rememberedMe = (store: Store = browserStore) => read<Me>(store, `${PREFIX}me`);
 
 /** Signing out leaves nothing of the household's on the device. */
@@ -106,13 +107,27 @@ export function queue(changes: Change[], next: Change): Change[] {
 export function withChanges(list: ShoppingList, changes: Change[]): ShoppingList {
   const mine = changes.filter((c) => c.week === list.week);
   if (!mine.length) return list;
-  const ticks = new Map(mine.flatMap((c) => (c.kind === "tick" ? [[c.key, c.checked] as const] : [])));
-  const extraTicks = new Map(mine.flatMap((c) => (c.kind === "tick_extra" ? [[c.id, c.checked] as const] : [])));
-  const added = mine.flatMap((c) => (c.kind === "add_extra" ? [{ id: c.id, name: c.name, checked: c.checked }] : []));
+  const ticks = new Map(
+    mine.flatMap((c) => (c.kind === "tick" ? [[c.key, c.checked] as const] : [])),
+  );
+  const extraTicks = new Map(
+    mine.flatMap((c) => (c.kind === "tick_extra" ? [[c.id, c.checked] as const] : [])),
+  );
+  const added = mine.flatMap((c) =>
+    c.kind === "add_extra" ? [{ id: c.id, name: c.name, checked: c.checked }] : [],
+  );
   return {
     ...list,
-    sections: list.sections.map((s) => ({ ...s, items: s.items.map((i) => (ticks.has(i.key) ? { ...i, checked: ticks.get(i.key)! } : i)) })),
-    extras: [...list.extras.map((x) => (extraTicks.has(x.id) ? { ...x, checked: extraTicks.get(x.id)! } : x)), ...added],
+    sections: list.sections.map((s) => ({
+      ...s,
+      items: s.items.map((i) => (ticks.has(i.key) ? { ...i, checked: ticks.get(i.key)! } : i)),
+    })),
+    extras: [
+      ...list.extras.map((x) =>
+        extraTicks.has(x.id) ? { ...x, checked: extraTicks.get(x.id)! } : x,
+      ),
+      ...added,
+    ],
   };
 }
 

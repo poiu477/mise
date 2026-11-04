@@ -1,6 +1,7 @@
 // Weeks run Monday to Sunday and are named by their Monday, as the API stores them. Dates are the viewer's local days.
 
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const parse = (week: string) => {
   const [y, m, d] = week.split("-").map(Number);
   return new Date(y, m - 1, d);

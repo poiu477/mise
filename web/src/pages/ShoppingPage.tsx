@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type ShoppingItem, type ShoppingList, type Weights } from "../api/client";
-import { deviceCopy, isLocal, localId, queue, sendChanges, withChanges, type Change, type Sent } from "../offline";
+import {
+  deviceCopy,
+  isLocal,
+  localId,
+  queue,
+  sendChanges,
+  withChanges,
+  type Change,
+  type Sent,
+} from "../offline";
 import { useSession } from "../session";
 import { addWeeks, mondayOf, weekLabel, weekOf } from "../week";
 import { WEIGHTS, shortWeight } from "../weights";
@@ -9,11 +18,15 @@ import { WEIGHTS, shortWeight } from "../weights";
 type Reached<T> = { data: T } | { refused: unknown } | "unreachable";
 
 /** A call's outcome. No answer, a server error or an ended session count as out of reach: worth trying again. */
-async function reach<T>(call: Promise<{ data?: T; error?: unknown; response: Response }>): Promise<Reached<T>> {
+async function reach<T>(
+  call: Promise<{ data?: T; error?: unknown; response: Response }>,
+): Promise<Reached<T>> {
   try {
     const r = await call;
     if (r.data !== undefined) return { data: r.data };
-    return r.response.status >= 500 || r.response.status === 401 ? "unreachable" : { refused: r.error };
+    return r.response.status >= 500 || r.response.status === 401
+      ? "unreachable"
+      : { refused: r.error };
   } catch {
     return "unreachable";
   }
@@ -26,30 +39,62 @@ const patience = () => AbortSignal.timeout(8000);
 export async function keepListsOnDevice(user: string) {
   const copy = deviceCopy(user);
   for (const week of [mondayOf(), addWeeks(mondayOf(), 1)]) {
-    const r = await reach(api.GET("/api/shopping", { params: { query: { week } }, signal: patience() }));
+    const r = await reach(
+      api.GET("/api/shopping", { params: { query: { week } }, signal: patience() }),
+    );
     if (r === "unreachable") return;
     if ("data" in r) copy.save(r.data);
   }
 }
 
 async function send(c: Change): Promise<Sent> {
-  const sent = (r: Reached<ShoppingList>, then?: Change): Sent => (r === "unreachable" ? r : "data" in r ? { list: r.data, then } : "refused");
+  const sent = (r: Reached<ShoppingList>, then?: Change): Sent =>
+    r === "unreachable" ? r : "data" in r ? { list: r.data, then } : "refused";
   switch (c.kind) {
     case "tick":
-      return sent(await reach(api.PUT("/api/shopping/marks", { body: { week: c.week, key: c.key, checked: c.checked }, signal: patience() })));
+      return sent(
+        await reach(
+          api.PUT("/api/shopping/marks", {
+            body: { week: c.week, key: c.key, checked: c.checked },
+            signal: patience(),
+          }),
+        ),
+      );
     case "tick_extra":
       if (isLocal(c.id)) return "refused";
-      return sent(await reach(api.PATCH("/api/shopping/extras/{id}", { params: { path: { id: c.id } }, body: { checked: c.checked }, signal: patience() })));
+      return sent(
+        await reach(
+          api.PATCH("/api/shopping/extras/{id}", {
+            params: { path: { id: c.id } },
+            body: { checked: c.checked },
+            signal: patience(),
+          }),
+        ),
+      );
     case "add_extra": {
-      const r = await reach(api.POST("/api/shopping/extras", { body: { week: c.week, name: c.name }, signal: patience() }));
+      const r = await reach(
+        api.POST("/api/shopping/extras", {
+          body: { week: c.week, name: c.name },
+          signal: patience(),
+        }),
+      );
       // Added; ticking it is a change of its own, so a lost answer can't add it twice.
-      const made = r !== "unreachable" && "data" in r ? r.data.extras.filter((x) => x.name === c.name.trim()).at(-1) : undefined;
-      return sent(r, c.checked && made ? { kind: "tick_extra", week: c.week, id: made.id, checked: true } : undefined);
+      const made =
+        r !== "unreachable" && "data" in r
+          ? r.data.extras.filter((x) => x.name === c.name.trim()).at(-1)
+          : undefined;
+      return sent(
+        r,
+        c.checked && made
+          ? { kind: "tick_extra", week: c.week, id: made.id, checked: true }
+          : undefined,
+      );
     }
   }
 }
 
-const when = (t: number) => new Date(t).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+const when = (t: number) =>
+  new Date(t).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
 
 export function ShoppingPage() {
   const { session, refresh } = useSession();
@@ -92,7 +137,9 @@ export function ShoppingPage() {
 
   const load = useCallback(async () => {
     const asked = ++latest.current;
-    const r = await reach(api.GET("/api/shopping", { params: { query: { week } }, signal: patience() }));
+    const r = await reach(
+      api.GET("/api/shopping", { params: { query: { week } }, signal: patience() }),
+    );
     if (asked !== latest.current) return;
     if (r === "unreachable") {
       const saved = copy?.saved(week);
@@ -120,7 +167,10 @@ export function ShoppingPage() {
         const r = await sendChanges(sent, send);
         const since = pendingRef.current.filter((c) => !sent.includes(c));
         setPending([...r.remaining, ...since]);
-        if (r.refused) setError("Some changes couldn't be saved: the list changed on the server. It shows what the server has now.");
+        if (r.refused)
+          setError(
+            "Some changes couldn't be saved: the list changed on the server. It shows what the server has now.",
+          );
         if (r.remaining.length) {
           setOffline(true);
           return;
@@ -168,14 +218,18 @@ export function ShoppingPage() {
   };
 
   /** Things that need the server there and then: removing, staples, units. */
-  const run = async (call: Promise<{ data?: ShoppingList; error?: unknown; response: Response }>) => {
+  const run = async (
+    call: Promise<{ data?: ShoppingList; error?: unknown; response: Response }>,
+  ) => {
     const asked = ++latest.current;
     setError("");
     const r = await reach(call);
     if (asked !== latest.current) return;
     if (r === "unreachable") {
       setOffline(true);
-      setError("Can't reach the server, so that wasn't saved. Ticks and added items still work offline.");
+      setError(
+        "Can't reach the server, so that wasn't saved. Ticks and added items still work offline.",
+      );
     } else if ("data" in r) accept(r.data);
     else {
       setError(errorText(r.refused));
@@ -184,37 +238,63 @@ export function ShoppingPage() {
   };
 
   const shown = list && withChanges(list, pending);
-  const tick = (item: ShoppingItem, checked: boolean) => shown && change({ kind: "tick", week: shown.week, key: item.key, checked });
-  const tickExtra = (id: string, checked: boolean) => shown && change({ kind: "tick_extra", week: shown.week, id, checked });
+  const tick = (item: ShoppingItem, checked: boolean) =>
+    shown && change({ kind: "tick", week: shown.week, key: item.key, checked });
+  const tickExtra = (id: string, checked: boolean) =>
+    shown && change({ kind: "tick_extra", week: shown.week, id, checked });
   const deleteExtra = (id: string) => {
-    if (isLocal(id)) setPending(pendingRef.current.filter((c) => !(c.kind === "add_extra" && c.id === id)));
+    if (isLocal(id))
+      setPending(pendingRef.current.filter((c) => !(c.kind === "add_extra" && c.id === id)));
     else run(api.DELETE("/api/shopping/extras/{id}", { params: { path: { id } } }));
   };
-  const hide = (key: string, hidden: boolean) => run(api.PUT("/api/shopping/marks", { body: { week, key, hidden } }));
-  const always = (foodId: string) => run(api.POST("/api/pantry-staples", { body: { week, food_id: foodId } }));
-  const weighIn = (foodId: string, weight_unit: Weights | null) => run(api.PUT("/api/shopping/food-weights", { body: { week, food_id: foodId, weight_unit } }));
-  const unstaple = (foodId: string) => run(api.DELETE("/api/pantry-staples/{food_id}", { params: { path: { food_id: foodId }, query: { week } } }));
+  const hide = (key: string, hidden: boolean) =>
+    run(api.PUT("/api/shopping/marks", { body: { week, key, hidden } }));
+  const always = (foodId: string) =>
+    run(api.POST("/api/pantry-staples", { body: { week, food_id: foodId } }));
+  const weighIn = (foodId: string, weight_unit: Weights | null) =>
+    run(api.PUT("/api/shopping/food-weights", { body: { week, food_id: foodId, weight_unit } }));
+  const unstaple = (foodId: string) =>
+    run(
+      api.DELETE("/api/pantry-staples/{food_id}", {
+        params: { path: { food_id: foodId }, query: { week } },
+      }),
+    );
   const addExtra = (e: FormEvent) => {
     e.preventDefault();
     if (!extra.trim() || !shown) return;
-    change({ kind: "add_extra", week: shown.week, id: localId(), name: extra.trim(), checked: false });
+    change({
+      kind: "add_extra",
+      week: shown.week,
+      id: localId(),
+      name: extra.trim(),
+      checked: false,
+    });
     setExtra("");
   };
 
   const items = shown?.sections.flatMap((s) => s.items) ?? [];
   const total = items.length + (shown?.extras.length ?? 0);
-  const left = items.filter((i) => !i.checked).length + (shown?.extras.filter((x) => !x.checked).length ?? 0);
+  const left =
+    items.filter((i) => !i.checked).length + (shown?.extras.filter((x) => !x.checked).length ?? 0);
   const waiting = pending.length;
 
   return (
     <div className="shopping">
       <header className="week-head">
         <div className="week-nav no-print">
-          <button type="button" onClick={() => setParams({ week: addWeeks(week, -1) })} aria-label="Previous week">
+          <button
+            type="button"
+            onClick={() => setParams({ week: addWeeks(week, -1) })}
+            aria-label="Previous week"
+          >
             ‹
           </button>
           <h1>{weekLabel(week)}</h1>
-          <button type="button" onClick={() => setParams({ week: addWeeks(week, 1) })} aria-label="Next week">
+          <button
+            type="button"
+            onClick={() => setParams({ week: addWeeks(week, 1) })}
+            aria-label="Next week"
+          >
             ›
           </button>
         </div>
@@ -235,21 +315,36 @@ export function ShoppingPage() {
       </header>
       {offline && (
         <p className="notice no-print" role="status">
-          {shown ? (savedAt ? `Offline: this is the list as of ${when(savedAt)}.` : "Offline.") : "Offline, and this week's list isn't saved on this device yet."}{" "}
-          {shown && (waiting ? `${waiting} ${waiting === 1 ? "change" : "changes"} will be sent when the server is back in reach.` : "Ticks and added items are kept here until then.")}
+          {shown
+            ? savedAt
+              ? `Offline: this is the list as of ${when(savedAt)}.`
+              : "Offline."
+            : "Offline, and this week's list isn't saved on this device yet."}{" "}
+          {shown &&
+            (waiting
+              ? `${waiting} ${waiting === 1 ? "change" : "changes"} will be sent when the server is back in reach.`
+              : "Ticks and added items are kept here until then.")}
         </p>
       )}
       {error && <p className="notice">{error}</p>}
       {!shown && !error && !offline && <p className="empty">Loading…</p>}
       {shown && shown.meals === 0 && shown.extras.length === 0 && (
         <p className="empty">
-          Nothing planned for this week yet. <Link to={`/plan?week=${week}`}>Plan some dishes</Link> and the list fills itself in.
+          Nothing planned for this week yet. <Link to={`/plan?week=${week}`}>Plan some dishes</Link>{" "}
+          and the list fills itself in.
         </p>
       )}
 
       {shown && (
         <form className="add-extra no-print" onSubmit={addExtra}>
-          <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Add something else" aria-label="Add something else" maxLength={200} enterKeyHint="done" />
+          <input
+            value={extra}
+            onChange={(e) => setExtra(e.target.value)}
+            placeholder="Add something else"
+            aria-label="Add something else"
+            maxLength={200}
+            enterKeyHint="done"
+          />
           <button type="submit" disabled={!extra.trim()}>
             Add
           </button>
@@ -263,14 +358,24 @@ export function ShoppingPage() {
             {shown.extras.map((x) => (
               <li key={x.id} className={x.checked ? "done" : ""}>
                 <label>
-                  <input type="checkbox" checked={x.checked} onChange={(e) => tickExtra(x.id, e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={x.checked}
+                    onChange={(e) => tickExtra(x.id, e.target.checked)}
+                  />
                   <span className="item-name">
                     {x.name}
                     {isLocal(x.id) && <span className="item-amount meta">not sent yet</span>}
                   </span>
                 </label>
                 <div className="item-actions no-print">
-                  <button type="button" className="quiet" onClick={() => deleteExtra(x.id)} disabled={offline && !isLocal(x.id)} aria-label={`Delete ${x.name}`}>
+                  <button
+                    type="button"
+                    className="quiet"
+                    onClick={() => deleteExtra(x.id)}
+                    disabled={offline && !isLocal(x.id)}
+                    aria-label={`Delete ${x.name}`}
+                  >
                     Delete
                   </button>
                 </div>
@@ -287,7 +392,11 @@ export function ShoppingPage() {
             {s.items.map((i) => (
               <li key={i.key} className={i.checked ? "done" : ""}>
                 <label>
-                  <input type="checkbox" checked={i.checked} onChange={(e) => tick(i, e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={i.checked}
+                    onChange={(e) => tick(i, e.target.checked)}
+                  />
                   <span className="item-name">
                     {i.name}
                     {i.amount && <span className="item-amount">{i.amount}</span>}
@@ -308,7 +417,13 @@ export function ShoppingPage() {
                     {i.weighed && i.food_id && (
                       <label className="weigh-in">
                         Weigh in
-                        <select value={i.weight_unit ?? ""} disabled={offline} onChange={(e) => weighIn(i.food_id!, (e.target.value || null) as Weights | null)}>
+                        <select
+                          value={i.weight_unit ?? ""}
+                          disabled={offline}
+                          onChange={(e) =>
+                            weighIn(i.food_id!, (e.target.value || null) as Weights | null)
+                          }
+                        >
                           <option value="">Usual ({shortWeight(shown.weight_unit)})</option>
                           {WEIGHTS.map((w) => (
                             <option key={w.value} value={w.value}>
@@ -320,11 +435,25 @@ export function ShoppingPage() {
                     )}
                     <div className="item-actions">
                       {i.food_id && (
-                        <button type="button" className="quiet" onClick={() => always(i.food_id!)} disabled={offline} title="Leave this off every list" aria-label={`Always have ${i.name}`}>
+                        <button
+                          type="button"
+                          className="quiet"
+                          onClick={() => always(i.food_id!)}
+                          disabled={offline}
+                          title="Leave this off every list"
+                          aria-label={`Always have ${i.name}`}
+                        >
                           Always have
                         </button>
                       )}
-                      <button type="button" className="quiet" onClick={() => hide(i.key, true)} disabled={offline} title="Take it off this week's list" aria-label={`Remove ${i.name}`}>
+                      <button
+                        type="button"
+                        className="quiet"
+                        onClick={() => hide(i.key, true)}
+                        disabled={offline}
+                        title="Take it off this week's list"
+                        aria-label={`Remove ${i.name}`}
+                      >
                         Remove
                       </button>
                     </div>
@@ -344,7 +473,13 @@ export function ShoppingPage() {
               <li key={l.key}>
                 <span>{l.name}</span>
                 <span className="meta">always on hand</span>
-                <button type="button" className="quiet" onClick={() => unstaple(l.key)} disabled={offline} aria-label={`Put ${l.name} back`}>
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => unstaple(l.key)}
+                  disabled={offline}
+                  aria-label={`Put ${l.name} back`}
+                >
                   Put back
                 </button>
               </li>
@@ -353,7 +488,13 @@ export function ShoppingPage() {
               <li key={l.key}>
                 <span>{l.name}</span>
                 <span className="meta">this week</span>
-                <button type="button" className="quiet" onClick={() => hide(l.key, false)} disabled={offline} aria-label={`Put ${l.name} back`}>
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => hide(l.key, false)}
+                  disabled={offline}
+                  aria-label={`Put ${l.name} back`}
+                >
                   Put back
                 </button>
               </li>

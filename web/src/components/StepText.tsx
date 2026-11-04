@@ -3,7 +3,11 @@
  * joined paragraphs ("…tender.Drain") get it back.
  */
 export function StepText({ text }: { text: string }) {
-  const tidy = (s: string) => s.replace(/\s+/g, " ").replace(/([a-z0-9)%])\.([A-Z][a-z])/g, "$1. $2").trim();
+  const tidy = (s: string) =>
+    s
+      .replace(/\s+/g, " ")
+      .replace(/([a-z0-9)%])\.([A-Z][a-z])/g, "$1. $2")
+      .trim();
   const bullets = text.split("•").map(tidy).filter(Boolean);
   if (bullets.length > 1) {
     return (

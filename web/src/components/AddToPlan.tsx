@@ -16,7 +16,9 @@ export function AddToPlan({ variantId, servings }: { variantId: string; servings
   const add = async () => {
     setDone({ target, state: "saving" });
     setError("");
-    const { error: failed } = await api.POST("/api/plan/entries", { body: { week, variant_id: variantId, servings } });
+    const { error: failed } = await api.POST("/api/plan/entries", {
+      body: { week, variant_id: variantId, servings },
+    });
     if (failed) {
       setDone(null);
       setError(errorText(failed));
