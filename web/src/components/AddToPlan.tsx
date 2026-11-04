@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { api, errorText } from "../api/client";
 import { addWeeks, mondayOf } from "../week";
@@ -7,18 +7,28 @@ import { addWeeks, mondayOf } from "../week";
 export function AddToPlan({ variantId, servings }: { variantId: string; servings: number }) {
   const thisWeek = mondayOf();
   const [week, setWeek] = useState(thisWeek);
-  // What was last added; a different version, size or week is a new thing to add.
+  // What was last added. A different version, size or week is a new thing to add, so changing the choice forgets
+  // the last result (even on coming back to it: the same dish can go on the plan twice).
   const target = `${variantId}|${servings}|${week}`;
   const [done, setDone] = useState<{ target: string; state: "saving" | "added" } | null>(null);
+  const [chosen, setChosen] = useState(target);
+  if (chosen !== target) {
+    setChosen(target);
+    setDone(null);
+  }
   const state = done?.target === target ? done.state : "idle";
   const [error, setError] = useState("");
+  // Only the latest submission's answer counts: an earlier one finishing late must not undo a newer one's state.
+  const latest = useRef(0);
 
   const add = async () => {
+    const mine = ++latest.current;
     setDone({ target, state: "saving" });
     setError("");
     const { error: failed } = await api.POST("/api/plan/entries", {
       body: { week, variant_id: variantId, servings },
     });
+    if (mine !== latest.current) return;
     if (failed) {
       setDone(null);
       setError(errorText(failed));
