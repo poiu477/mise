@@ -17,21 +17,23 @@ export function AddToPlan({ variantId, servings }: { variantId: string; servings
     setDone(null);
   }
   const state = done?.target === target ? done.state : "idle";
-  const [error, setError] = useState("");
+  // A failure belongs to the choice it was for, so it never shows next to another one.
+  const [failure, setFailure] = useState<{ target: string; text: string } | null>(null);
+  const error = failure?.target === target ? failure.text : "";
   // Only the latest submission's answer counts: an earlier one finishing late must not undo a newer one's state.
   const latest = useRef(0);
 
   const add = async () => {
     const mine = ++latest.current;
     setDone({ target, state: "saving" });
-    setError("");
+    setFailure(null);
     const { error: failed } = await api.POST("/api/plan/entries", {
       body: { week, variant_id: variantId, servings },
     });
     if (mine !== latest.current) return;
     if (failed) {
       setDone(null);
-      setError(errorText(failed));
+      setFailure({ target, text: errorText(failed) });
       return;
     }
     setDone({ target, state: "added" });

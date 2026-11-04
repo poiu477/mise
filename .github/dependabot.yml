@@ -27,3 +27,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Rust is raised by hand, in rust-toolchain.toml, the Dockerfile and Cargo.toml together.
+      - dependency-name: rust

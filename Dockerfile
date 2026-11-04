@@ -11,7 +11,7 @@ RUN npm run build
 # The same Rust as rust-toolchain.toml.
 FROM rust:1.99.1-bookworm AS server
 WORKDIR /src
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
 COPY migrations ./migrations
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

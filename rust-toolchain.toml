@@ -1,5 +1,6 @@
-# The one Rust every build uses: local, CI and the Docker image (keep the Dockerfile's rust tag and Cargo.toml's
-# rust-version in step when raising it).
+# The one Rust every build uses: local, CI and the Docker image (which copies this file, so rustup enforces it there
+# too). When raising it, change the Dockerfile's rust tag, Cargo.toml's rust-version and the cargo-deny step in CI's
+# workflow in the same commit; Dependabot leaves the rust image alone.
 [toolchain]
 channel = "1.99.1"
 components = ["rustfmt", "clippy"]
