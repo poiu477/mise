@@ -85,7 +85,7 @@ pub struct Health {
 }
 
 /// Liveness and version.
-#[utoipa::path(get, path = "/api/health", operation_id = "health", responses((status = 200, body = Health)))]
+#[utoipa::path(get, path = "/api/health", operation_id = "health", responses((status = 200, description = "The server is up", body = Health)))]
 pub async fn health() -> Json<Health> {
     Json(Health {
         status: "ok",

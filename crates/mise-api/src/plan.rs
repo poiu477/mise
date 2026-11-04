@@ -99,7 +99,7 @@ fn check_servings(n: f64) -> ApiResult<()> {
 }
 
 /// A week's plan.
-#[utoipa::path(get, path = "/api/plan", operation_id = "get_plan", tag = "plan", params(WeekParams), responses((status = 200, body = Plan)))]
+#[utoipa::path(get, path = "/api/plan", operation_id = "get_plan", tag = "plan", params(WeekParams), responses((status = 200, description = "The week's plan", body = Plan)))]
 pub async fn get(
     State(s): State<AppState>,
     Extension(me): Extension<CurrentUser>,
@@ -120,7 +120,7 @@ pub struct NewEntry {
 /// Add a dish to a week. Answers with the week's plan.
 #[utoipa::path(
     post, path = "/api/plan/entries", operation_id = "add_plan_entry", tag = "plan", request_body = NewEntry,
-    responses((status = 200, body = Plan), (status = 404, body = crate::error::ErrorBody))
+    responses((status = 200, description = "The week's plan with the dish added", body = Plan), (status = 404, description = "No such version", body = crate::error::ErrorBody))
 )]
 pub async fn add(
     State(s): State<AppState>,
@@ -163,7 +163,7 @@ pub struct EntryChange {
 /// Change a planned dish's serving count. Answers with the week's plan.
 #[utoipa::path(
     patch, path = "/api/plan/entries/{id}", operation_id = "update_plan_entry", tag = "plan", params(("id" = Uuid, Path)), request_body = EntryChange,
-    responses((status = 200, body = Plan), (status = 404, body = crate::error::ErrorBody))
+    responses((status = 200, description = "The week's plan", body = Plan), (status = 404, description = "No such entry in this household's plan", body = crate::error::ErrorBody))
 )]
 pub async fn update(
     State(s): State<AppState>,
@@ -185,7 +185,7 @@ pub async fn update(
 /// Take a dish off the plan. Answers with the week's plan.
 #[utoipa::path(
     delete, path = "/api/plan/entries/{id}", operation_id = "delete_plan_entry", tag = "plan", params(("id" = Uuid, Path)),
-    responses((status = 200, body = Plan), (status = 404, body = crate::error::ErrorBody))
+    responses((status = 200, description = "The week's plan without it", body = Plan), (status = 404, description = "No such entry in this household's plan", body = crate::error::ErrorBody))
 )]
 pub async fn remove(
     State(s): State<AppState>,

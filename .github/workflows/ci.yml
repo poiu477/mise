@@ -55,10 +55,11 @@ jobs:
           node-version: 26
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - name: Web API types match the server
+      - name: API document is valid and the web types match it
         run: |
           cargo run -q --locked -p mise-api -- openapi > web/openapi.json
           cd web && npm ci --no-audit --no-fund
+          node scripts/check-openapi.mjs
           npx openapi-typescript openapi.json -o src/api/schema.d.ts
           git diff --exit-code -- src/api/schema.d.ts \
             || { echo "::error::web/src/api/schema.d.ts is out of date: run 'npm run api' in web/"; exit 1; }

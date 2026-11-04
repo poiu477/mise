@@ -85,7 +85,7 @@ gates (a `./check` command, browser journeys, a seed gate) is in [status.md](sta
 ## CI
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request: the Rust job (formatting, clippy,
-tests against a Postgres service, and a check that `web/src/api/schema.d.ts` matches the server), the web job
+tests against a Postgres service, a check that every response in the OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-openapi.mjs`), and a check that `web/src/api/schema.d.ts` matches the server), the web job
 (formatting, lint, tests, build, an audit of shipped npm packages), `cargo deny`, and a build of the Docker image.
 Dependabot opens grouped update pull requests weekly. TypeScript majors are held back until every tool that depends on TypeScript accepts them: the weekly "TypeScript major watch" workflow (`npm run typescript:ready` in `web/`) opens an issue when that happens, and deleting the `typescript` ignore rule in `.github/dependabot.yml` lets Dependabot propose the upgrade. `.git-blame-ignore-revs` lists the formatting-only commits;
 run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once per clone.

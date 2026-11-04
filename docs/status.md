@@ -63,6 +63,9 @@ order: the remote and CI baseline first (it makes everything after it checked), 
       throttling exists.
 - [ ] Observability: JSON logs as an option, a request id on every log line, a readiness check, basic metrics.
 - [ ] API contract: decide on `/api/v1` and a standard error shape before anything outside the web app depends on it.
+- [ ] Document every response each endpoint can return: the OpenAPI annotations list the main ones, but signed-in
+      routes can all return 401, browser-only actions 403, and validation 400s are missing on some. Add a test that
+      the documented statuses match what the handlers return.
 - [ ] Public-repo hygiene: replace the HelloFresh step text quoted in tests (about 23 lines) with our own; decide
       whether to publish the git history as it is or start the public repo fresh.
 - [ ] Presentation: a README with screenshots and a short demo, a hosted demo running the demo bundle, versioned
