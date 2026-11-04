@@ -4,35 +4,107 @@ use crate::text::normalize_name;
 
 /// Ingredients that mention a protein but are not one: stocks, sauces, seasonings.
 const NOT_A_PROTEIN: &[&str] = &[
-    "stock", "broth", "concentrate", "demi", "glace", "base", "bouillon", "seasoning", "sauce", "gravy", "powder",
-    "flavor", "flavour", "spice", "blend", "rub", "fat", "dressing", "soup", "ramen",
+    "stock",
+    "broth",
+    "concentrate",
+    "demi",
+    "glace",
+    "base",
+    "bouillon",
+    "seasoning",
+    "sauce",
+    "gravy",
+    "powder",
+    "flavor",
+    "flavour",
+    "spice",
+    "blend",
+    "rub",
+    "fat",
+    "dressing",
+    "soup",
+    "ramen",
 ];
 
 /// Checked in order: the first match wins, so "pork tenderloin" is Pork before "tenderloin" can mean Beef, and
 /// "chicken sausage" is Chicken.
 const PROTEINS: &[(&[&str], &str)] = &[
-    (&["impossible", "beyond", "plant based", "plant-based", "vegan"], "Plant-based"),
+    (
+        &[
+            "impossible",
+            "beyond",
+            "plant based",
+            "plant-based",
+            "vegan",
+        ],
+        "Plant-based",
+    ),
     (&["chicken"], "Chicken"),
     (&["turkey"], "Turkey"),
-    (&["pork", "bacon", "chorizo", "prosciutto", "pancetta", "ham", "bratwurst"], "Pork"),
-    (&["beef", "steak", "sirloin", "ribeye", "rib eye", "bavette", "tenderloin", "brisket", "meatball"], "Beef"),
+    (
+        &[
+            "pork",
+            "bacon",
+            "chorizo",
+            "prosciutto",
+            "pancetta",
+            "ham",
+            "bratwurst",
+        ],
+        "Pork",
+    ),
+    (
+        &[
+            "beef",
+            "steak",
+            "sirloin",
+            "ribeye",
+            "rib eye",
+            "bavette",
+            "tenderloin",
+            "brisket",
+            "meatball",
+        ],
+        "Beef",
+    ),
     (&["lamb"], "Lamb"),
     (&["duck"], "Duck"),
     (&["shrimp", "prawn"], "Shrimp"),
     (&["salmon"], "Salmon"),
     (&["scallop"], "Scallops"),
-    (&["tilapia", "cod", "barramundi", "trout", "steelhead", "sea bass", "mahi", "haddock", "fish", "pollock", "swordfish"], "Fish"),
+    (
+        &[
+            "tilapia",
+            "cod",
+            "barramundi",
+            "trout",
+            "steelhead",
+            "sea bass",
+            "mahi",
+            "haddock",
+            "fish",
+            "pollock",
+            "swordfish",
+        ],
+        "Fish",
+    ),
     (&["tofu"], "Tofu"),
     (&["sausage"], "Pork"),
 ];
 
 pub fn protein_of(food_name: &str) -> Option<&'static str> {
     let name = format!(" {} ", normalize_name(food_name));
-    if NOT_A_PROTEIN.iter().any(|w| name.contains(&format!(" {w} ")) || name.contains(&format!(" {w}s "))) {
+    if NOT_A_PROTEIN
+        .iter()
+        .any(|w| name.contains(&format!(" {w} ")) || name.contains(&format!(" {w}s ")))
+    {
         return None;
     }
     PROTEINS.iter().find_map(|(words, label)| {
-        words.iter().any(|w| name.contains(&format!(" {w} ")) || name.contains(&format!(" {w}s "))).then_some(*label)
+        words
+            .iter()
+            .any(|w| name.contains(&format!(" {w} ")) || name.contains(&format!(" {w}s ")))
+            .then_some(*label)
     })
 }
 

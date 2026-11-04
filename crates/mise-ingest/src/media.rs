@@ -103,36 +103,64 @@ pub struct DerivativeStats {
 }
 
 fn thread_pool(jobs: usize) -> Result<Arc<rayon::ThreadPool>> {
-    Ok(Arc::new(rayon::ThreadPoolBuilder::new().num_threads(jobs.max(1)).build()?))
+    Ok(Arc::new(
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(jobs.max(1))
+            .build()?,
+    ))
 }
 
 fn log_rate(done: u64, total: u64, started: Instant) -> (f64, u64) {
     let rate = done as f64 / started.elapsed().as_secs_f64().max(0.001);
-    let eta = if rate > 0.0 { ((total.saturating_sub(done)) as f64 / rate) as u64 } else { 0 };
+    let eta = if rate > 0.0 {
+        ((total.saturating_sub(done)) as f64 / rate) as u64
+    } else {
+        0
+    };
     ((rate * 10.0).round() / 10.0, eta)
 }
 
 /// Order `root`-relative file paths by modification time, read from directory listings (no file is opened).
 /// The archive was written in download order, so on a hard disk this turns scattered seeks into mostly
 /// sequential reads (path order is not download order). Files that cannot be listed go last.
-fn in_disk_order<T: Send>(root: &Path, items: Vec<T>, path_of: impl Fn(&T) -> &str + Sync, threads: &rayon::ThreadPool) -> Vec<T> {
-    let mut dirs: Vec<&str> = items.iter().map(|it| path_of(it).rsplit_once('/').map_or("", |(d, _)| d)).collect();
+fn in_disk_order<T: Send>(
+    root: &Path,
+    items: Vec<T>,
+    path_of: impl Fn(&T) -> &str + Sync,
+    threads: &rayon::ThreadPool,
+) -> Vec<T> {
+    let mut dirs: Vec<&str> = items
+        .iter()
+        .map(|it| path_of(it).rsplit_once('/').map_or("", |(d, _)| d))
+        .collect();
     dirs.sort_unstable();
     dirs.dedup();
     let modified: HashMap<String, std::time::SystemTime> = threads.install(|| {
         dirs.par_iter()
             .flat_map_iter(|dir| {
-                let entries = std::fs::read_dir(root.join(dir)).into_iter().flatten().flatten();
+                let entries = std::fs::read_dir(root.join(dir))
+                    .into_iter()
+                    .flatten()
+                    .flatten();
                 entries.filter_map(move |e| {
                     let time = e.metadata().ok()?.modified().ok()?;
                     let name = e.file_name().into_string().ok()?;
-                    Some((if dir.is_empty() { name } else { format!("{dir}/{name}") }, time))
+                    Some((
+                        if dir.is_empty() {
+                            name
+                        } else {
+                            format!("{dir}/{name}")
+                        },
+                        time,
+                    ))
                 })
             })
             .collect()
     });
-    let mut keyed: Vec<(Option<std::time::SystemTime>, T)> =
-        items.into_iter().map(|it| (modified.get(path_of(&it)).copied(), it)).collect();
+    let mut keyed: Vec<(Option<std::time::SystemTime>, T)> = items
+        .into_iter()
+        .map(|it| (modified.get(path_of(&it)).copied(), it))
+        .collect();
     keyed.sort_by_key(|(time, _)| (time.is_none(), *time));
     keyed.into_iter().map(|(_, it)| it).collect()
 }
@@ -167,21 +195,40 @@ enum ReadOutcome {
 /// Store every referenced file not stored yet, then rebuild the links.
 pub async fn store_and_link(pool: &PgPool, opts: &MediaOptions) -> Result<StoreStats> {
     let mut stats = StoreStats::default();
-    let archive_root = opts.archive_root.as_deref().context("--from (the archive root) is required to store media")?;
-    anyhow::ensure!(archive_root.is_dir(), "archive root {} is not a directory", archive_root.display());
+    let archive_root = opts
+        .archive_root
+        .as_deref()
+        .context("--from (the archive root) is required to store media")?;
+    anyhow::ensure!(
+        archive_root.is_dir(),
+        "archive root {} is not a directory",
+        archive_root.display()
+    );
     std::fs::create_dir_all(&opts.media_root)
         .with_context(|| format!("creating media root {}", opts.media_root.display()))?;
 
     // Ordered by path so a --limit trial run takes whole recipes; reading order is decided below.
     let referenced: Vec<String> = sqlx::query_scalar(REFERENCED_PATHS).fetch_all(pool).await?;
-    let stored: HashSet<String> = sqlx::query_scalar("SELECT path FROM media_sources").fetch_all(pool).await?.into_iter().collect();
+    let stored: HashSet<String> = sqlx::query_scalar("SELECT path FROM media_sources")
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .collect();
     stats.referenced = referenced.len() as u64;
-    let mut todo: Vec<String> = referenced.into_iter().filter(|p| !stored.contains(p)).collect();
+    let mut todo: Vec<String> = referenced
+        .into_iter()
+        .filter(|p| !stored.contains(p))
+        .collect();
     stats.already_stored = stats.referenced - todo.len() as u64;
     if let Some(limit) = opts.limit {
         todo.truncate(limit);
     }
-    tracing::info!(referenced = stats.referenced, already_stored = stats.already_stored, to_read = todo.len(), "storing originals");
+    tracing::info!(
+        referenced = stats.referenced,
+        already_stored = stats.already_stored,
+        to_read = todo.len(),
+        "storing originals"
+    );
 
     let pool_threads = thread_pool(opts.jobs)?;
     let todo = in_disk_order(archive_root, todo, |p| p.as_str(), &pool_threads);
@@ -196,7 +243,12 @@ pub async fn store_and_link(pool: &PgPool, opts: &MediaOptions) -> Result<StoreS
         let archive = archive_root.to_path_buf();
         let media_root = opts.media_root.clone();
         let outcomes: Vec<ReadOutcome> = tokio::task::spawn_blocking(move || {
-            threads.install(|| chunk.par_iter().map(|p| read_and_place(&archive, &media_root, p)).collect())
+            threads.install(|| {
+                chunk
+                    .par_iter()
+                    .map(|p| read_and_place(&archive, &media_root, p))
+                    .collect()
+            })
         })
         .await?;
         processed += outcomes.len() as u64;
@@ -204,7 +256,15 @@ pub async fn store_and_link(pool: &PgPool, opts: &MediaOptions) -> Result<StoreS
         if processed >= next_log || processed == total {
             next_log = processed + LOG_EVERY;
             let (per_s, eta_s) = log_rate(processed, total, started);
-            tracing::info!(processed, total, new_media = stats.new_media, missing = stats.missing, per_s, eta_s, "storing");
+            tracing::info!(
+                processed,
+                total,
+                new_media = stats.new_media,
+                missing = stats.missing,
+                per_s,
+                eta_s,
+                "storing"
+            );
         }
     }
 
@@ -231,7 +291,10 @@ fn read_and_place(archive_root: &Path, media_root: &Path, path: &str) -> ReadOut
     };
     // Judged by content, not extension: the archive holds saved S3 error pages named like images.
     let Some(kind) = ImageKind::sniff(&data) else {
-        return ReadOutcome::NotImage(path.to_string(), String::from_utf8_lossy(&data[..data.len().min(60)]).into_owned());
+        return ReadOutcome::NotImage(
+            path.to_string(),
+            String::from_utf8_lossy(&data[..data.len().min(60)]).into_owned(),
+        );
     };
     let sha256 = hex::encode(Sha256::digest(&data));
     let dims = image_dimensions(&data, kind);
@@ -239,9 +302,21 @@ fn read_and_place(archive_root: &Path, media_root: &Path, path: &str) -> ReadOut
     let dest = media_root.join(original_path(&sha256, kind.ext()));
     let placed = match place(&source, &dest) {
         Ok(p) => p,
-        Err(e) => return ReadOutcome::Unreadable(path.to_string(), format!("placing {}: {e}", dest.display())),
+        Err(e) => {
+            return ReadOutcome::Unreadable(
+                path.to_string(),
+                format!("placing {}: {e}", dest.display()),
+            );
+        }
     };
-    ReadOutcome::Read(ReadFile { path: path.to_string(), sha256, kind, bytes: data.len() as i64, dims, placed })
+    ReadOutcome::Read(ReadFile {
+        path: path.to_string(),
+        sha256,
+        kind,
+        bytes: data.len() as i64,
+        dims,
+        placed,
+    })
 }
 
 /// Width and height from the image header, without decoding pixels.
@@ -252,7 +327,9 @@ fn image_dimensions(data: &[u8], kind: ImageKind) -> Option<(u32, u32)> {
         ImageKind::Webp => image::ImageFormat::WebP,
         ImageKind::Gif => image::ImageFormat::Gif,
     };
-    ImageReader::with_format(Cursor::new(data), format).into_dimensions().ok()
+    ImageReader::with_format(Cursor::new(data), format)
+        .into_dimensions()
+        .ok()
 }
 
 /// Put `source` at `dest`: hard link when possible (same volume), else copy. Content-addressed, so an
@@ -282,7 +359,11 @@ fn place(source: &Path, dest: &Path) -> std::io::Result<Placed> {
     }
 }
 
-async fn write_store_batch(pool: &PgPool, outcomes: Vec<ReadOutcome>, stats: &mut StoreStats) -> Result<()> {
+async fn write_store_batch(
+    pool: &PgPool,
+    outcomes: Vec<ReadOutcome>,
+    stats: &mut StoreStats,
+) -> Result<()> {
     let mut files = Vec::with_capacity(outcomes.len());
     for outcome in outcomes {
         match outcome {
@@ -321,7 +402,10 @@ async fn write_store_batch(pool: &PgPool, outcomes: Vec<ReadOutcome>, stats: &mu
 
     // One media row per distinct content; files whose content is already stored only gain a source path.
     let mut seen = HashSet::new();
-    let new: Vec<&ReadFile> = files.iter().filter(|f| seen.insert(f.sha256.as_str())).collect();
+    let new: Vec<&ReadFile> = files
+        .iter()
+        .filter(|f| seen.insert(f.sha256.as_str()))
+        .collect();
     let mut tx = pool.begin().await?;
     let inserted = sqlx::query(
         "INSERT INTO media (id, sha256, mime, bytes, width, height, path)
@@ -483,7 +567,12 @@ pub async fn make_derivatives(pool: &PgPool, opts: &MediaOptions) -> Result<Deri
         let threads = threads.clone();
         let media_root = opts.media_root.clone();
         let outcomes: Vec<DerivativeOutcome> = tokio::task::spawn_blocking(move || {
-            threads.install(|| chunk.par_iter().map(|(id, sha, path)| derive(&media_root, *id, sha, path)).collect())
+            threads.install(|| {
+                chunk
+                    .par_iter()
+                    .map(|(id, sha, path)| derive(&media_root, *id, sha, path))
+                    .collect()
+            })
         })
         .await?;
         write_derivatives(pool, outcomes, &mut stats).await?;
@@ -491,8 +580,15 @@ pub async fn make_derivatives(pool: &PgPool, opts: &MediaOptions) -> Result<Deri
             next_log = stats.done + LOG_EVERY;
             let (per_s, eta_s) = log_rate(stats.done, stats.queued, started);
             let written_mb = stats.bytes_written / 1_000_000;
-            tracing::info!(done = stats.done, queued = stats.queued, failures = stats.decode_failures + stats.read_failures,
-                written_mb, per_s, eta_s, "making web copies");
+            tracing::info!(
+                done = stats.done,
+                queued = stats.queued,
+                failures = stats.decode_failures + stats.read_failures,
+                written_mb,
+                per_s,
+                eta_s,
+                "making web copies"
+            );
         }
     }
     stats.remaining = waiting - stats.done - stats.decode_failures;
@@ -512,7 +608,8 @@ fn derive(media_root: &Path, id: Uuid, sha256: &str, path: &str) -> DerivativeOu
         Err(e) => return DerivativeOutcome::DecodeFailed(id, e.to_string()),
     };
     // An original that is already small enough, upright and in a format every browser shows is used as is.
-    let reusable = (upright && kind != ImageKind::Gif).then(|| (media_root.join(path), kind, data.len() as i64));
+    let reusable = (upright && kind != ImageKind::Gif)
+        .then(|| (media_root.join(path), kind, data.len() as i64));
     drop(data);
     match write_web_sizes(media_root, sha256, image, reusable) {
         Ok(made) => DerivativeOutcome::Made(id, made),
@@ -523,11 +620,16 @@ fn derive(media_root: &Path, id: Uuid, sha256: &str, path: &str) -> DerivativeOu
 /// Decode and turn upright per the EXIF orientation, so web copies display the right way up everywhere.
 /// Also says whether the stored bytes were already upright.
 fn decode(data: &[u8]) -> image::ImageResult<(DynamicImage, bool)> {
-    let mut decoder = ImageReader::new(Cursor::new(data)).with_guessed_format()?.into_decoder()?;
+    let mut decoder = ImageReader::new(Cursor::new(data))
+        .with_guessed_format()?
+        .into_decoder()?;
     let orientation = decoder.orientation()?;
     let mut image = DynamicImage::from_decoder(decoder)?;
     image.apply_orientation(orientation);
-    Ok((image, orientation == image::metadata::Orientation::NoTransforms))
+    Ok((
+        image,
+        orientation == image::metadata::Orientation::NoTransforms,
+    ))
 }
 
 /// Resize to each web size (largest first, each from the previous to save work) and encode. A size the
@@ -541,7 +643,11 @@ fn write_web_sizes(
     let (orig_w, orig_h) = (image.width(), image.height());
     // PNG only when transparency is actually used (ingredient cut-outs); everything else is a JPEG photo.
     let transparent = image.color().has_alpha() && image.to_rgba8().pixels().any(|p| p.0[3] < 255);
-    let mut current = if transparent { DynamicImage::ImageRgba8(image.into_rgba8()) } else { DynamicImage::ImageRgb8(image.into_rgb8()) };
+    let mut current = if transparent {
+        DynamicImage::ImageRgba8(image.into_rgba8())
+    } else {
+        DynamicImage::ImageRgb8(image.into_rgb8())
+    };
     let mut sizes = WEB_SIZES.to_vec();
     sizes.sort_unstable_by(|a, b| b.cmp(a));
 
@@ -553,11 +659,21 @@ fn write_web_sizes(
             let dest = media_root.join(&rel);
             // Replace whatever an earlier run left, so the link always points at the original.
             match std::fs::remove_file(&dest) {
-                Err(e) if e.kind() != ErrorKind::NotFound => return Err(e).with_context(|| format!("replacing {rel}")),
+                Err(e) if e.kind() != ErrorKind::NotFound => {
+                    return Err(e).with_context(|| format!("replacing {rel}"));
+                }
                 _ => {}
             }
             place(original, &dest).with_context(|| format!("linking {rel}"))?;
-            made.push(Derivative { max_side: max_side as i32, path: rel, mime: kind.mime(), bytes: *bytes, width: w as i32, height: h as i32, linked: true });
+            made.push(Derivative {
+                max_side: max_side as i32,
+                path: rel,
+                mime: kind.mime(),
+                bytes: *bytes,
+                width: w as i32,
+                height: h as i32,
+                linked: true,
+            });
             continue;
         }
         if (w, h) != (current.width(), current.height()) {
@@ -569,7 +685,12 @@ fn write_web_sizes(
                 .write_image(current.as_bytes(), w, h, current.color().into())?;
             ("png", "image/png")
         } else {
-            JpegEncoder::new_with_quality(&mut out, JPEG_QUALITY).write_image(current.as_bytes(), w, h, current.color().into())?;
+            JpegEncoder::new_with_quality(&mut out, JPEG_QUALITY).write_image(
+                current.as_bytes(),
+                w,
+                h,
+                current.color().into(),
+            )?;
             ("jpg", "image/jpeg")
         };
         let rel = derivative_path(sha256, max_side, ext);
@@ -580,12 +701,24 @@ fn write_web_sizes(
         let tmp = dest.with_extension("partial");
         std::fs::write(&tmp, &out).with_context(|| format!("writing {}", tmp.display()))?;
         std::fs::rename(&tmp, &dest).with_context(|| format!("renaming to {}", dest.display()))?;
-        made.push(Derivative { max_side: max_side as i32, path: rel, mime, bytes: out.len() as i64, width: w as i32, height: h as i32, linked: false });
+        made.push(Derivative {
+            max_side: max_side as i32,
+            path: rel,
+            mime,
+            bytes: out.len() as i64,
+            width: w as i32,
+            height: h as i32,
+            linked: false,
+        });
     }
     Ok(made)
 }
 
-async fn write_derivatives(pool: &PgPool, outcomes: Vec<DerivativeOutcome>, stats: &mut DerivativeStats) -> Result<()> {
+async fn write_derivatives(
+    pool: &PgPool,
+    outcomes: Vec<DerivativeOutcome>,
+    stats: &mut DerivativeStats,
+) -> Result<()> {
     let mut rows: Vec<(Uuid, Derivative)> = Vec::new();
     let mut failed: Vec<(Uuid, String)> = Vec::new();
     for outcome in outcomes {
@@ -650,15 +783,34 @@ mod tests {
         std::fs::create_dir_all(root.join("a/images")).unwrap();
         std::fs::create_dir_all(root.join("b/images")).unwrap();
         let base = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
-        for (path, offset) in [("a/images/hero.jpg", 30), ("b/images/hero.jpg", 10), ("b/images/step-01-1.jpg", 20)] {
+        for (path, offset) in [
+            ("a/images/hero.jpg", 30),
+            ("b/images/hero.jpg", 10),
+            ("b/images/step-01-1.jpg", 20),
+        ] {
             let file = std::fs::File::create(root.join(path)).unwrap();
-            file.set_modified(base + Duration::from_secs(offset)).unwrap();
+            file.set_modified(base + Duration::from_secs(offset))
+                .unwrap();
         }
         let threads = thread_pool(2).unwrap();
-        let paths: Vec<String> =
-            ["a/images/hero.jpg", "missing/x.jpg", "b/images/step-01-1.jpg", "b/images/hero.jpg"].map(String::from).into();
+        let paths: Vec<String> = [
+            "a/images/hero.jpg",
+            "missing/x.jpg",
+            "b/images/step-01-1.jpg",
+            "b/images/hero.jpg",
+        ]
+        .map(String::from)
+        .into();
         let ordered = in_disk_order(&root, paths, |p| p.as_str(), &threads);
         std::fs::remove_dir_all(&root).unwrap();
-        assert_eq!(ordered, ["b/images/hero.jpg", "b/images/step-01-1.jpg", "a/images/hero.jpg", "missing/x.jpg"]);
+        assert_eq!(
+            ordered,
+            [
+                "b/images/hero.jpg",
+                "b/images/step-01-1.jpg",
+                "a/images/hero.jpg",
+                "missing/x.jpg"
+            ]
+        );
     }
 }

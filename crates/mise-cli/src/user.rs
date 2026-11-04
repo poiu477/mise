@@ -38,7 +38,10 @@ pub enum UserCommand {
 fn read_password() -> Result<String> {
     eprintln!("Password (one line on standard input):");
     let mut line = String::new();
-    std::io::stdin().lock().read_line(&mut line).context("reading the password")?;
+    std::io::stdin()
+        .lock()
+        .read_line(&mut line)
+        .context("reading the password")?;
     Ok(line.trim_end_matches(['\r', '\n']).to_string())
 }
 
@@ -60,21 +63,39 @@ pub async fn run(pool: &PgPool, cmd: UserCommand) -> Result<()> {
             .fetch_all(pool)
             .await?;
             if rows.is_empty() {
-                println!("No accounts yet: the first visit to the web app creates the admin account.");
+                println!(
+                    "No accounts yet: the first visit to the web app creates the admin account."
+                );
             }
             for (username, name, admin, disabled, household, password) in rows {
-                let flags = [admin.then_some("admin"), disabled.then_some("off"), (!password).then_some("sso only")];
+                let flags = [
+                    admin.then_some("admin"),
+                    disabled.then_some("off"),
+                    (!password).then_some("sso only"),
+                ];
                 let flags: Vec<&str> = flags.into_iter().flatten().collect();
-                println!("{username:<20} {name:<24} {household:<24} {}", flags.join(", "));
+                println!(
+                    "{username:<20} {name:<24} {household:<24} {}",
+                    flags.join(", ")
+                );
             }
         }
-        UserCommand::Add { username, admin, email, household } => {
+        UserCommand::Add {
+            username,
+            admin,
+            email,
+            household,
+        } => {
             let password = read_password()?;
             let household_id = match &household {
-                Some(name) => sqlx::query_scalar::<_, Uuid>("SELECT id FROM households WHERE name = $1 ORDER BY created_at LIMIT 1")
+                Some(name) => {
+                    sqlx::query_scalar::<_, Uuid>(
+                        "SELECT id FROM households WHERE name = $1 ORDER BY created_at LIMIT 1",
+                    )
                     .bind(name)
                     .fetch_optional(pool)
-                    .await?,
+                    .await?
+                }
                 None => None,
             };
             let r = NewUser {
@@ -86,7 +107,9 @@ pub async fn run(pool: &PgPool, cmd: UserCommand) -> Result<()> {
                 household_id,
                 household_name: household,
             };
-            auth::routes::add_user(pool, r).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+            auth::routes::add_user(pool, r)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
             println!("Added {username}.");
         }
         UserCommand::SetPassword { username } => {
@@ -94,20 +117,39 @@ pub async fn run(pool: &PgPool, cmd: UserCommand) -> Result<()> {
             let password = read_password()?;
             auth::validate_password(&password).map_err(|e| anyhow::anyhow!("{e}"))?;
             let hash = auth::hash_password(&password)?;
-            sqlx::query("UPDATE users SET password_hash = $2 WHERE id = $1").bind(id).bind(hash).execute(pool).await?;
-            sqlx::query("DELETE FROM sessions WHERE user_id = $1").bind(id).execute(pool).await?;
+            sqlx::query("UPDATE users SET password_hash = $2 WHERE id = $1")
+                .bind(id)
+                .bind(hash)
+                .execute(pool)
+                .await?;
+            sqlx::query("DELETE FROM sessions WHERE user_id = $1")
+                .bind(id)
+                .execute(pool)
+                .await?;
             println!("Password set for {username}; it was signed out everywhere.");
         }
         UserCommand::Admin { username, off } => {
             let id = user_id(pool, &username).await?;
             if off {
-                let others: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE is_admin AND NOT disabled AND id <> $1").bind(id).fetch_one(pool).await?;
+                let others: i64 = sqlx::query_scalar(
+                    "SELECT count(*) FROM users WHERE is_admin AND NOT disabled AND id <> $1",
+                )
+                .bind(id)
+                .fetch_one(pool)
+                .await?;
                 if others == 0 {
                     bail!("{username} is the last admin");
                 }
             }
-            sqlx::query("UPDATE users SET is_admin = $2 WHERE id = $1").bind(id).bind(!off).execute(pool).await?;
-            println!("{username} is {}an admin.", if off { "no longer " } else { "now " });
+            sqlx::query("UPDATE users SET is_admin = $2 WHERE id = $1")
+                .bind(id)
+                .bind(!off)
+                .execute(pool)
+                .await?;
+            println!(
+                "{username} is {}an admin.",
+                if off { "no longer " } else { "now " }
+            );
         }
     }
     Ok(())

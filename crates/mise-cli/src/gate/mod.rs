@@ -161,13 +161,19 @@ pub struct RelatedDish {
     pub in_sample: Option<usize>,
 }
 
-pub async fn write_report(pool: &PgPool, sample_size: usize, seed: u64, out: &Path) -> Result<Report> {
+pub async fn write_report(
+    pool: &PgPool,
+    sample_size: usize,
+    seed: u64,
+    out: &Path,
+) -> Result<Report> {
     let snap = data::load_snapshot(pool).await?;
     let report = build(pool, &snap, sample_size, seed).await?;
     if let Some(dir) = out.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
-    std::fs::write(out, html::render(&report)).with_context(|| format!("writing {}", out.display()))?;
+    std::fs::write(out, html::render(&report))
+        .with_context(|| format!("writing {}", out.display()))?;
     Ok(report)
 }
 
@@ -185,14 +191,25 @@ struct Index<'a> {
 }
 
 fn index(snap: &Snapshot) -> Index<'_> {
-    let dish_at: HashMap<Uuid, usize> = snap.dishes.iter().enumerate().map(|(i, d)| (d.id, i)).collect();
+    let dish_at: HashMap<Uuid, usize> = snap
+        .dishes
+        .iter()
+        .enumerate()
+        .map(|(i, d)| (d.id, i))
+        .collect();
     let mut variants_of: Vec<Vec<&Variant>> = vec![Vec::new(); snap.dishes.len()];
     let variant: HashMap<Uuid, &Variant> = snap.variants.iter().map(|v| (v.id, v)).collect();
     let mut lineage: Vec<HashMap<usize, usize>> = vec![HashMap::new(); snap.dishes.len()];
     for v in &snap.variants {
-        let Some(&d) = dish_at.get(&v.dish_id) else { continue };
+        let Some(&d) = dish_at.get(&v.dish_id) else {
+            continue;
+        };
         variants_of[d].push(v);
-        if let Some(p) = v.parent_variant_id.and_then(|p| variant.get(&p)).and_then(|p| dish_at.get(&p.dish_id)) {
+        if let Some(p) = v
+            .parent_variant_id
+            .and_then(|p| variant.get(&p))
+            .and_then(|p| dish_at.get(&p.dish_id))
+        {
             if *p != d {
                 *lineage[d].entry(*p).or_default() += 1;
                 *lineage[*p].entry(d).or_default() += 1;
@@ -218,7 +235,10 @@ fn index(snap: &Snapshot) -> Index<'_> {
     let same_title = group(&|d| normalize_name(&clean_title(&d.title)));
     let mut same_core = group(&|d| protein_core(&d.title));
     for (d, twins) in same_core.iter_mut().enumerate() {
-        twins.retain(|&o| !same_title[d].contains(&o) && overlap(snap, d, o).is_some_and(|x| x >= CORE_TWIN_OVERLAP));
+        twins.retain(|&o| {
+            !same_title[d].contains(&o)
+                && overlap(snap, d, o).is_some_and(|x| x >= CORE_TWIN_OVERLAP)
+        });
     }
     let mut reviews_of = vec![Vec::new(); snap.dishes.len()];
     for (r, item) in snap.merge_reviews.iter().enumerate() {
@@ -230,28 +250,42 @@ fn index(snap: &Snapshot) -> Index<'_> {
             }
         }
     }
-    Index { dish_at, variants_of, variant, lineage, same_title, same_core, reviews_of }
+    Index {
+        dish_at,
+        variants_of,
+        variant,
+        lineage,
+        same_title,
+        same_core,
+        reviews_of,
+    }
 }
 
 async fn build(pool: &PgPool, snap: &Snapshot, sample_size: usize, seed: u64) -> Result<Report> {
     let ix = index(snap);
-    let options_of: HashMap<Uuid, Vec<&data::DishOption>> = snap.options.iter().fold(HashMap::new(), |mut m, o| {
-        m.entry(o.dish_id).or_default().push(o);
-        m
-    });
+    let options_of: HashMap<Uuid, Vec<&data::DishOption>> =
+        snap.options.iter().fold(HashMap::new(), |mut m, o| {
+            m.entry(o.dish_id).or_default().push(o);
+            m
+        });
 
     let features: Vec<sample::Features> = snap
         .dishes
         .iter()
         .enumerate()
         .map(|(i, d)| {
-            let titles: HashSet<String> = ix.variants_of[i].iter().map(|v| normalize_name(&clean_title(&v.title))).collect();
+            let titles: HashSet<String> = ix.variants_of[i]
+                .iter()
+                .map(|v| normalize_name(&clean_title(&v.title)))
+                .collect();
             sample::Features {
                 id: d.id,
                 content_type: d.content_type.clone(),
                 versions: ix.variants_of[i].len(),
                 titles: titles.len(),
-                protein_choice: options_of.get(&d.id).is_some_and(|os| os.iter().any(|o| o.key == "protein")),
+                protein_choice: options_of
+                    .get(&d.id)
+                    .is_some_and(|os| os.iter().any(|o| o.key == "protein")),
                 merge_review: !ix.reviews_of[i].is_empty(),
                 lineage_links: ix.lineage[i].len(),
                 title_twins: ix.same_title[i].len(),
@@ -260,7 +294,11 @@ async fn build(pool: &PgPool, snap: &Snapshot, sample_size: usize, seed: u64) ->
         })
         .collect();
     let picks = sample::draw(&features, sample_size, seed);
-    let card_no: HashMap<usize, usize> = picks.iter().enumerate().map(|(n, p)| (p.dish, n + 1)).collect();
+    let card_no: HashMap<usize, usize> = picks
+        .iter()
+        .enumerate()
+        .map(|(n, p)| (p.dish, n + 1))
+        .collect();
 
     let strata = STRATA
         .iter()
@@ -275,10 +313,19 @@ async fn build(pool: &PgPool, snap: &Snapshot, sample_size: usize, seed: u64) ->
         .collect();
 
     // Related dishes per pick, so their default versions' ingredients load in the same query.
-    let related_of: Vec<Vec<(usize, Vec<String>)>> = picks.iter().map(|p| related_dishes(&ix, snap, p.dish)).collect();
-    let mut default_ids: Vec<Uuid> = picks.iter().filter_map(|p| snap.dishes[p.dish].default_variant_id).collect();
+    let related_of: Vec<Vec<(usize, Vec<String>)>> = picks
+        .iter()
+        .map(|p| related_dishes(&ix, snap, p.dish))
+        .collect();
+    let mut default_ids: Vec<Uuid> = picks
+        .iter()
+        .filter_map(|p| snap.dishes[p.dish].default_variant_id)
+        .collect();
     for rel in &related_of {
-        default_ids.extend(rel.iter().filter_map(|(d, _)| snap.dishes[*d].default_variant_id));
+        default_ids.extend(
+            rel.iter()
+                .filter_map(|(d, _)| snap.dishes[*d].default_variant_id),
+        );
     }
     default_ids.sort();
     default_ids.dedup();
@@ -290,7 +337,12 @@ async fn build(pool: &PgPool, snap: &Snapshot, sample_size: usize, seed: u64) ->
         snap.dishes[d]
             .default_variant_id
             .and_then(|v| lines.get(&v))
-            .map(|ls| ls.iter().filter(|l| l.shipped).map(|l| food_of(l).name).collect())
+            .map(|ls| {
+                ls.iter()
+                    .filter(|l| l.shipped)
+                    .map(|l| food_of(l).name)
+                    .collect()
+            })
             .unwrap_or_default()
     };
     let related_dish = |d: usize| -> RelatedDish {
@@ -317,19 +369,32 @@ async fn build(pool: &PgPool, snap: &Snapshot, sample_size: usize, seed: u64) ->
             .iter()
             .filter(|o| o.key == "version")
             .flat_map(|o| o.choices.as_array().cloned().unwrap_or_default())
-            .filter_map(|c| Some((c["value"].as_str()?.to_string(), c["label"].as_str()?.to_string())))
+            .filter_map(|c| {
+                Some((
+                    c["value"].as_str()?.to_string(),
+                    c["label"].as_str()?.to_string(),
+                ))
+            })
             .collect();
 
         let rows: Vec<VersionRow> = vs
             .iter()
             .map(|v| {
-                let attr = |k: &str| attributes.get(&v.id).and_then(|a| a.get(k)).cloned().unwrap_or_default();
+                let attr = |k: &str| {
+                    attributes
+                        .get(&v.id)
+                        .and_then(|a| a.get(k))
+                        .cloned()
+                        .unwrap_or_default()
+                };
                 let version = attr("version");
                 let parent = match v.parent_variant_id.and_then(|p| ix.variant.get(&p)) {
                     None => Parent::None,
                     Some(p) if p.dish_id == dish.id => Parent::SameDish,
                     Some(p) => match ix.dish_at.get(&p.dish_id) {
-                        Some(&o) => Parent::Other(snap.dishes[o].title.clone(), snap.dishes[o].slug.clone()),
+                        Some(&o) => {
+                            Parent::Other(snap.dishes[o].title.clone(), snap.dishes[o].slug.clone())
+                        }
                         None => Parent::None,
                     },
                 };
@@ -342,7 +407,13 @@ async fn build(pool: &PgPool, snap: &Snapshot, sample_size: usize, seed: u64) ->
                         p => p.to_string(),
                     },
                     portion: attr("portion"),
-                    version: version_label.get(&version).cloned().unwrap_or_else(|| if version == "standard" { "Standard".into() } else { version }),
+                    version: version_label.get(&version).cloned().unwrap_or_else(|| {
+                        if version == "standard" {
+                            "Standard".into()
+                        } else {
+                            version
+                        }
+                    }),
                     has_steps: v.has_steps,
                     parent,
                     is_default: dish.default_variant_id == Some(v.id),
@@ -369,16 +440,34 @@ async fn build(pool: &PgPool, snap: &Snapshot, sample_size: usize, seed: u64) ->
                     })
                     .unwrap_or_default();
                 let default_label = o.default_value.as_ref().and_then(|dv| {
-                    o.choices.as_array()?.iter().find(|c| c["value"].as_str() == Some(dv))?["label"].as_str().map(str::to_string)
+                    o.choices
+                        .as_array()?
+                        .iter()
+                        .find(|c| c["value"].as_str() == Some(dv))?["label"]
+                        .as_str()
+                        .map(str::to_string)
                 });
-                OptionView { label: o.label.clone(), default_label, choices }
+                OptionView {
+                    label: o.label.clone(),
+                    default_label,
+                    choices,
+                }
             })
             .collect();
 
-        let default_lines: &[Line] = dish.default_variant_id.and_then(|v| lines.get(&v)).map(Vec::as_slice).unwrap_or(&[]);
+        let default_lines: &[Line] = dish
+            .default_variant_id
+            .and_then(|v| lines.get(&v))
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
         let related = rel
             .into_iter()
-            .map(|(o, why)| Related { dish: related_dish(o), why, overlap: overlap(snap, d, o), shipped: shipped_names(o) })
+            .map(|(o, why)| Related {
+                dish: related_dish(o),
+                why,
+                overlap: overlap(snap, d, o),
+                shipped: shipped_names(o),
+            })
             .collect();
 
         let reviews = ix.reviews_of[d]
@@ -386,7 +475,11 @@ async fn build(pool: &PgPool, snap: &Snapshot, sample_size: usize, seed: u64) ->
             .filter_map(|&r| {
                 let item = &snap.merge_reviews[r];
                 let this_is_copy = item.dish_id == dish.id;
-                let other_id = if this_is_copy { item.other_dish_id } else { item.dish_id };
+                let other_id = if this_is_copy {
+                    item.other_dish_id
+                } else {
+                    item.dish_id
+                };
                 let &o = ix.dish_at.get(&other_id)?;
                 Some(ReviewView {
                     this_is_copy,
@@ -411,8 +504,16 @@ async fn build(pool: &PgPool, snap: &Snapshot, sample_size: usize, seed: u64) ->
             title_groups: title_groups(&rows),
             default_version: rows.iter().find(|r| r.is_default).cloned(),
             rows,
-            shipped: default_lines.iter().filter(|l| l.shipped).map(food_of).collect(),
-            pantry: default_lines.iter().filter(|l| !l.shipped).map(food_of).collect(),
+            shipped: default_lines
+                .iter()
+                .filter(|l| l.shipped)
+                .map(food_of)
+                .collect(),
+            pantry: default_lines
+                .iter()
+                .filter(|l| !l.shipped)
+                .map(food_of)
+                .collect(),
             reviews,
             related,
         });
@@ -435,13 +536,23 @@ fn related_dishes(ix: &Index, snap: &Snapshot, d: usize) -> Vec<(usize, Vec<Stri
     lineage.sort_by_key(|(o, n)| (std::cmp::Reverse(**n), **o));
     let mut order: Vec<usize> = Vec::new();
     for (&o, &n) in lineage {
-        why.entry(o).or_default().push(format!("shared lineage ×{n}"));
+        why.entry(o)
+            .or_default()
+            .push(format!("shared lineage ×{n}"));
         order.push(o);
     }
-    for (list, reason) in [(&ix.same_title[d], "same title"), (&ix.same_core[d], "same title apart from protein")] {
+    for (list, reason) in [
+        (&ix.same_title[d], "same title"),
+        (&ix.same_core[d], "same title apart from protein"),
+    ] {
         // Closest ingredients first.
         let mut list = list.clone();
-        list.sort_by(|&a, &b| overlap(snap, d, b).unwrap_or(0.0).total_cmp(&overlap(snap, d, a).unwrap_or(0.0)).then(a.cmp(&b)));
+        list.sort_by(|&a, &b| {
+            overlap(snap, d, b)
+                .unwrap_or(0.0)
+                .total_cmp(&overlap(snap, d, a).unwrap_or(0.0))
+                .then(a.cmp(&b))
+        });
         for o in list {
             let e = why.entry(o).or_default();
             if e.is_empty() {
@@ -450,7 +561,11 @@ fn related_dishes(ix: &Index, snap: &Snapshot, d: usize) -> Vec<(usize, Vec<Stri
             e.push(reason.to_string());
         }
     }
-    order.into_iter().take(MAX_RELATED).map(|o| (o, why.remove(&o).unwrap_or_default())).collect()
+    order
+        .into_iter()
+        .take(MAX_RELATED)
+        .map(|o| (o, why.remove(&o).unwrap_or_default()))
+        .collect()
 }
 
 fn title_groups(rows: &[VersionRow]) -> Vec<TitleGroup> {
@@ -467,16 +582,25 @@ fn title_groups(rows: &[VersionRow]) -> Vec<TitleGroup> {
     let mut out: Vec<TitleGroup> = groups
         .into_iter()
         .map(|(_, rs)| TitleGroup {
-            title: most_common(rs.iter().map(|r| clean_title(&r.title))).map(|(t, _)| t).unwrap_or_default(),
-            subtitle: most_common(rs.iter().filter_map(|r| r.subtitle.as_deref().map(clean_title)).filter(|s| !s.is_empty()))
-                .map(|(s, _)| s),
+            title: most_common(rs.iter().map(|r| clean_title(&r.title)))
+                .map(|(t, _)| t)
+                .unwrap_or_default(),
+            subtitle: most_common(
+                rs.iter()
+                    .filter_map(|r| r.subtitle.as_deref().map(clean_title))
+                    .filter(|s| !s.is_empty()),
+            )
+            .map(|(s, _)| s),
             count: rs.len(),
             years: years(rs.iter().map(|r| r.published)),
             proteins: counts(rs.iter().map(|r| r.protein.clone())),
             portions: counts(rs.iter().map(|r| r.portion.clone())),
             versions: counts(rs.iter().map(|r| r.version.clone())),
             has_default: rs.iter().any(|r| r.is_default),
-            copied_in: rs.iter().filter(|r| matches!(r.parent, Parent::Other(..))).count(),
+            copied_in: rs
+                .iter()
+                .filter(|r| matches!(r.parent, Parent::Other(..)))
+                .count(),
         })
         .collect();
     out.sort_by_key(|g| (std::cmp::Reverse(g.count), g.title.clone()));
@@ -496,7 +620,18 @@ fn summarize(
         e.1 += ix.variants_of[i].len();
     }
     let bucket = |edges: &[(usize, usize, &'static str)], value: fn(&sample::Features) -> usize| {
-        edges.iter().map(|&(lo, hi, label)| (label, features.iter().filter(|f| (lo..=hi).contains(&value(f))).count())).collect()
+        edges
+            .iter()
+            .map(|&(lo, hi, label)| {
+                (
+                    label,
+                    features
+                        .iter()
+                        .filter(|f| (lo..=hi).contains(&value(f)))
+                        .count(),
+                )
+            })
+            .collect()
     };
     let mut options: BTreeMap<String, usize> = BTreeMap::new();
     for os in options_of.values() {
@@ -510,10 +645,26 @@ fn summarize(
         variants,
         by_type,
         versions_hist: bucket(
-            &[(1, 1, "1"), (2, 3, "2–3"), (4, 9, "4–9"), (10, 24, "10–24"), (25, 99, "25–99"), (100, usize::MAX, "100+")],
+            &[
+                (1, 1, "1"),
+                (2, 3, "2–3"),
+                (4, 9, "4–9"),
+                (10, 24, "10–24"),
+                (25, 99, "25–99"),
+                (100, usize::MAX, "100+"),
+            ],
             |f| f.versions,
         ),
-        titles_hist: bucket(&[(1, 1, "1"), (2, 2, "2"), (3, 5, "3–5"), (6, 10, "6–10"), (11, usize::MAX, "11+")], |f| f.titles),
+        titles_hist: bucket(
+            &[
+                (1, 1, "1"),
+                (2, 2, "2"),
+                (3, 5, "3–5"),
+                (6, 10, "6–10"),
+                (11, usize::MAX, "11+"),
+            ],
+            |f| f.titles,
+        ),
         mean_versions: variants as f64 / snap.dishes.len().max(1) as f64,
         max_versions: features.iter().map(|f| f.versions).max().unwrap_or(0),
         options: options.into_iter().collect(),
@@ -530,16 +681,28 @@ fn summarize(
 /// Jaccard overlap of two dishes' default versions' shipped foods; None when neither ships anything.
 fn overlap(snap: &Snapshot, a: usize, b: usize) -> Option<f64> {
     let empty = HashSet::new();
-    let sa = snap.default_shipped.get(&snap.dishes[a].id).unwrap_or(&empty);
-    let sb = snap.default_shipped.get(&snap.dishes[b].id).unwrap_or(&empty);
+    let sa = snap
+        .default_shipped
+        .get(&snap.dishes[a].id)
+        .unwrap_or(&empty);
+    let sb = snap
+        .default_shipped
+        .get(&snap.dishes[b].id)
+        .unwrap_or(&empty);
     let union = sa.union(sb).count();
     (union > 0).then(|| sa.intersection(sb).count() as f64 / union as f64)
 }
 
 fn food_of(l: &Line) -> Food {
     match &l.food_name {
-        Some(name) => Food { name: name.clone(), matched: true },
-        None => Food { name: l.raw_name.clone(), matched: false },
+        Some(name) => Food {
+            name: name.clone(),
+            matched: true,
+        },
+        None => Food {
+            name: l.raw_name.clone(),
+            matched: false,
+        },
     }
 }
 

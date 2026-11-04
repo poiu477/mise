@@ -117,11 +117,21 @@ pub async fn load_snapshot(pool: &PgPool) -> Result<Snapshot> {
     for (dish, food) in rows {
         default_shipped.entry(dish).or_default().insert(food);
     }
-    Ok(Snapshot { dishes, variants, options, merge_reviews, review_counts, default_shipped })
+    Ok(Snapshot {
+        dishes,
+        variants,
+        options,
+        merge_reviews,
+        review_counts,
+        default_shipped,
+    })
 }
 
 /// variant id -> key -> value, for the given dishes' variants.
-pub async fn load_attributes(pool: &PgPool, dish_ids: &[Uuid]) -> Result<HashMap<Uuid, HashMap<String, String>>> {
+pub async fn load_attributes(
+    pool: &PgPool,
+    dish_ids: &[Uuid],
+) -> Result<HashMap<Uuid, HashMap<String, String>>> {
     let rows: Vec<(Uuid, String, String)> = sqlx::query_as(
         "SELECT va.variant_id, va.key, va.value FROM variant_attributes va
          JOIN variants v ON v.id = va.variant_id WHERE v.dish_id = ANY($1)",

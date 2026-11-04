@@ -42,30 +42,38 @@ pub struct Preferred {
 
 /// Load a file of preferred versions, replacing those recorded before. Returns how many were loaded.
 pub async fn apply_preferred(pool: &PgPool, path: &Path) -> Result<usize> {
-    let list: Vec<Preferred> =
-        serde_json::from_reader(std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?)
-            .with_context(|| format!("reading {}", path.display()))?;
+    let list: Vec<Preferred> = serde_json::from_reader(
+        std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?,
+    )
+    .with_context(|| format!("reading {}", path.display()))?;
     let mut tx = pool.begin().await?;
-    sqlx::query("DELETE FROM preferred_versions").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM preferred_versions")
+        .execute(&mut *tx)
+        .await?;
     for p in &list {
-        sqlx::query("INSERT INTO preferred_versions (source, external_id, times) VALUES ($1, $2, $3)")
-            .bind(&p.record.0)
-            .bind(&p.record.1)
-            .bind(p.times)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT INTO preferred_versions (source, external_id, times) VALUES ($1, $2, $3)",
+        )
+        .bind(&p.record.0)
+        .bind(&p.record.1)
+        .bind(p.times)
+        .execute(&mut *tx)
+        .await?;
     }
     tx.commit().await?;
     Ok(list.len())
 }
 
 pub async fn apply_file(pool: &PgPool, path: &Path) -> Result<ApplyStats> {
-    let decisions: Vec<Decision> =
-        serde_json::from_reader(std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?)
-            .with_context(|| format!("reading {}", path.display()))?;
+    let decisions: Vec<Decision> = serde_json::from_reader(
+        std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?,
+    )
+    .with_context(|| format!("reading {}", path.display()))?;
     let mut stats = ApplyStats::default();
     let mut tx = pool.begin().await?;
-    sqlx::query("DELETE FROM dish_decisions").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM dish_decisions")
+        .execute(&mut *tx)
+        .await?;
     for d in &decisions {
         match d.decision.as_str() {
             "merge" => stats.merge += 1,
@@ -73,7 +81,11 @@ pub async fn apply_file(pool: &PgPool, path: &Path) -> Result<ApplyStats> {
             other => bail!("unknown decision {other:?} (expected merge or keep_apart)"),
         }
         // One row per unordered pair, so the same pair decided twice keeps the later decision.
-        let (a, b) = if (&d.a.0, &d.a.1) <= (&d.b.0, &d.b.1) { (&d.a, &d.b) } else { (&d.b, &d.a) };
+        let (a, b) = if (&d.a.0, &d.a.1) <= (&d.b.0, &d.b.1) {
+            (&d.a, &d.b)
+        } else {
+            (&d.b, &d.a)
+        };
         sqlx::query(
             "INSERT INTO dish_decisions (a_source, a_external, b_source, b_external, decision, decided_by, note)
              VALUES ($1, $2, $3, $4, $5, $6, $7)

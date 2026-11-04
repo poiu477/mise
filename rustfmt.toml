@@ -1,0 +1,2 @@
+# rustfmt at its defaults, with the 2024 style edition to match the crates.
+style_edition = "2024"

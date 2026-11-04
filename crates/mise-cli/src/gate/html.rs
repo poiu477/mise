@@ -24,7 +24,12 @@ pub fn render(r: &Report) -> String {
     toolbar(&mut h, r);
     h.push_str("<main class=\"wrap\">");
     summary(&mut h, r);
-    let _ = write!(h, "<p class=\"count-line\">Showing <b id=\"shown\">{}</b> of {} dishes.</p>", r.cards.len(), r.cards.len());
+    let _ = write!(
+        h,
+        "<p class=\"count-line\">Showing <b id=\"shown\">{}</b> of {} dishes.</p>",
+        r.cards.len(),
+        r.cards.len()
+    );
     for (i, c) in r.cards.iter().enumerate() {
         card(&mut h, i + 1, c);
     }
@@ -93,19 +98,57 @@ fn toolbar(h: &mut String, r: &Report) {
 fn summary(h: &mut String, r: &Report) {
     let s: &Summary = &r.summary;
     h.push_str("<section class=\"summary\"><div class=\"tiles\">");
-    let pct = |n: usize, of: usize| if of == 0 { 0.0 } else { 100.0 * n as f64 / of as f64 };
+    let pct = |n: usize, of: usize| {
+        if of == 0 {
+            0.0
+        } else {
+            100.0 * n as f64 / of as f64
+        }
+    };
     for (v, k) in [
         (fmt_n(s.dishes), "dishes".to_string()),
         (fmt_n(s.variants), "versions".to_string()),
-        (format!("{:.1}", s.mean_versions), format!("versions per dish (max {})", s.max_versions)),
-        (fmt_n(s.multi_version_dishes), format!("dishes with 2+ versions ({:.0}%)", pct(s.multi_version_dishes, s.dishes))),
-        (fmt_n(s.with_any_option), format!("dishes with options ({:.0}%)", pct(s.with_any_option, s.dishes))),
-        (fmt_n(s.in_merge_review), "dishes in an open merge review".to_string()),
-        (fmt_n(s.lineage_linked), "dishes sharing lineage with another".to_string()),
-        (fmt_n(s.title_twinned), "dishes sharing their cleaned title with another".to_string()),
-        (fmt_n(s.protein_twinned), "dishes with a protein twin (likely missed merges)".to_string()),
+        (
+            format!("{:.1}", s.mean_versions),
+            format!("versions per dish (max {})", s.max_versions),
+        ),
+        (
+            fmt_n(s.multi_version_dishes),
+            format!(
+                "dishes with 2+ versions ({:.0}%)",
+                pct(s.multi_version_dishes, s.dishes)
+            ),
+        ),
+        (
+            fmt_n(s.with_any_option),
+            format!(
+                "dishes with options ({:.0}%)",
+                pct(s.with_any_option, s.dishes)
+            ),
+        ),
+        (
+            fmt_n(s.in_merge_review),
+            "dishes in an open merge review".to_string(),
+        ),
+        (
+            fmt_n(s.lineage_linked),
+            "dishes sharing lineage with another".to_string(),
+        ),
+        (
+            fmt_n(s.title_twinned),
+            "dishes sharing their cleaned title with another".to_string(),
+        ),
+        (
+            fmt_n(s.protein_twinned),
+            "dishes with a protein twin (likely missed merges)".to_string(),
+        ),
     ] {
-        let _ = write!(h, "<div class=\"tile\"><div class=\"v\">{}</div><div class=\"k\">{}</div></div>", esc(&v), esc(&k));
+        let _ = write!(
+            h,
+            "<div class=\"tile\"><div class=\"v\">{}</div><div class=\"k\">{}</div></div>",
+            esc(&v),
+            esc(&k)
+        );
     }
     h.push_str("</div><div class=\"panels\">");
 
@@ -148,7 +191,13 @@ fn summary(h: &mut String, r: &Report) {
 
     h.push_str("<div class=\"panel\"><h3>Content types</h3><table><thead><tr><th>Type</th><th class=\"n\">Dishes</th><th class=\"n\">Versions</th></tr></thead><tbody>");
     for (t, (d, v)) in &s.by_type {
-        let _ = write!(h, "<tr><td>{}</td><td class=\"n\">{}</td><td class=\"n\">{}</td></tr>", esc(t), fmt_n(*d), fmt_n(*v));
+        let _ = write!(
+            h,
+            "<tr><td>{}</td><td class=\"n\">{}</td><td class=\"n\">{}</td></tr>",
+            esc(t),
+            fmt_n(*d),
+            fmt_n(*v)
+        );
     }
     h.push_str("</tbody></table><h3 style=\"margin-top:10px\">Option coverage</h3><table><thead><tr><th>Option</th><th class=\"n\">Dishes</th>\
                 <th class=\"n\">of all</th><th class=\"n\">of 2+ versions</th></tr></thead><tbody>");
@@ -166,16 +215,30 @@ fn summary(h: &mut String, r: &Report) {
 
     h.push_str("<div class=\"panel\"><h3>Review queue</h3><table><thead><tr><th>Kind</th><th>Status</th><th class=\"n\">Items</th></tr></thead><tbody>");
     for (kind, status, n) in &s.review_counts {
-        let _ = write!(h, "<tr><td>{}</td><td>{}</td><td class=\"n\">{}</td></tr>", esc(kind), esc(status), fmt_n(*n as usize));
+        let _ = write!(
+            h,
+            "<tr><td>{}</td><td>{}</td><td class=\"n\">{}</td></tr>",
+            esc(kind),
+            esc(status),
+            fmt_n(*n as usize)
+        );
     }
     h.push_str("</tbody></table></div></div></section>");
 }
 
 fn hist(h: &mut String, title: &str, rows: &[(&str, usize)], total: usize) {
     let max = rows.iter().map(|r| r.1).max().unwrap_or(1).max(1);
-    let _ = write!(h, "<div class=\"panel\"><h3>{}</h3><table class=\"hist\"><tbody>", esc(title));
+    let _ = write!(
+        h,
+        "<div class=\"panel\"><h3>{}</h3><table class=\"hist\"><tbody>",
+        esc(title)
+    );
     for (label, n) in rows {
-        let share = if total == 0 { 0.0 } else { 100.0 * *n as f64 / total as f64 };
+        let share = if total == 0 {
+            0.0
+        } else {
+            100.0 * *n as f64 / total as f64
+        };
         let _ = write!(
             h,
             "<tr title=\"{label}: {n} dishes ({share:.1}%)\"><td>{label}</td><td class=\"bar-cell\"><div class=\"hbar\" style=\"width:{w:.1}%\"></div></td>\
@@ -191,7 +254,13 @@ fn hist(h: &mut String, title: &str, rows: &[(&str, usize)], total: usize) {
 fn card(h: &mut String, no: usize, c: &Card) {
     let d = &c.dish;
     let tags: Vec<&str> = c.tags.iter().map(|&t| STRATA[t].key).collect();
-    let search = format!("{} {} {}", d.title, d.subtitle.as_deref().unwrap_or(""), d.slug).to_lowercase();
+    let search = format!(
+        "{} {} {}",
+        d.title,
+        d.subtitle.as_deref().unwrap_or(""),
+        d.slug
+    )
+    .to_lowercase();
     let _ = write!(
         h,
         "<article class=\"card\" id=\"dish-{no}\" data-id=\"{id}\" data-stratum=\"{st}\" data-tags=\"{tags}\" data-type=\"{ct}\" data-search=\"{search}\">\
@@ -204,7 +273,11 @@ fn card(h: &mut String, no: usize, c: &Card) {
         ct = esc(&d.content_type),
         search = esc(&search),
         title = esc(&d.title),
-        sub = d.subtitle.as_deref().map(|s| format!("<p class=\"sub\">{}</p>", esc(s))).unwrap_or_default(),
+        sub = d
+            .subtitle
+            .as_deref()
+            .map(|s| format!("<p class=\"sub\">{}</p>", esc(s)))
+            .unwrap_or_default(),
         n = c.versions,
         s = if c.versions == 1 { "" } else { "s" },
         range = esc(&date_range(c.first, c.last)),
@@ -257,9 +330,15 @@ fn card(h: &mut String, no: usize, c: &Card) {
             "<tr{}><td class=\"t\">{}{}{}</td><td class=\"n\">{}</td><td class=\"num\">{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
             if g.has_default { " class=\"def\"" } else { "" },
             esc(&g.title),
-            g.subtitle.as_deref().map(|s| format!("<br><span class=\"muted\">{}</span>", esc(s))).unwrap_or_default(),
+            g.subtitle
+                .as_deref()
+                .map(|s| format!("<br><span class=\"muted\">{}</span>", esc(s)))
+                .unwrap_or_default(),
             if g.copied_in > 0 {
-                format!(" <span class=\"copied\" title=\"Versions copied from a version in another dish\">↪ {} from other dish</span>", g.copied_in)
+                format!(
+                    " <span class=\"copied\" title=\"Versions copied from a version in another dish\">↪ {} from other dish</span>",
+                    g.copied_in
+                )
             } else {
                 String::new()
             },
@@ -285,7 +364,11 @@ fn card(h: &mut String, no: usize, c: &Card) {
         let parent = match &v.parent {
             Parent::None => "<span class=\"muted\">—</span>".to_string(),
             Parent::SameDish => "this dish".to_string(),
-            Parent::Other(title, slug) => format!("<b>other dish:</b> {} <span class=\"slug\">{}</span>", esc(title), esc(slug)),
+            Parent::Other(title, slug) => format!(
+                "<b>other dish:</b> {} <span class=\"slug\">{}</span>",
+                esc(title),
+                esc(slug)
+            ),
         };
         let _ = write!(
             h,
@@ -293,7 +376,10 @@ fn card(h: &mut String, no: usize, c: &Card) {
             if v.is_default { " class=\"def\"" } else { "" },
             esc(&date(v.published)),
             esc(&v.title),
-            v.subtitle.as_deref().map(|s| format!("<br><span class=\"muted\">{}</span>", esc(s))).unwrap_or_default(),
+            v.subtitle
+                .as_deref()
+                .map(|s| format!("<br><span class=\"muted\">{}</span>", esc(s)))
+                .unwrap_or_default(),
             esc(&v.protein),
             esc(&v.portion),
             esc(&v.version),
@@ -324,7 +410,11 @@ fn card(h: &mut String, no: usize, c: &Card) {
         h.push_str("</ul>");
     }
     if !c.pantry.is_empty() {
-        let _ = write!(h, "<details><summary>Pantry ({})</summary><ul class=\"foods small\">", c.pantry.len());
+        let _ = write!(
+            h,
+            "<details><summary>Pantry ({})</summary><ul class=\"foods small\">",
+            c.pantry.len()
+        );
         for f in &c.pantry {
             food(h, &f.name, f.matched);
         }
@@ -334,22 +424,43 @@ fn card(h: &mut String, no: usize, c: &Card) {
 
     // Open merge reviews.
     if !c.reviews.is_empty() {
-        let _ = write!(h, "<div><h3>Open merge review{}</h3>", if c.reviews.len() == 1 { "" } else { "s" });
+        let _ = write!(
+            h,
+            "<div><h3>Open merge review{}</h3>",
+            if c.reviews.len() == 1 { "" } else { "s" }
+        );
         for rv in &c.reviews {
             let lead = if rv.this_is_copy {
-                format!("This dish's “{}” was copied from “{}” in", esc(&rv.copy_title), esc(&rv.source_title))
+                format!(
+                    "This dish's “{}” was copied from “{}” in",
+                    esc(&rv.copy_title),
+                    esc(&rv.source_title)
+                )
             } else {
                 format!("“{}” in", esc(&rv.copy_title))
             };
-            let tail = if rv.this_is_copy { String::new() } else { format!(" was copied from this dish's “{}”", esc(&rv.source_title)) };
+            let tail = if rv.this_is_copy {
+                String::new()
+            } else {
+                format!(" was copied from this dish's “{}”", esc(&rv.source_title))
+            };
             let _ = write!(
                 h,
                 "<div class=\"rev\">{lead} {other}{tail}.<br><span class=\"muted\">title similarity</span> <b>{sim}</b> · \
                  <span class=\"muted\">shipped overlap</span> <b>{ov}</b> · <span class=\"muted\">confidence</span> {conf}</div>",
                 other = dish_ref(&rv.other),
-                sim = rv.title_similarity.map(|x| format!("{x:.2}")).unwrap_or_else(|| "?".into()),
-                ov = rv.shipped_overlap.map(|x| format!("{x:.2}")).unwrap_or_else(|| "?".into()),
-                conf = rv.confidence.map(|x| format!("{x:.2}")).unwrap_or_else(|| "?".into()),
+                sim = rv
+                    .title_similarity
+                    .map(|x| format!("{x:.2}"))
+                    .unwrap_or_else(|| "?".into()),
+                ov = rv
+                    .shipped_overlap
+                    .map(|x| format!("{x:.2}"))
+                    .unwrap_or_else(|| "?".into()),
+                conf = rv
+                    .confidence
+                    .map(|x| format!("{x:.2}"))
+                    .unwrap_or_else(|| "?".into()),
             );
         }
         h.push_str("</div>");
@@ -390,7 +501,10 @@ fn related(h: &mut String, rel: &Related) {
         esc(&rel.dish.slug),
         esc(&rel.why.join(", ")),
         rel.overlap
-            .map(|o| format!(" · <span class=\"muted\">shipped overlap</span> <span class=\"ov\">{:.0}%</span>", o * 100.0))
+            .map(|o| format!(
+                " · <span class=\"muted\">shipped overlap</span> <span class=\"ov\">{:.0}%</span>",
+                o * 100.0
+            ))
             .unwrap_or_default()
     );
     if !rel.shipped.is_empty() {
@@ -406,10 +520,17 @@ fn related(h: &mut String, rel: &Related) {
 /// A dish named in another dish's card, linked when it has its own card.
 fn dish_ref(d: &RelatedDish) -> String {
     let name = match d.in_sample {
-        Some(n) => format!("<a href=\"#dish-{n}\"><b>{}</b></a> <span class=\"muted\">(#{n})</span>", esc(&d.title)),
+        Some(n) => format!(
+            "<a href=\"#dish-{n}\"><b>{}</b></a> <span class=\"muted\">(#{n})</span>",
+            esc(&d.title)
+        ),
         None => format!("<b>{}</b>", esc(&d.title)),
     };
-    let sub = d.subtitle.as_deref().map(|s| format!(" <span class=\"muted\">{}</span>", esc(s))).unwrap_or_default();
+    let sub = d
+        .subtitle
+        .as_deref()
+        .map(|s| format!(" <span class=\"muted\">{}</span>", esc(s)))
+        .unwrap_or_default();
     format!(
         "{name}{sub} <span class=\"muted\">· {} · {} version{}{}{}</span> <span class=\"slug\">{}</span>",
         esc(&d.content_type),
@@ -425,7 +546,11 @@ fn food(h: &mut String, name: &str, matched: bool) {
     let _ = write!(
         h,
         "<li{}>{}</li>",
-        if matched { "" } else { " class=\"unmatched\" title=\"Not matched to a food; raw name shown\"" },
+        if matched {
+            ""
+        } else {
+            " class=\"unmatched\" title=\"Not matched to a food; raw name shown\""
+        },
         esc(name)
     );
 }
@@ -435,12 +560,17 @@ fn counted(values: &[(String, usize)]) -> String {
     match values {
         [] => String::new(),
         [(v, _)] => esc(v),
-        _ => values.iter().map(|(v, n)| format!("{} <span class=\"cnt\">×{n}</span>", esc(v))).collect::<Vec<_>>().join(", "),
+        _ => values
+            .iter()
+            .map(|(v, n)| format!("{} <span class=\"cnt\">×{n}</span>", esc(v)))
+            .collect::<Vec<_>>()
+            .join(", "),
     }
 }
 
 fn date(d: Option<DateTime<Utc>>) -> String {
-    d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_else(|| "undated".into())
+    d.map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| "undated".into())
 }
 
 fn date_range(a: Option<DateTime<Utc>>, b: Option<DateTime<Utc>>) -> String {
@@ -495,14 +625,20 @@ mod tests {
 
     #[test]
     fn escapes_markup_in_text_and_attributes() {
-        assert_eq!(esc(r#"<b>"Tom's" & Jerry</b>"#), "&lt;b&gt;&quot;Tom&#39;s&quot; &amp; Jerry&lt;/b&gt;");
+        assert_eq!(
+            esc(r#"<b>"Tom's" & Jerry</b>"#),
+            "&lt;b&gt;&quot;Tom&#39;s&quot; &amp; Jerry&lt;/b&gt;"
+        );
     }
 
     #[test]
     fn script_json_cannot_close_the_script() {
         let s = script_json(&json!({ "title": "</script><script>alert(1)</script>" }));
         assert!(!s.contains("</script"));
-        assert_eq!(serde_json::from_str::<serde_json::Value>(&s).unwrap()["title"], "</script><script>alert(1)</script>");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&s).unwrap()["title"],
+            "</script><script>alert(1)</script>"
+        );
     }
 
     #[test]

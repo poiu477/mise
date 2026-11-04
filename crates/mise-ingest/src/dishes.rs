@@ -110,11 +110,15 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     sqlx::query("UPDATE variants v SET dish_id = NULL FROM dishes d WHERE d.id = v.dish_id AND d.origin = 'grouped' AND NOT v.dish_pinned")
         .execute(&mut *tx)
         .await?;
-    sqlx::query("UPDATE dishes SET default_variant_id = NULL WHERE origin = 'grouped'").execute(&mut *tx).await?;
+    sqlx::query("UPDATE dishes SET default_variant_id = NULL WHERE origin = 'grouped'")
+        .execute(&mut *tx)
+        .await?;
     sqlx::query("DELETE FROM dishes d WHERE origin = 'grouped' AND NOT EXISTS (SELECT 1 FROM variants v WHERE v.dish_id = d.id)")
         .execute(&mut *tx)
         .await?;
-    sqlx::query("DELETE FROM review_items WHERE kind = 'dish_merge' AND status = 'open'").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM review_items WHERE kind = 'dish_merge' AND status = 'open'")
+        .execute(&mut *tx)
+        .await?;
 
     let vs: Vec<V> = sqlx::query_as(
         "SELECT id, title, subtitle, parent_variant_id, coalesce(meta->>'content_type', 'recipe') AS content_type,
@@ -146,9 +150,16 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     }
     let jaccard = |sets: &HashMap<Uuid, HashSet<Uuid>>, a: Uuid, b: Uuid| -> f64 {
         let empty = HashSet::new();
-        let (sa, sb) = (sets.get(&a).unwrap_or(&empty), sets.get(&b).unwrap_or(&empty));
+        let (sa, sb) = (
+            sets.get(&a).unwrap_or(&empty),
+            sets.get(&b).unwrap_or(&empty),
+        );
         let union = sa.union(sb).count();
-        if union == 0 { 0.0 } else { sa.intersection(sb).count() as f64 / union as f64 }
+        if union == 0 {
+            0.0
+        } else {
+            sa.intersection(sb).count() as f64 / union as f64
+        }
     };
     let overlap = |a: Uuid, b: Uuid| jaccard(&shipped, a, b);
     let flavour_overlap = |a: Uuid, b: Uuid| jaccard(&flavour, a, b);
@@ -169,7 +180,9 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let mut decided_pairs: HashSet<(usize, usize)> = HashSet::new();
     let mut decided_merges: Vec<(usize, usize)> = Vec::new();
     for (decision, a, b) in &decided {
-        let (Some(&a), Some(&b)) = (index.get(a), index.get(b)) else { continue };
+        let (Some(&a), Some(&b)) = (index.get(a), index.get(b)) else {
+            continue;
+        };
         decided_pairs.insert((a.min(b), a.max(b)));
         if decision == "merge" {
             decided_merges.push((a, b));
@@ -182,7 +195,9 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
 
     // 1. Lineage: a copy joins its parent when it is recognisably the same dish.
     for (i, v) in vs.iter().enumerate() {
-        let Some(&p) = v.parent_variant_id.and_then(|p| index.get(&p)) else { continue };
+        let Some(&p) = v.parent_variant_id.and_then(|p| index.get(&p)) else {
+            continue;
+        };
         if vs[p].content_type != v.content_type {
             continue;
         }
@@ -195,9 +210,16 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
             stats.merged_as_protein_swap += uf.union(i, p) as usize;
             continue;
         }
-        let (sim, ov) = (strsim::sorensen_dice(&clean[i], &clean[p]), overlap(v.id, vs[p].id));
-        let enough_items = [v.id, vs[p].id].iter().all(|id| shipped.get(id).map_or(0, HashSet::len) >= MIN_SHIPPED_ITEMS);
-        if (sim >= MIN_TITLE_SIMILARITY && ov >= MIN_SHIPPED_OVERLAP) || (ov >= STRONG_SHIPPED_OVERLAP && enough_items) {
+        let (sim, ov) = (
+            strsim::sorensen_dice(&clean[i], &clean[p]),
+            overlap(v.id, vs[p].id),
+        );
+        let enough_items = [v.id, vs[p].id]
+            .iter()
+            .all(|id| shipped.get(id).map_or(0, HashSet::len) >= MIN_SHIPPED_ITEMS);
+        if (sim >= MIN_TITLE_SIMILARITY && ov >= MIN_SHIPPED_OVERLAP)
+            || (ov >= STRONG_SHIPPED_OVERLAP && enough_items)
+        {
             stats.merged_by_similarity += uf.union(i, p) as usize;
         } else if !decided_pairs.contains(&(i.min(p), i.max(p))) {
             reviews.push((v, &vs[p], sim, ov));
@@ -210,7 +232,9 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     for (i, v) in vs.iter().enumerate() {
         let sub = normalize_name(&clean_title(v.subtitle.as_deref().unwrap_or("")));
         match by_key.entry((clean[i].clone(), sub, v.content_type.as_str())) {
-            std::collections::hash_map::Entry::Occupied(e) => stats.merged_by_title_key += uf.union(i, *e.get()) as usize,
+            std::collections::hash_map::Entry::Occupied(e) => {
+                stats.merged_by_title_key += uf.union(i, *e.get()) as usize
+            }
             std::collections::hash_map::Entry::Vacant(e) => {
                 e.insert(i);
             }
@@ -219,7 +243,10 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
 
     // 2b. Protein twins from separate lineages: the same protein-neutral core (two words or more, so a bare
     //     "Tacos" does not qualify) and shared non-protein ingredients or similar subtitles.
-    let sub_key: Vec<String> = vs.iter().map(|v| normalize_name(&clean_title(v.subtitle.as_deref().unwrap_or("")))).collect();
+    let sub_key: Vec<String> = vs
+        .iter()
+        .map(|v| normalize_name(&clean_title(v.subtitle.as_deref().unwrap_or(""))))
+        .collect();
     let mut twins: HashMap<(String, &str), Vec<usize>> = HashMap::new(); // representatives per core
     for (i, v) in vs.iter().enumerate() {
         let core = protein_core(&v.title);
@@ -233,7 +260,8 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
                 placed = true;
                 break;
             }
-            let subtitles_alike = !sub_key[i].is_empty() && strsim::sorensen_dice(&sub_key[i], &sub_key[r]) >= TWIN_SUBTITLE_SIMILARITY;
+            let subtitles_alike = !sub_key[i].is_empty()
+                && strsim::sorensen_dice(&sub_key[i], &sub_key[r]) >= TWIN_SUBTITLE_SIMILARITY;
             if flavour_overlap(v.id, vs[r].id) >= TWIN_OVERLAP || subtitles_alike {
                 stats.merged_as_cross_lineage_twin += uf.union(i, r) as usize;
                 placed = true;
@@ -259,7 +287,9 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         sim >= ANCHOR_CORE_SIMILARITY
             || (sim >= WEAK_CORE_SIMILARITY
                 && flavour_overlap(vs[a].id, vs[b].id) >= STRONG_SHIPPED_OVERLAP
-                && [a, b].iter().all(|&x| flavour.get(&vs[x].id).map_or(0, HashSet::len) >= MIN_SHIPPED_ITEMS))
+                && [a, b]
+                    .iter()
+                    .all(|&x| flavour.get(&vs[x].id).map_or(0, HashSet::len) >= MIN_SHIPPED_ITEMS))
     };
     let mut components: Vec<Vec<usize>> = Vec::new();
     for members in by_root.into_values() {
@@ -276,13 +306,18 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         // Ties go to the title itself, so a run on the same data always picks the same anchor.
         let mut groups: Vec<(&str, Vec<usize>)> = groups.into_iter().collect();
         groups.sort_by(|(ta, a), (tb, b)| {
-            (b.len(), b.iter().map(|&m| vs[m].published).max()).cmp(&(a.len(), a.iter().map(|&m| vs[m].published).max())).then(ta.cmp(tb))
+            (b.len(), b.iter().map(|&m| vs[m].published).max())
+                .cmp(&(a.len(), a.iter().map(|&m| vs[m].published).max()))
+                .then(ta.cmp(tb))
         });
         let groups: Vec<Vec<usize>> = groups.into_iter().map(|(_, g)| g).collect();
         let mut clusters: Vec<(usize, Vec<usize>)> = Vec::new(); // (anchor representative, members)
         for g in groups {
             let rep = *g.iter().max_by_key(|&&m| vs[m].published).unwrap();
-            match clusters.iter_mut().find(|(anchor, _)| same_dish(rep, *anchor)) {
+            match clusters
+                .iter_mut()
+                .find(|(anchor, _)| same_dish(rep, *anchor))
+            {
                 Some((_, ms)) => ms.extend(g),
                 None => {
                     stats.split_from_drift += 1;
@@ -352,10 +387,20 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
 
     let mut order: Vec<usize> = (0..components.len()).collect();
     // Variants are loaded in id order, so a component's first member is a stable tie-break.
-    order.sort_by_key(|&c| (std::cmp::Reverse(components[c].len()), components[c].iter().min().copied()));
+    order.sort_by_key(|&c| {
+        (
+            std::cmp::Reverse(components[c].len()),
+            components[c].iter().min().copied(),
+        )
+    });
 
-    let mut slugs: HashSet<String> = sqlx::query_scalar::<_, String>("SELECT slug FROM dishes").fetch_all(&mut *tx).await?.into_iter().collect();
-    let (mut d_id, mut d_title, mut d_sub, mut d_slug, mut d_type, mut d_default) = (vec![], vec![], vec![], vec![], vec![], vec![]);
+    let mut slugs: HashSet<String> = sqlx::query_scalar::<_, String>("SELECT slug FROM dishes")
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .collect();
+    let (mut d_id, mut d_title, mut d_sub, mut d_slug, mut d_type, mut d_default) =
+        (vec![], vec![], vec![], vec![], vec![], vec![]);
     let (mut a_variant, mut a_dish) = (vec![], vec![]);
     for &c in &order {
         let members = &components[c];
@@ -365,7 +410,8 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
             .expect("components are never empty");
         // The dish is named by its most common cleaned title (ties go to the most recent), not by whichever
         // version happens to be the default: that one may be a protein swap or carry a word like "Organic".
-        let mut counts: HashMap<String, (usize, Option<chrono::DateTime<chrono::Utc>>)> = HashMap::new();
+        let mut counts: HashMap<String, (usize, Option<chrono::DateTime<chrono::Utc>>)> =
+            HashMap::new();
         for &m in members {
             let e = counts.entry(clean_title(&vs[m].title)).or_default();
             e.0 += votes(m);
@@ -399,10 +445,26 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         d_title.push(title.clone());
         // Subtitle: the most common one among versions that carry the chosen title, so the two read together.
         let mut subs: HashMap<String, usize> = HashMap::new();
-        for &m in members.iter().filter(|&&m| clean_title(&vs[m].title) == title) {
-            *subs.entry(vs[m].subtitle.as_deref().map(clean_title).unwrap_or_default()).or_default() += votes(m);
+        for &m in members
+            .iter()
+            .filter(|&&m| clean_title(&vs[m].title) == title)
+        {
+            *subs
+                .entry(
+                    vs[m]
+                        .subtitle
+                        .as_deref()
+                        .map(clean_title)
+                        .unwrap_or_default(),
+                )
+                .or_default() += votes(m);
         }
-        d_sub.push(subs.into_iter().max_by_key(|(s, n)| (*n, s.clone())).map(|(s, _)| s).filter(|s| !s.is_empty()));
+        d_sub.push(
+            subs.into_iter()
+                .max_by_key(|(s, n)| (*n, s.clone()))
+                .map(|(s, _)| s)
+                .filter(|s| !s.is_empty()),
+        );
         d_slug.push(slug);
         d_type.push(vs[best].content_type.clone());
         d_default.push(vs[best].id);
@@ -434,7 +496,11 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         .await
         .context("assigning variants")?;
 
-    let dish_of: HashMap<Uuid, Uuid> = a_variant.iter().copied().zip(a_dish.iter().copied()).collect();
+    let dish_of: HashMap<Uuid, Uuid> = a_variant
+        .iter()
+        .copied()
+        .zip(a_dish.iter().copied())
+        .collect();
     for (v, p, sim, ov) in reviews {
         let (dv, dp) = (dish_of[&v.id], dish_of[&p.id]);
         if dv == dp {
@@ -457,7 +523,11 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
 /// "beef-ragu-2" → "beef-ragu".
 fn strip_number(slug: &str) -> &str {
     match slug.rsplit_once('-') {
-        Some((head, tail)) if !head.is_empty() && !tail.is_empty() && tail.bytes().all(|b| b.is_ascii_digit()) => head,
+        Some((head, tail))
+            if !head.is_empty() && !tail.is_empty() && tail.bytes().all(|b| b.is_ascii_digit()) =>
+        {
+            head
+        }
         _ => slug,
     }
 }

@@ -27,11 +27,12 @@ pub struct ParseStats {
 
 pub async fn parse_steps(pool: &PgPool) -> Result<ParseStats> {
     let mut lines: HashMap<Uuid, Vec<(String, String)>> = HashMap::new();
-    let rows: Vec<(Uuid, String, String)> =
-        sqlx::query_as("SELECT variant_id, line_key, raw_name FROM ingredient_lines ORDER BY variant_id, position")
-            .fetch_all(pool)
-            .await
-            .context("loading ingredient lines")?;
+    let rows: Vec<(Uuid, String, String)> = sqlx::query_as(
+        "SELECT variant_id, line_key, raw_name FROM ingredient_lines ORDER BY variant_id, position",
+    )
+    .fetch_all(pool)
+    .await
+    .context("loading ingredient lines")?;
     for (v, key, name) in rows {
         lines.entry(v).or_default().push((key, name));
     }
@@ -54,7 +55,10 @@ pub async fn parse_steps(pool: &PgPool) -> Result<ParseStats> {
         })
         .collect();
 
-    let mut stats = ParseStats { steps: parsed.len(), ..Default::default() };
+    let mut stats = ParseStats {
+        steps: parsed.len(),
+        ..Default::default()
+    };
     for (_, t) in &parsed {
         stats.with_alts += t.has_alts() as usize;
         stats.unparsed += t.unparsed;
@@ -74,7 +78,10 @@ pub async fn parse_steps(pool: &PgPool) -> Result<ParseStats> {
 
     for chunk in parsed.chunks(BATCH) {
         let ids: Vec<Uuid> = chunk.iter().map(|(id, _)| *id).collect();
-        let json: Vec<String> = chunk.iter().map(|(_, t)| serde_json::to_string(t)).collect::<Result<_, _>>()?;
+        let json: Vec<String> = chunk
+            .iter()
+            .map(|(_, t)| serde_json::to_string(t))
+            .collect::<Result<_, _>>()?;
         sqlx::query("UPDATE steps s SET template = x.t::jsonb FROM UNNEST($1::uuid[], $2::text[]) AS x(id, t) WHERE s.id = x.id")
             .bind(&ids)
             .bind(&json)

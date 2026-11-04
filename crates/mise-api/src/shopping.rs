@@ -116,7 +116,17 @@ struct Group {
     recipes: Vec<String>,
 }
 
-type LineRow = (Uuid, Uuid, String, Option<Uuid>, Option<String>, Option<bool>, Option<String>, Option<String>, Option<String>);
+type LineRow = (
+    Uuid,
+    Uuid,
+    String,
+    Option<Uuid>,
+    Option<String>,
+    Option<bool>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
 
 async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<ShoppingList> {
     let entries: Vec<(Uuid, f64, String)> = sqlx::query_as(
@@ -161,10 +171,12 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
 
     // As the dish page does: published amounts that would shrink as servings grow are derived instead.
     let mut yields: HashMap<Uuid, Vec<f64>> = HashMap::new();
-    for (v, y) in sqlx::query_as::<_, (Uuid, f64)>("SELECT variant_id, servings::float8 FROM variant_yields WHERE variant_id = ANY($1)")
-        .bind(&variants)
-        .fetch_all(&s.pool)
-        .await?
+    for (v, y) in sqlx::query_as::<_, (Uuid, f64)>(
+        "SELECT variant_id, servings::float8 FROM variant_yields WHERE variant_id = ANY($1)",
+    )
+    .bind(&variants)
+    .fetch_all(&s.pool)
+    .await?
     {
         yields.entry(v).or_default().push(y);
     }
@@ -188,7 +200,9 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
 
     let mut groups: BTreeMap<String, Group> = BTreeMap::new();
     for (variant, target, dish) in &entries {
-        for (line, line_variant, raw, food_id, food, shipped, count_unit, count_size, section) in &lines {
+        for (line, line_variant, raw, food_id, food, shipped, count_unit, count_size, section) in
+            &lines
+        {
             if line_variant != variant {
                 continue;
             }
@@ -203,7 +217,11 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
                 recipes: Vec::new(),
             });
             g.pantry &= *shipped == Some(false);
-            g.needs.extend(amounts.get(line).and_then(|a| servings::line_quantity(a, *target)));
+            g.needs.extend(
+                amounts
+                    .get(line)
+                    .and_then(|a| servings::line_quantity(a, *target)),
+            );
             if !g.recipes.contains(dish) {
                 g.recipes.push(dish.clone());
             }
@@ -219,17 +237,25 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
             .into_iter()
             .map(|(k, c, h)| (k, (c, h)))
             .collect();
-    let staples: Vec<Uuid> = sqlx::query_scalar("SELECT food_id FROM pantry_staples WHERE household_id = $1").bind(household).fetch_all(&s.pool).await?;
-    let usual: String = sqlx::query_scalar("SELECT weight_unit FROM households WHERE id = $1").bind(household).fetch_one(&s.pool).await?;
-    let usual = Weights::stored(&usual);
-    let per_food: HashMap<Uuid, Weights> =
-        sqlx::query_as::<_, (Uuid, String)>("SELECT food_id, weight_unit FROM food_weight_units WHERE household_id = $1")
+    let staples: Vec<Uuid> =
+        sqlx::query_scalar("SELECT food_id FROM pantry_staples WHERE household_id = $1")
             .bind(household)
             .fetch_all(&s.pool)
-            .await?
-            .into_iter()
-            .map(|(f, w)| (f, Weights::stored(&w)))
-            .collect();
+            .await?;
+    let usual: String = sqlx::query_scalar("SELECT weight_unit FROM households WHERE id = $1")
+        .bind(household)
+        .fetch_one(&s.pool)
+        .await?;
+    let usual = Weights::stored(&usual);
+    let per_food: HashMap<Uuid, Weights> = sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT food_id, weight_unit FROM food_weight_units WHERE household_id = $1",
+    )
+    .bind(household)
+    .fetch_all(&s.pool)
+    .await?
+    .into_iter()
+    .map(|(f, w)| (f, Weights::stored(&w)))
+    .collect();
 
     let mut by_section: BTreeMap<(usize, String), Vec<ShoppingItem>> = BTreeMap::new();
     let (mut removed, mut left_out) = (Vec::new(), Vec::new());
@@ -243,20 +269,34 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
             removed.push(LeftOut { key, name: g.name });
             continue;
         }
-        let section = if g.pantry { CHECK.to_string() } else { g.section };
+        let section = if g.pantry {
+            CHECK.to_string()
+        } else {
+            g.section
+        };
         let weight_unit = g.food_id.and_then(|f| per_food.get(&f).copied());
         let weighed = g.needs.iter().any(|q| q.unit.family() == Family::Weight)
-            || g.count.as_ref().and_then(|c| c.size.as_ref()).is_some_and(|s| s.unit.family() == Family::Weight);
-        by_section.entry((shopping::section_order(&section), section)).or_default().push(ShoppingItem {
-            amount: shopping::total(&g.needs, g.count.as_ref(), weight_unit.unwrap_or(usual).core()),
-            weighed,
-            weight_unit,
-            key,
-            food_id: g.food_id,
-            name: g.name,
-            checked,
-            recipes: g.recipes,
-        });
+            || g.count
+                .as_ref()
+                .and_then(|c| c.size.as_ref())
+                .is_some_and(|s| s.unit.family() == Family::Weight);
+        by_section
+            .entry((shopping::section_order(&section), section))
+            .or_default()
+            .push(ShoppingItem {
+                amount: shopping::total(
+                    &g.needs,
+                    g.count.as_ref(),
+                    weight_unit.unwrap_or(usual).core(),
+                ),
+                weighed,
+                weight_unit,
+                key,
+                food_id: g.food_id,
+                name: g.name,
+                checked,
+                recipes: g.recipes,
+            });
     }
     let sections = by_section
         .into_iter()
@@ -276,12 +316,24 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
         .into_iter()
         .map(|(id, name, checked)| ShoppingExtra { id, name, checked })
         .collect();
-    Ok(ShoppingList { week, meals: entries.len(), extras, sections, removed, staples: left_out, weight_unit: usual })
+    Ok(ShoppingList {
+        week,
+        meals: entries.len(),
+        extras,
+        sections,
+        removed,
+        staples: left_out,
+        weight_unit: usual,
+    })
 }
 
 /// A week's shopping list.
 #[utoipa::path(get, path = "/api/shopping", operation_id = "get_shopping", tag = "shopping", params(WeekParams), responses((status = 200, body = ShoppingList)))]
-pub async fn get(State(s): State<AppState>, Extension(me): Extension<CurrentUser>, Query(p): Query<WeekParams>) -> ApiResult<Json<ShoppingList>> {
+pub async fn get(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Query(p): Query<WeekParams>,
+) -> ApiResult<Json<ShoppingList>> {
     Ok(Json(build(&s, me.household_id, monday(p.week)).await?))
 }
 
@@ -298,7 +350,11 @@ pub struct Mark {
 
 /// Tick an item off, or take it off or put it back on this week's list. Answers with the list.
 #[utoipa::path(put, path = "/api/shopping/marks", operation_id = "mark_shopping_item", tag = "shopping", request_body = Mark, responses((status = 200, body = ShoppingList)))]
-pub async fn mark(State(s): State<AppState>, Extension(me): Extension<CurrentUser>, JsonBody(b): JsonBody<Mark>) -> ApiResult<Json<ShoppingList>> {
+pub async fn mark(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    JsonBody(b): JsonBody<Mark>,
+) -> ApiResult<Json<ShoppingList>> {
     clean(&b.key)?;
     let week = monday(b.week);
     sqlx::query(
@@ -320,7 +376,9 @@ pub async fn mark(State(s): State<AppState>, Extension(me): Extension<CurrentUse
 fn clean(text: &str) -> ApiResult<&str> {
     let t = text.trim();
     if t.is_empty() || t.len() > 200 || t.contains('\0') {
-        return Err(ApiError::BadRequest("enter between 1 and 200 characters".into()));
+        return Err(ApiError::BadRequest(
+            "enter between 1 and 200 characters".into(),
+        ));
     }
     Ok(t)
 }
@@ -337,15 +395,21 @@ pub struct NewExtra {
     post, path = "/api/shopping/extras", operation_id = "add_shopping_extra", tag = "shopping", request_body = NewExtra,
     responses((status = 200, body = ShoppingList), (status = 400, body = crate::error::ErrorBody))
 )]
-pub async fn add_extra(State(s): State<AppState>, Extension(me): Extension<CurrentUser>, JsonBody(b): JsonBody<NewExtra>) -> ApiResult<Json<ShoppingList>> {
+pub async fn add_extra(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    JsonBody(b): JsonBody<NewExtra>,
+) -> ApiResult<Json<ShoppingList>> {
     let week = monday(b.week);
-    sqlx::query("INSERT INTO shopping_extras (id, household_id, week, name) VALUES ($1, $2, $3, $4)")
-        .bind(Uuid::now_v7())
-        .bind(me.household_id)
-        .bind(week)
-        .bind(clean(&b.name)?)
-        .execute(&s.pool)
-        .await?;
+    sqlx::query(
+        "INSERT INTO shopping_extras (id, household_id, week, name) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(me.household_id)
+    .bind(week)
+    .bind(clean(&b.name)?)
+    .execute(&s.pool)
+    .await?;
     Ok(Json(build(&s, me.household_id, week).await?))
 }
 
@@ -359,7 +423,12 @@ pub struct ExtraChange {
     patch, path = "/api/shopping/extras/{id}", operation_id = "update_shopping_extra", tag = "shopping", params(("id" = Uuid, Path)), request_body = ExtraChange,
     responses((status = 200, body = ShoppingList), (status = 404, body = crate::error::ErrorBody))
 )]
-pub async fn update_extra(State(s): State<AppState>, Extension(me): Extension<CurrentUser>, Path(id): Path<Uuid>, JsonBody(b): JsonBody<ExtraChange>) -> ApiResult<Json<ShoppingList>> {
+pub async fn update_extra(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Path(id): Path<Uuid>,
+    JsonBody(b): JsonBody<ExtraChange>,
+) -> ApiResult<Json<ShoppingList>> {
     let week: NaiveDate = sqlx::query_scalar("UPDATE shopping_extras SET checked = $3 WHERE id = $1 AND household_id = $2 RETURNING week")
         .bind(id)
         .bind(me.household_id)
@@ -375,13 +444,19 @@ pub async fn update_extra(State(s): State<AppState>, Extension(me): Extension<Cu
     delete, path = "/api/shopping/extras/{id}", operation_id = "delete_shopping_extra", tag = "shopping", params(("id" = Uuid, Path)),
     responses((status = 200, body = ShoppingList), (status = 404, body = crate::error::ErrorBody))
 )]
-pub async fn remove_extra(State(s): State<AppState>, Extension(me): Extension<CurrentUser>, Path(id): Path<Uuid>) -> ApiResult<Json<ShoppingList>> {
-    let week: NaiveDate = sqlx::query_scalar("DELETE FROM shopping_extras WHERE id = $1 AND household_id = $2 RETURNING week")
-        .bind(id)
-        .bind(me.household_id)
-        .fetch_optional(&s.pool)
-        .await?
-        .ok_or(ApiError::NotFound)?;
+pub async fn remove_extra(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<ShoppingList>> {
+    let week: NaiveDate = sqlx::query_scalar(
+        "DELETE FROM shopping_extras WHERE id = $1 AND household_id = $2 RETURNING week",
+    )
+    .bind(id)
+    .bind(me.household_id)
+    .fetch_optional(&s.pool)
+    .await?
+    .ok_or(ApiError::NotFound)?;
     Ok(Json(build(&s, me.household_id, week).await?))
 }
 
@@ -397,13 +472,22 @@ pub struct NewStaple {
     post, path = "/api/pantry-staples", operation_id = "add_pantry_staple", tag = "shopping", request_body = NewStaple,
     responses((status = 200, body = ShoppingList), (status = 404, body = crate::error::ErrorBody))
 )]
-pub async fn add_staple(State(s): State<AppState>, Extension(me): Extension<CurrentUser>, JsonBody(b): JsonBody<NewStaple>) -> ApiResult<Json<ShoppingList>> {
+pub async fn add_staple(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    JsonBody(b): JsonBody<NewStaple>,
+) -> ApiResult<Json<ShoppingList>> {
     let added = sqlx::query("INSERT INTO pantry_staples (household_id, food_id) SELECT $1, f.id FROM foods f WHERE f.id = $2 ON CONFLICT DO NOTHING")
         .bind(me.household_id)
         .bind(b.food_id)
         .execute(&s.pool)
         .await?;
-    if added.rows_affected() == 0 && !sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM foods WHERE id = $1)").bind(b.food_id).fetch_one(&s.pool).await? {
+    if added.rows_affected() == 0
+        && !sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM foods WHERE id = $1)")
+            .bind(b.food_id)
+            .fetch_one(&s.pool)
+            .await?
+    {
         return Err(ApiError::NotFound);
     }
     Ok(Json(build(&s, me.household_id, monday(b.week)).await?))
@@ -414,8 +498,17 @@ pub async fn add_staple(State(s): State<AppState>, Extension(me): Extension<Curr
     delete, path = "/api/pantry-staples/{food_id}", operation_id = "delete_pantry_staple", tag = "shopping",
     params(("food_id" = Uuid, Path), WeekParams), responses((status = 200, body = ShoppingList))
 )]
-pub async fn remove_staple(State(s): State<AppState>, Extension(me): Extension<CurrentUser>, Path(food_id): Path<Uuid>, Query(p): Query<WeekParams>) -> ApiResult<Json<ShoppingList>> {
-    sqlx::query("DELETE FROM pantry_staples WHERE household_id = $1 AND food_id = $2").bind(me.household_id).bind(food_id).execute(&s.pool).await?;
+pub async fn remove_staple(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Path(food_id): Path<Uuid>,
+    Query(p): Query<WeekParams>,
+) -> ApiResult<Json<ShoppingList>> {
+    sqlx::query("DELETE FROM pantry_staples WHERE household_id = $1 AND food_id = $2")
+        .bind(me.household_id)
+        .bind(food_id)
+        .execute(&s.pool)
+        .await?;
     Ok(Json(build(&s, me.household_id, monday(p.week)).await?))
 }
 
@@ -427,15 +520,31 @@ pub struct ShoppingSettings {
 
 /// The household's shopping list settings.
 #[utoipa::path(get, path = "/api/shopping/settings", operation_id = "get_shopping_settings", tag = "shopping", responses((status = 200, body = ShoppingSettings)))]
-pub async fn settings(State(s): State<AppState>, Extension(me): Extension<CurrentUser>) -> ApiResult<Json<ShoppingSettings>> {
-    let w: String = sqlx::query_scalar("SELECT weight_unit FROM households WHERE id = $1").bind(me.household_id).fetch_one(&s.pool).await?;
-    Ok(Json(ShoppingSettings { weight_unit: Weights::stored(&w) }))
+pub async fn settings(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+) -> ApiResult<Json<ShoppingSettings>> {
+    let w: String = sqlx::query_scalar("SELECT weight_unit FROM households WHERE id = $1")
+        .bind(me.household_id)
+        .fetch_one(&s.pool)
+        .await?;
+    Ok(Json(ShoppingSettings {
+        weight_unit: Weights::stored(&w),
+    }))
 }
 
 /// Change the household's shopping list settings, for everyone in it.
 #[utoipa::path(put, path = "/api/shopping/settings", operation_id = "update_shopping_settings", tag = "shopping", request_body = ShoppingSettings, responses((status = 200, body = ShoppingSettings)))]
-pub async fn update_settings(State(s): State<AppState>, Extension(me): Extension<CurrentUser>, JsonBody(b): JsonBody<ShoppingSettings>) -> ApiResult<Json<ShoppingSettings>> {
-    sqlx::query("UPDATE households SET weight_unit = $2 WHERE id = $1").bind(me.household_id).bind(b.weight_unit.core().as_str()).execute(&s.pool).await?;
+pub async fn update_settings(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    JsonBody(b): JsonBody<ShoppingSettings>,
+) -> ApiResult<Json<ShoppingSettings>> {
+    sqlx::query("UPDATE households SET weight_unit = $2 WHERE id = $1")
+        .bind(me.household_id)
+        .bind(b.weight_unit.core().as_str())
+        .execute(&s.pool)
+        .await?;
     Ok(Json(b))
 }
 
@@ -453,8 +562,16 @@ pub struct FoodWeights {
     put, path = "/api/shopping/food-weights", operation_id = "set_food_weights", tag = "shopping", request_body = FoodWeights,
     responses((status = 200, body = ShoppingList), (status = 404, body = crate::error::ErrorBody))
 )]
-pub async fn set_food_weights(State(s): State<AppState>, Extension(me): Extension<CurrentUser>, JsonBody(b): JsonBody<FoodWeights>) -> ApiResult<Json<ShoppingList>> {
-    if !sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM foods WHERE id = $1)").bind(b.food_id).fetch_one(&s.pool).await? {
+pub async fn set_food_weights(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    JsonBody(b): JsonBody<FoodWeights>,
+) -> ApiResult<Json<ShoppingList>> {
+    if !sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM foods WHERE id = $1)")
+        .bind(b.food_id)
+        .fetch_one(&s.pool)
+        .await?
+    {
         return Err(ApiError::NotFound);
     }
     match b.weight_unit {
@@ -465,7 +582,11 @@ pub async fn set_food_weights(State(s): State<AppState>, Extension(me): Extensio
         .bind(me.household_id)
         .bind(b.food_id)
         .bind(w.core().as_str()),
-        None => sqlx::query("DELETE FROM food_weight_units WHERE household_id = $1 AND food_id = $2").bind(me.household_id).bind(b.food_id),
+        None => {
+            sqlx::query("DELETE FROM food_weight_units WHERE household_id = $1 AND food_id = $2")
+                .bind(me.household_id)
+                .bind(b.food_id)
+        }
     }
     .execute(&s.pool)
     .await?;

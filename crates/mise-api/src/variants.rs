@@ -2,10 +2,7 @@
 
 use std::collections::HashMap;
 
-use axum::{
-    Json,
-    extract::State,
-};
+use axum::{Json, extract::State};
 use mise_core::servings;
 use mise_core::step_amounts::{self, Context, Template};
 use serde::{Deserialize, Serialize};
@@ -80,14 +77,30 @@ pub struct Variant {
     pub meta: serde_json::Value,
 }
 
-type LineRow = (Uuid, String, String, Option<Uuid>, Option<String>, Option<bool>, Vec<String>, Option<String>, Option<String>, Option<String>, Option<String>);
+type LineRow = (
+    Uuid,
+    String,
+    String,
+    Option<Uuid>,
+    Option<String>,
+    Option<bool>,
+    Vec<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
 
 /// A version of a dish at a serving count.
 #[utoipa::path(
     get, path = "/api/variants/{id}", operation_id = "get_variant", tag = "dishes", params(("id" = Uuid, Path), RenderParams),
     responses((status = 200, body = Variant), (status = 404, body = crate::error::ErrorBody))
 )]
-pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Query<RenderParams>) -> ApiResult<Json<Variant>> {
+pub async fn get(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    Query(p): Query<RenderParams>,
+) -> ApiResult<Json<Variant>> {
     let (title, subtitle, description, meta, dish_slug): (String, Option<String>, Option<String>, serde_json::Value, Option<String>) =
         sqlx::query_as(
             "SELECT v.title, v.subtitle, v.description, v.meta, d.slug FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
@@ -97,14 +110,21 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
         .fetch_optional(&s.pool)
         .await?
         .ok_or(ApiError::NotFound)?;
-    let yields: Vec<f64> = sqlx::query_scalar("SELECT servings::float8 FROM variant_yields WHERE variant_id = $1 ORDER BY servings")
-        .bind(id)
-        .fetch_all(&s.pool)
-        .await?;
-    let target = p.servings.or_else(|| yields.first().copied()).unwrap_or(2.0);
+    let yields: Vec<f64> = sqlx::query_scalar(
+        "SELECT servings::float8 FROM variant_yields WHERE variant_id = $1 ORDER BY servings",
+    )
+    .bind(id)
+    .fetch_all(&s.pool)
+    .await?;
+    let target = p
+        .servings
+        .or_else(|| yields.first().copied())
+        .unwrap_or(2.0);
     let max = yields.iter().copied().fold(MAX_SERVINGS, f64::max);
     if !(target > 0.0 && target <= max) {
-        return Err(ApiError::BadRequest(format!("servings must be more than 0 and at most {max}")));
+        return Err(ApiError::BadRequest(format!(
+            "servings must be more than 0 and at most {max}"
+        )));
     }
 
     let lines: Vec<LineRow> = sqlx::query_as(
@@ -126,11 +146,12 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
     {
         amounts.entry(line).or_default().push((sv, a, u));
     }
-    let step_rows: Vec<(Uuid, i32, String, Option<serde_json::Value>)> =
-        sqlx::query_as("SELECT id, position, text, template FROM steps WHERE variant_id = $1 ORDER BY position")
-            .bind(id)
-            .fetch_all(&s.pool)
-            .await?;
+    let step_rows: Vec<(Uuid, i32, String, Option<serde_json::Value>)> = sqlx::query_as(
+        "SELECT id, position, text, template FROM steps WHERE variant_id = $1 ORDER BY position",
+    )
+    .bind(id)
+    .fetch_all(&s.pool)
+    .await?;
     let mut step_images: HashMap<Uuid, Vec<Image>> = HashMap::new();
     for (step, media) in sqlx::query_as::<_, (Uuid, Uuid)>(
         "SELECT step_id, media_id FROM variant_media WHERE variant_id = $1 AND role = 'step' AND step_id IS NOT NULL ORDER BY position",
@@ -141,13 +162,18 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
     {
         step_images.entry(step).or_default().push(Image::new(media));
     }
-    let hero: Option<Uuid> = sqlx::query_scalar("SELECT media_id FROM variant_media WHERE variant_id = $1 AND role = 'hero' LIMIT 1")
-        .bind(id)
-        .fetch_optional(&s.pool)
-        .await?;
+    let hero: Option<Uuid> = sqlx::query_scalar(
+        "SELECT media_id FROM variant_media WHERE variant_id = $1 AND role = 'hero' LIMIT 1",
+    )
+    .bind(id)
+    .fetch_optional(&s.pool)
+    .await?;
 
     // Everything below is synchronous: the renderer's line lookup is not Send.
-    let templates: Vec<Option<Template>> = step_rows.iter().map(|r| r.3.clone().and_then(|t| serde_json::from_value(t).ok())).collect();
+    let templates: Vec<Option<Template>> = step_rows
+        .iter()
+        .map(|r| r.3.clone().and_then(|t| serde_json::from_value(t).ok()))
+        .collect();
     let base = step_amounts::text_base(&yields, templates.iter().flatten());
     // The yield the steps are written for, and its double (the one their parentheses give), are trusted first;
     // a published amount that would shrink as servings grow is derived instead.
@@ -158,21 +184,41 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
 
     let ingredients: Vec<Ingredient> = lines
         .iter()
-        .map(|(line, _, name, food_id, food, shipped, allergens, note, image, count_unit, count_size)| {
-            let count = servings::CountUnit::from_props(count_unit.as_deref(), count_size.as_deref());
-            let (amount, scaled) = amounts.get(line).map_or((None, false), |a| servings::line_text(a, target, count.as_ref()));
-            Ingredient {
-                name: name.clone(),
-                food_id: *food_id,
-                food: food.clone(),
-                amount,
-                scaled,
-                shipped: *shipped,
-                allergens: allergens.clone(),
-                note: note.clone(),
-                image: image.as_deref().and_then(|m| m.parse().ok()).map(Image::new),
-            }
-        })
+        .map(
+            |(
+                line,
+                _,
+                name,
+                food_id,
+                food,
+                shipped,
+                allergens,
+                note,
+                image,
+                count_unit,
+                count_size,
+            )| {
+                let count =
+                    servings::CountUnit::from_props(count_unit.as_deref(), count_size.as_deref());
+                let (amount, scaled) = amounts.get(line).map_or((None, false), |a| {
+                    servings::line_text(a, target, count.as_ref())
+                });
+                Ingredient {
+                    name: name.clone(),
+                    food_id: *food_id,
+                    food: food.clone(),
+                    amount,
+                    scaled,
+                    shipped: *shipped,
+                    allergens: allergens.clone(),
+                    note: note.clone(),
+                    image: image
+                        .as_deref()
+                        .and_then(|m| m.parse().ok())
+                        .map(Image::new),
+                }
+            },
+        )
         .collect();
 
     let any_alts = templates.iter().flatten().any(Template::has_alts);
@@ -180,19 +226,37 @@ pub async fn get(State(s): State<AppState>, Path(id): Path<Uuid>, Query(p): Quer
     let line_amount = |key: &str, sv: f64| -> Option<f64> {
         let list = amounts.get(by_key.get(key)?)?;
         let unit = &list.first()?.2;
-        let points: Vec<(f64, f64)> = list.iter().filter(|p| &p.2 == unit).map(|p| (p.0, p.1)).collect();
+        let points: Vec<(f64, f64)> = list
+            .iter()
+            .filter(|p| &p.2 == unit)
+            .map(|p| (p.0, p.1))
+            .collect();
         servings::amount_at(&points, sv).map(|(a, _)| a)
     };
-    let ctx = Context { base, scale_plain: !any_alts, line_amount: &line_amount };
+    let ctx = Context {
+        base,
+        scale_plain: !any_alts,
+        line_amount: &line_amount,
+    };
     let steps: Vec<Step> = step_rows
         .iter()
         .zip(&templates)
         .map(|((step, position, text, _), t)| {
             let r = match t {
                 Some(t) => step_amounts::render(t, target, &ctx),
-                None => step_amounts::Rendered { text: text.clone(), ..Default::default() },
+                None => step_amounts::Rendered {
+                    text: text.clone(),
+                    ..Default::default()
+                },
             };
-            Step { position: *position, text: r.text, scaled: r.scaled, check: r.check, check_amounts: r.check_amounts, images: step_images.remove(step).unwrap_or_default() }
+            Step {
+                position: *position,
+                text: r.text,
+                scaled: r.scaled,
+                check: r.check,
+                check_amounts: r.check_amounts,
+                images: step_images.remove(step).unwrap_or_default(),
+            }
         })
         .collect();
 

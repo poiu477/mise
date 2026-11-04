@@ -10,7 +10,11 @@ use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
-#[command(name = "mise", version, about = "mise recipe system: admin and data tools")]
+#[command(
+    name = "mise",
+    version,
+    about = "mise recipe system: admin and data tools"
+)]
 struct Cli {
     #[arg(long, env = "DATABASE_URL", global = true, hide_env_values = true)]
     database_url: Option<String>,
@@ -113,7 +117,9 @@ enum Command {
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,sqlx=error")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,sqlx=error")),
+        )
         .init();
 
     let cli = Cli::parse();
@@ -130,7 +136,11 @@ async fn main() -> anyhow::Result<()> {
         Command::ImportBundle { dir } => {
             let started = std::time::Instant::now();
             let stats = mise_ingest::bundle::import_bundle(&pool, &dir).await?;
-            tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "bundle imported");
+            tracing::info!(
+                ?stats,
+                elapsed_s = started.elapsed().as_secs(),
+                "bundle imported"
+            );
             let foods = dir.join("foods.ndjson");
             if foods.exists() {
                 let added = mise_ingest::foods::import_food_knowledge(&pool, &foods).await?;
@@ -144,19 +154,34 @@ async fn main() -> anyhow::Result<()> {
                 tracing::info!("previous matching undone");
             }
             let stats = mise_ingest::foods::match_foods(&pool).await?;
-            tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "foods matched");
+            tracing::info!(
+                ?stats,
+                elapsed_s = started.elapsed().as_secs(),
+                "foods matched"
+            );
         }
         Command::GroupDishes => {
             let started = std::time::Instant::now();
             let stats = mise_ingest::dishes::group_dishes(&pool).await?;
-            tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "dishes grouped");
+            tracing::info!(
+                ?stats,
+                elapsed_s = started.elapsed().as_secs(),
+                "dishes grouped"
+            );
         }
         Command::DeriveOptions => {
             let started = std::time::Instant::now();
             let stats = mise_ingest::options::derive_options(&pool).await?;
-            tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "options derived");
+            tracing::info!(
+                ?stats,
+                elapsed_s = started.elapsed().as_secs(),
+                "options derived"
+            );
         }
-        Command::Prune { content_type, missing_from } => {
+        Command::Prune {
+            content_type,
+            missing_from,
+        } => {
             let stats = match (content_type, missing_from) {
                 (Some(ct), _) => mise_ingest::prune::prune_content_type(&pool, &ct).await?,
                 (None, Some(dir)) => mise_ingest::prune::prune_missing_from(&pool, &dir).await?,
@@ -164,38 +189,96 @@ async fn main() -> anyhow::Result<()> {
             };
             tracing::info!(?stats, "pruned");
         }
-        Command::IngestMedia { from, media_root, limit, skip_derivatives, derivatives_only, jobs } => {
+        Command::IngestMedia {
+            from,
+            media_root,
+            limit,
+            skip_derivatives,
+            derivatives_only,
+            jobs,
+        } => {
             let opts = mise_ingest::media::MediaOptions {
                 archive_root: from,
                 media_root,
                 limit,
-                jobs: jobs.unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get())),
+                jobs: jobs
+                    .unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get())),
             };
             if !derivatives_only {
                 let started = std::time::Instant::now();
                 let stats = mise_ingest::media::store_and_link(&pool, &opts).await?;
-                tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "media stored and linked");
+                tracing::info!(
+                    ?stats,
+                    elapsed_s = started.elapsed().as_secs(),
+                    "media stored and linked"
+                );
             }
             if !skip_derivatives {
                 let started = std::time::Instant::now();
                 let stats = mise_ingest::media::make_derivatives(&pool, &opts).await?;
-                tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "web copies made");
+                tracing::info!(
+                    ?stats,
+                    elapsed_s = started.elapsed().as_secs(),
+                    "web copies made"
+                );
             }
         }
         Command::ParseSteps => {
             let started = std::time::Instant::now();
             let stats = mise_ingest::steps::parse_steps(&pool).await?;
-            tracing::info!(?stats, elapsed_s = started.elapsed().as_secs(), "steps parsed");
+            tracing::info!(
+                ?stats,
+                elapsed_s = started.elapsed().as_secs(),
+                "steps parsed"
+            );
         }
-        Command::ScalingReport { sample, out, seed, only } => {
-            let only = only.map(|path| anyhow::Ok(std::fs::read_to_string(path)?.split_whitespace().map(str::parse).collect::<Result<Vec<uuid::Uuid>, _>>()?)).transpose()?;
+        Command::ScalingReport {
+            sample,
+            out,
+            seed,
+            only,
+        } => {
+            let only = only
+                .map(|path| {
+                    anyhow::Ok(
+                        std::fs::read_to_string(path)?
+                            .split_whitespace()
+                            .map(str::parse)
+                            .collect::<Result<Vec<uuid::Uuid>, _>>()?,
+                    )
+                })
+                .transpose()?;
             let s = scaling::write_report(&pool, sample, seed, &out, only.as_deref()).await?;
-            tracing::info!(cases = s.step_overall.0, right_pct = format!("{:.1}", s.step_overall.1), "step amounts at 4, all recipes");
-            tracing::info!(cases = s.step_sample.0, right_pct = format!("{:.1}", s.step_sample.1), "step amounts at 4, sample");
-            tracing::info!(cases = s.whole_line_3.0, right_pct = format!("{:.1}", s.whole_line_3.1), "whole-line step amounts at 3");
-            tracing::info!(cases = s.whole_line_6.0, right_pct = format!("{:.1}", s.whole_line_6.1), "whole-line step amounts at 6");
-            tracing::info!(cases = s.ingredient_3.0, right_pct = format!("{:.1}", s.ingredient_3.1), "ingredient amounts at 3");
-            tracing::info!(cases = s.ingredient_6.0, right_pct = format!("{:.1}", s.ingredient_6.1), "ingredient amounts at 6");
+            tracing::info!(
+                cases = s.step_overall.0,
+                right_pct = format!("{:.1}", s.step_overall.1),
+                "step amounts at 4, all recipes"
+            );
+            tracing::info!(
+                cases = s.step_sample.0,
+                right_pct = format!("{:.1}", s.step_sample.1),
+                "step amounts at 4, sample"
+            );
+            tracing::info!(
+                cases = s.whole_line_3.0,
+                right_pct = format!("{:.1}", s.whole_line_3.1),
+                "whole-line step amounts at 3"
+            );
+            tracing::info!(
+                cases = s.whole_line_6.0,
+                right_pct = format!("{:.1}", s.whole_line_6.1),
+                "whole-line step amounts at 6"
+            );
+            tracing::info!(
+                cases = s.ingredient_3.0,
+                right_pct = format!("{:.1}", s.ingredient_3.1),
+                "ingredient amounts at 3"
+            );
+            tracing::info!(
+                cases = s.ingredient_6.0,
+                right_pct = format!("{:.1}", s.ingredient_6.1),
+                "ingredient amounts at 6"
+            );
             tracing::info!(out = %out.display(), "scaling report written");
         }
         Command::Food(cmd) => food::run(&pool, cmd).await?,
@@ -205,7 +288,12 @@ async fn main() -> anyhow::Result<()> {
             let report = gate::write_report(&pool, sample, seed, &out).await?;
             let bytes = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
             for s in &report.strata {
-                tracing::info!(stratum = s.key, in_data = s.population, sampled = s.sampled, "stratum");
+                tracing::info!(
+                    stratum = s.key,
+                    in_data = s.population,
+                    sampled = s.sampled,
+                    "stratum"
+                );
             }
             tracing::info!(dishes = report.cards.len(), seed, kib = bytes / 1024, out = %out.display(), "gate report written");
         }

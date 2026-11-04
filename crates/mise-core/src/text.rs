@@ -33,14 +33,23 @@ mod tests {
 
     #[test]
     fn normalizes_brands_and_punctuation() {
-        assert_eq!(normalize_name("PHILADELPHIA® Cream Cheese"), "philadelphia cream cheese");
-        assert_eq!(normalize_name("  Frank’s RedHot®  Sauce "), "frank's redhot sauce");
+        assert_eq!(
+            normalize_name("PHILADELPHIA® Cream Cheese"),
+            "philadelphia cream cheese"
+        );
+        assert_eq!(
+            normalize_name("  Frank’s RedHot®  Sauce "),
+            "frank's redhot sauce"
+        );
         assert_eq!(normalize_name("Tex-Mex Paste"), "tex mex paste");
     }
 
     #[test]
     fn slugs() {
         assert_eq!(slugify("Frank’s RedHot® Sauce"), "franks-redhot-sauce");
-        assert_eq!(slugify("Sweet & Smoky BBQ Seasoning"), "sweet-smoky-bbq-seasoning");
+        assert_eq!(
+            slugify("Sweet & Smoky BBQ Seasoning"),
+            "sweet-smoky-bbq-seasoning"
+        );
     }
 }

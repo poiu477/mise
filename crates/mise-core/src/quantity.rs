@@ -51,9 +51,10 @@ impl Unit {
             "kg" | "kilogram" | "kilograms" => Unit::Kg,
             "pinch" | "pinches" => Unit::Pinch,
             "unit" | "units" | "pick" | "picks" | "" => Unit::Count(String::new()),
-            "clove" | "cloves" | "thumb" | "thumbs" | "slice" | "slices" | "piece" | "pieces" | "sprig" | "sprigs"
-            | "can" | "cans" | "jar" | "jars" | "box" | "boxes" | "bunch" | "bunches" | "head" | "heads" | "stalk"
-            | "stalks" | "pack" | "packs" | "bun" | "buns" | "tube" | "tubes" | "wedge" | "wedges" => {
+            "clove" | "cloves" | "thumb" | "thumbs" | "slice" | "slices" | "piece" | "pieces"
+            | "sprig" | "sprigs" | "can" | "cans" | "jar" | "jars" | "box" | "boxes" | "bunch"
+            | "bunches" | "head" | "heads" | "stalk" | "stalks" | "pack" | "packs" | "bun"
+            | "buns" | "tube" | "tubes" | "wedge" | "wedges" => {
                 Unit::Count(singular(w).to_string())
             }
             _ => return None,
@@ -124,17 +125,24 @@ impl Quantity {
     }
 
     pub fn scaled(&self, factor: f64) -> Quantity {
-        Quantity { amount: self.amount * factor, unit: self.unit.clone() }
+        Quantity {
+            amount: self.amount * factor,
+            unit: self.unit.clone(),
+        }
     }
 
     /// The amount expressed in `unit`, when the two convert.
     pub fn in_unit(&self, unit: &Unit) -> Option<f64> {
-        self.unit.compatible(unit).then(|| self.amount * self.unit.size() / unit.size())
+        self.unit
+            .compatible(unit)
+            .then(|| self.amount * self.unit.size() / unit.size())
     }
 
     /// Same amount within 2% once both are in one unit.
     pub fn same_as(&self, other: &Quantity) -> bool {
-        other.in_unit(&self.unit).is_some_and(|b| (self.amount - b).abs() <= 0.02 * self.amount.abs().max(b.abs()) + 1e-9)
+        other.in_unit(&self.unit).is_some_and(|b| {
+            (self.amount - b).abs() <= 0.02 * self.amount.abs().max(b.abs()) + 1e-9
+        })
     }
 
     /// The same amount in the clearest words, for a published amount: 3 tsp reads as 1 TBSP and 6 tsp as 2 TBSP,
@@ -143,7 +151,9 @@ impl Quantity {
     pub fn tidied(&self) -> Quantity {
         let a = self.amount;
         match self.unit {
-            Unit::Tsp if a >= 3.0 && is_multiple(a / 3.0, 0.5) => Quantity::new(a / 3.0, Unit::Tbsp),
+            Unit::Tsp if a >= 3.0 && is_multiple(a / 3.0, 0.5) => {
+                Quantity::new(a / 3.0, Unit::Tbsp)
+            }
             Unit::Tsp if a > 0.0 && a < 0.25 && (a - round_to(a, 0.125)).abs() > 0.004 => {
                 Quantity::new((a / PINCH_TSP).round().max(1.0), Unit::Pinch)
             }
@@ -189,16 +199,26 @@ impl Quantity {
             // Nothing positive rounds to zero: small amounts move to the next smaller unit or keep the smallest
             // measurable step.
             // Below a quarter ounce (a few sprigs of herbs) the amount stays as small as it is.
-            Unit::Oz | Unit::FlOz if a < 0.25 => Quantity::new(round_to(a, 0.01).max(0.01), self.unit.clone()),
-            Unit::Oz | Unit::FlOz => Quantity::new(round_to(a, if a < 1.0 { 0.25 } else { 0.5 }), self.unit.clone()),
+            Unit::Oz | Unit::FlOz if a < 0.25 => {
+                Quantity::new(round_to(a, 0.01).max(0.01), self.unit.clone())
+            }
+            Unit::Oz | Unit::FlOz => Quantity::new(
+                round_to(a, if a < 1.0 { 0.25 } else { 0.5 }),
+                self.unit.clone(),
+            ),
             Unit::Lb if a < 0.25 => Quantity::new(a * 16.0, Unit::Oz).rounded(),
             Unit::Lb => Quantity::new(round_to(a, 0.25), Unit::Lb),
-            Unit::G | Unit::Ml => Quantity::new(round_to(a, if a >= 20.0 { 5.0 } else { 1.0 }).max(1.0), self.unit.clone()),
+            Unit::G | Unit::Ml => Quantity::new(
+                round_to(a, if a >= 20.0 { 5.0 } else { 1.0 }).max(1.0),
+                self.unit.clone(),
+            ),
             Unit::Kg if a < 0.05 => Quantity::new(a * 1000.0, Unit::G).rounded(),
             Unit::L if a < 0.05 => Quantity::new(a * 1000.0, Unit::Ml).rounded(),
             Unit::Kg | Unit::L => Quantity::new(round_to(a, 0.05), self.unit.clone()),
             // Whole and half items; quarters below one; slivers (0.07 of a thumb of ginger) as they are.
-            Unit::Count(_) if a < 0.25 => Quantity::new(round_to(a, 0.01).max(0.01), self.unit.clone()),
+            Unit::Count(_) if a < 0.25 => {
+                Quantity::new(round_to(a, 0.01).max(0.01), self.unit.clone())
+            }
             Unit::Count(_) if a < 1.0 => Quantity::new(round_to(a, 0.25), self.unit.clone()),
             Unit::Count(_) => Quantity::new(round_to(a, 0.5), self.unit.clone()),
             Unit::Pinch => self.clone(),
@@ -219,7 +239,17 @@ impl Quantity {
             Unit::Pinch => up(1.0),
             Unit::FlOz => up(0.5),
             Unit::Ml | Unit::G => up(if a >= 20.0 { 5.0 } else { 1.0 }),
-            Unit::L | Unit::Kg if a < 0.05 => return Quantity::new(a * 1000.0, if self.unit == Unit::L { Unit::Ml } else { Unit::G }).measured(),
+            Unit::L | Unit::Kg if a < 0.05 => {
+                return Quantity::new(
+                    a * 1000.0,
+                    if self.unit == Unit::L {
+                        Unit::Ml
+                    } else {
+                        Unit::G
+                    },
+                )
+                .measured();
+            }
             Unit::L | Unit::Kg => up(0.05),
             Unit::Lb if a < 0.25 => return Quantity::new(a * 16.0, Unit::Oz).measured(),
             Unit::Lb => up(0.25),
@@ -274,7 +304,9 @@ fn spoons(tsp: f64) -> Vec<Quantity> {
     // Largest first, so that of two equally good answers the one in bigger measures is kept.
     const CUP_PARTS: [f64; 6] = [0.75, 2.0 / 3.0, 0.5, 1.0 / 3.0, 0.25, 0.0];
     const TBSP: [f64; 7] = [3.5, 3.0, 2.5, 2.0, 1.5, 1.0, 0.0];
-    const TSP: [f64; 13] = [2.75, 2.5, 2.25, 2.0, 1.75, 1.5, 1.25, 1.0, 0.75, 0.5, 0.25, 0.125, 0.0];
+    const TSP: [f64; 13] = [
+        2.75, 2.5, 2.25, 2.0, 1.75, 1.5, 1.25, 1.0, 0.75, 0.5, 0.25, 0.125, 0.0,
+    ];
     if !tsp.is_finite() || tsp > 1e6 {
         return vec![Quantity::new(tsp / 48.0, Unit::Cup)];
     }
@@ -297,10 +329,14 @@ fn spoons(tsp: f64) -> Vec<Quantity> {
                         }
                         let m = [cups, t, s, p];
                         let parts = m.iter().filter(|x| **x > 0.0).count();
-                        if total <= within && simple.is_none_or(|b| (parts, total) < (b.0, b.1 - 1e-9)) {
+                        if total <= within
+                            && simple.is_none_or(|b| (parts, total) < (b.0, b.1 - 1e-9))
+                        {
                             simple = Some((parts, total, m));
                         }
-                        if closest.is_none_or(|b| total < b.1 - 1e-9 || (total < b.1 + 1e-9 && parts < b.0)) {
+                        if closest.is_none_or(|b| {
+                            total < b.1 - 1e-9 || (total < b.1 + 1e-9 && parts < b.0)
+                        }) {
                             closest = Some((parts, total, m));
                         }
                     }
@@ -308,12 +344,19 @@ fn spoons(tsp: f64) -> Vec<Quantity> {
             }
         }
     }
-    let Some((_, _, [cups, t, s, p])) = simple.or(closest) else { return vec![Quantity::new(tsp, Unit::Tsp)] };
-    [(cups, Unit::Cup), (t, Unit::Tbsp), (s, Unit::Tsp), (p, Unit::Pinch)]
-        .into_iter()
-        .filter(|(a, _)| *a > 0.0)
-        .map(|(a, u)| Quantity::new(a, u))
-        .collect()
+    let Some((_, _, [cups, t, s, p])) = simple.or(closest) else {
+        return vec![Quantity::new(tsp, Unit::Tsp)];
+    };
+    [
+        (cups, Unit::Cup),
+        (t, Unit::Tbsp),
+        (s, Unit::Tsp),
+        (p, Unit::Pinch),
+    ]
+    .into_iter()
+    .filter(|(a, _)| *a > 0.0)
+    .map(|(a, u)| Quantity::new(a, u))
+    .collect()
 }
 
 fn round_to(a: f64, step: f64) -> f64 {
@@ -440,7 +483,12 @@ impl fmt::Display for Quantity {
 /// Read a number at the start of `s` as recipes write it: "2", "1.5", "½", "1½", "1 1⁄2", "3/4", "1 ½".
 /// Returns the value and how many bytes it used.
 pub fn parse_number(s: &str) -> Option<(f64, usize)> {
-    let glyph = |c: char| GLYPHS.iter().find(|(_, g)| g.starts_with(c)).map(|(v, _)| *v);
+    let glyph = |c: char| {
+        GLYPHS
+            .iter()
+            .find(|(_, g)| g.starts_with(c))
+            .map(|(v, _)| *v)
+    };
     let bytes = s.as_bytes();
     let mut i = 0;
     while i < bytes.len() && bytes[i].is_ascii_digit() {
@@ -553,7 +601,10 @@ mod tests {
         assert_eq!(parse_number("cup"), None);
         assert_eq!(parse_number("11⁄2 tsp").map(|x| x.0), Some(1.5));
         assert_eq!(parse_number("31⁄4 cups").map(|x| x.0), Some(3.25));
-        assert_eq!(parse_number("12⁄3 cups").map(|x| x.0), Some(1.0 + 2.0 / 3.0));
+        assert_eq!(
+            parse_number("12⁄3 cups").map(|x| x.0),
+            Some(1.0 + 2.0 / 3.0)
+        );
         assert_eq!(parse_number("1⁄2 tsp").map(|x| x.0), Some(0.5));
         assert_eq!(parse_number("1∕3 cup").map(|x| x.0), Some(1.0 / 3.0));
     }
@@ -585,9 +636,18 @@ mod tests {
         assert_eq!(format_amount(0.99), "1");
         assert_eq!(format_amount(0.016), "0.02");
         assert_eq!(format_amount(2.52), "2½");
-        assert_eq!(q(1.3, Unit::Count("clove".into())).rounded(), q(1.5, Unit::Count("clove".into())));
-        assert_eq!(q(0.7, Unit::Count("lime".into())).rounded(), q(0.75, Unit::Count("lime".into())));
-        assert_eq!(q(0.035, Unit::Count("thumb".into())).rounded(), q(0.04, Unit::Count("thumb".into())));
+        assert_eq!(
+            q(1.3, Unit::Count("clove".into())).rounded(),
+            q(1.5, Unit::Count("clove".into()))
+        );
+        assert_eq!(
+            q(0.7, Unit::Count("lime".into())).rounded(),
+            q(0.75, Unit::Count("lime".into()))
+        );
+        assert_eq!(
+            q(0.035, Unit::Count("thumb".into())).rounded(),
+            q(0.04, Unit::Count("thumb".into()))
+        );
     }
 
     #[test]
@@ -608,7 +668,10 @@ mod tests {
         assert_eq!(m(0.33, Unit::Cup), "⅓ cup");
         assert_eq!(m(0.67, Unit::Cup), "⅔ cup");
         assert_eq!(m(0.495, Unit::Cup), "½ cup");
-        assert_eq!(q(1.05, Unit::Tsp).measured().in_unit(&Unit::Tsp), Some(1.0625));
+        assert_eq!(
+            q(1.05, Unit::Tsp).measured().in_unit(&Unit::Tsp),
+            Some(1.0625)
+        );
     }
 
     #[test]

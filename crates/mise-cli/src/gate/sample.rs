@@ -72,7 +72,13 @@ pub const STRATA: &[Stratum] = &[
         weight: 10,
         test: |f| f.titles >= 3,
     },
-    Stratum { key: "large", label: "Large", about: "25 or more versions.", weight: 9, test: |f| f.versions >= 25 },
+    Stratum {
+        key: "large",
+        label: "Large",
+        about: "25 or more versions.",
+        weight: 9,
+        test: |f| f.versions >= 25,
+    },
     Stratum {
         key: "protein",
         label: "Protein choice",
@@ -94,8 +100,20 @@ pub const STRATA: &[Stratum] = &[
         weight: 7,
         test: |f| (4..25).contains(&f.versions),
     },
-    Stratum { key: "small", label: "2–3 versions", about: "A small dish.", weight: 7, test: |f| (2..4).contains(&f.versions) },
-    Stratum { key: "single", label: "Single version", about: "One version only.", weight: 8, test: |f| f.versions == 1 },
+    Stratum {
+        key: "small",
+        label: "2–3 versions",
+        about: "A small dish.",
+        weight: 7,
+        test: |f| (2..4).contains(&f.versions),
+    },
+    Stratum {
+        key: "single",
+        label: "Single version",
+        about: "One version only.",
+        weight: 8,
+        test: |f| f.versions == 1,
+    },
 ];
 
 /// One sampled dish: its index into the features slice and the stratum it was drawn for.
@@ -122,7 +140,9 @@ pub fn draw(features: &[Features], n: usize, seed: u64) -> Vec<Pick> {
     let candidates: Vec<Vec<usize>> = STRATA
         .iter()
         .map(|s| {
-            let mut c: Vec<usize> = (0..features.len()).filter(|&i| (s.test)(&features[i])).collect();
+            let mut c: Vec<usize> = (0..features.len())
+                .filter(|&i| (s.test)(&features[i]))
+                .collect();
             c.sort_by_key(|&i| (mix(seed, features[i].id), features[i].id));
             c
         })
@@ -131,19 +151,20 @@ pub fn draw(features: &[Features], n: usize, seed: u64) -> Vec<Pick> {
     let mut taken = vec![false; features.len()];
     let mut picks: Vec<Vec<usize>> = vec![Vec::new(); STRATA.len()];
     let mut cursor = vec![0usize; STRATA.len()];
-    let mut take = |s: usize, want: usize, taken: &mut Vec<bool>, picks: &mut Vec<Vec<usize>>| -> usize {
-        let mut got = 0;
-        while got < want && cursor[s] < candidates[s].len() {
-            let i = candidates[s][cursor[s]];
-            cursor[s] += 1;
-            if !taken[i] {
-                taken[i] = true;
-                picks[s].push(i);
-                got += 1;
+    let mut take =
+        |s: usize, want: usize, taken: &mut Vec<bool>, picks: &mut Vec<Vec<usize>>| -> usize {
+            let mut got = 0;
+            while got < want && cursor[s] < candidates[s].len() {
+                let i = candidates[s][cursor[s]];
+                cursor[s] += 1;
+                if !taken[i] {
+                    taken[i] = true;
+                    picks[s].push(i);
+                    got += 1;
+                }
             }
-        }
-        got
-    };
+            got
+        };
     let mut shortfall = 0;
     for (s, &q) in quotas.iter().enumerate() {
         shortfall += q - take(s, q, &mut taken, &mut picks);
@@ -155,7 +176,11 @@ pub fn draw(features: &[Features], n: usize, seed: u64) -> Vec<Pick> {
         }
         shortfall -= take(s, shortfall, &mut taken, &mut picks);
     }
-    picks.into_iter().enumerate().flat_map(|(stratum, ds)| ds.into_iter().map(move |dish| Pick { dish, stratum })).collect()
+    picks
+        .into_iter()
+        .enumerate()
+        .flat_map(|(stratum, ds)| ds.into_iter().map(move |dish| Pick { dish, stratum }))
+        .collect()
 }
 
 /// Every stratum a dish qualifies for, not only the one it was drawn for.
@@ -184,7 +209,11 @@ mod tests {
         (0..2000u128)
             .map(|i| Features {
                 id: Uuid::from_u128(i * 7919 + 1),
-                content_type: if i % 13 == 0 { "product".into() } else { "recipe".into() },
+                content_type: if i % 13 == 0 {
+                    "product".into()
+                } else {
+                    "recipe".into()
+                },
                 versions: [1, 1, 1, 2, 3, 5, 12, 30][i as usize % 8],
                 titles: 1 + (i as usize % 5 == 0) as usize * 2,
                 protein_choice: i % 9 == 0,
@@ -208,7 +237,10 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), 300);
         for p in &a {
-            assert!((STRATA[p.stratum].test)(&f[p.dish]), "a dish is drawn only for a stratum it qualifies for");
+            assert!(
+                (STRATA[p.stratum].test)(&f[p.dish]),
+                "a dish is drawn only for a stratum it qualifies for"
+            );
         }
     }
 

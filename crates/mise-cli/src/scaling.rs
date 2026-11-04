@@ -17,7 +17,9 @@ use std::path::Path;
 use anyhow::{Context as _, Result};
 use mise_core::quantity::{Quantity, Unit};
 use mise_core::servings::{self, CountUnit};
-use mise_core::step_amounts::{Context, Method, Part, Template, amount_at, pan_note, pans_needed, text_base};
+use mise_core::step_amounts::{
+    Context, Method, Part, Template, amount_at, pan_note, pans_needed, text_base,
+};
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -50,7 +52,11 @@ impl Tally {
         e.1 += ok as usize;
     }
     fn pct(&self) -> f64 {
-        if self.total == 0 { 0.0 } else { 100.0 * self.right as f64 / self.total as f64 }
+        if self.total == 0 {
+            0.0
+        } else {
+            100.0 * self.right as f64 / self.total as f64
+        }
     }
 }
 
@@ -73,7 +79,10 @@ fn stable_hash(seed: u64, id: Uuid) -> u64 {
 }
 
 fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 pub struct Summary {
@@ -86,10 +95,20 @@ pub struct Summary {
 }
 
 /// `only`: draw the sample from these variants (a seed list) instead of every dish's default version.
-pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path, only: Option<&[Uuid]>) -> Result<Summary> {
+pub async fn write_report(
+    pool: &PgPool,
+    sample: usize,
+    seed: u64,
+    out: &Path,
+    only: Option<&[Uuid]>,
+) -> Result<Summary> {
     // Load everything the renderer needs.
     let mut yields: HashMap<Uuid, Vec<f64>> = HashMap::new();
-    for (v, s) in sqlx::query_as::<_, (Uuid, f64)>("SELECT variant_id, servings::float8 FROM variant_yields").fetch_all(pool).await? {
+    for (v, s) in
+        sqlx::query_as::<_, (Uuid, f64)>("SELECT variant_id, servings::float8 FROM variant_yields")
+            .fetch_all(pool)
+            .await?
+    {
         yields.entry(v).or_default().push(s);
     }
     let mut amounts: LineAmounts = HashMap::new();
@@ -130,7 +149,10 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path, o
 
     // As the app does: published amounts that would shrink as servings grow are derived instead.
     for ((v, _), list) in amounts.iter_mut() {
-        let base = text_base(yields.get(v).map(Vec::as_slice).unwrap_or(&[]), steps.get(v).into_iter().flatten().map(|s| &s.template));
+        let base = text_base(
+            yields.get(v).map(Vec::as_slice).unwrap_or(&[]),
+            steps.get(v).into_iter().flatten().map(|s| &s.template),
+        );
         servings::keep_consistent(list, &[base, base * 2.0]);
     }
 
@@ -146,13 +168,20 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path, o
     .await?;
     let full = |v: &Uuid| {
         let ys = yields.get(v).map(Vec::as_slice).unwrap_or(&[]);
-        [2.0, 3.0, 4.0, 6.0].iter().all(|t| ys.iter().any(|y| (y - t).abs() < 1e-9))
+        [2.0, 3.0, 4.0, 6.0]
+            .iter()
+            .all(|t| ys.iter().any(|y| (y - t).abs() < 1e-9))
     };
     let mut picks: Vec<&(Uuid, Uuid, String)> = candidates
         .iter()
         .filter(|(_, v, _)| match only {
             Some(_) => steps.contains_key(v),
-            None => full(v) && steps.get(v).is_some_and(|ss| ss.iter().any(|s| s.template.has_alts())),
+            None => {
+                full(v)
+                    && steps
+                        .get(v)
+                        .is_some_and(|ss| ss.iter().any(|s| s.template.has_alts()))
+            }
         })
         .collect();
     picks.sort_by_key(|(d, v, _)| (stable_hash(seed, *d), *v));
@@ -168,19 +197,33 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path, o
         let base = text_base(&ys, ss.iter().map(|s| &s.template));
         let line_amount = |key: &str, s: f64| line_value(&amounts, *v, key, s);
         let any_alts = ss.iter().any(|s| s.template.has_alts());
-        let ctx = Context { base, scale_plain: !any_alts, line_amount: &line_amount };
+        let ctx = Context {
+            base,
+            scale_plain: !any_alts,
+            line_amount: &line_amount,
+        };
         for s in ss {
             for p in &s.template.parts {
-                let Part::Amount { alts, .. } = p else { continue };
+                let Part::Amount { alts, .. } = p else {
+                    continue;
+                };
                 for (at, published) in alts {
-                    let Some((pred, m)) = amount_at(p, *at, &ctx, false) else { continue };
+                    let Some((pred, m)) = amount_at(p, *at, &ctx, false) else {
+                        continue;
+                    };
                     let ok = pred.same_as(published);
                     overall.add(method_name(m), ok);
                     if in_sample.contains(v) {
                         sampled.add(method_name(m), ok);
                     }
                     if !ok {
-                        *misses.entry(format!("{}: {} → derived {pred}, published {published}", method_name(m), base_text(p))).or_default() += 1;
+                        *misses
+                            .entry(format!(
+                                "{}: {} → derived {pred}, published {published}",
+                                method_name(m),
+                                base_text(p)
+                            ))
+                            .or_default() += 1;
                     }
                 }
             }
@@ -191,16 +234,30 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path, o
     let (mut ing3, mut ing6) = (Tally::default(), Tally::default());
     for ((_, _), list) in &amounts {
         let get = |t: f64| list.iter().find(|(s, _, _)| (s - t).abs() < 1e-9);
-        let (Some(a2), Some(a3), Some(a4), Some(a6)) = (get(2.0), get(3.0), get(4.0), get(6.0)) else { continue };
-        let Some(unit) = a2.2.as_deref().and_then(Unit::parse) else { continue };
+        let (Some(a2), Some(a3), Some(a4), Some(a6)) = (get(2.0), get(3.0), get(4.0), get(6.0))
+        else {
+            continue;
+        };
+        let Some(unit) = a2.2.as_deref().and_then(Unit::parse) else {
+            continue;
+        };
         if [a3, a4, a6].iter().any(|a| a.2 != a2.2) {
             continue;
         }
         let known = [(2.0, a2.1), (4.0, a4.1)];
         for (target, official, tally) in [(3.0, a3.1, &mut ing3), (6.0, a6.1, &mut ing6)] {
-            let Some((v, _)) = servings::amount_at(&known, target) else { continue };
+            let Some((v, _)) = servings::amount_at(&known, target) else {
+                continue;
+            };
             let pred = Quantity::new(v, unit.clone()).rounded();
-            tally.add(if target == 3.0 { "interpolated" } else { "in proportion to servings" }, pred.same_as(&Quantity::new(official, unit.clone())));
+            tally.add(
+                if target == 3.0 {
+                    "interpolated"
+                } else {
+                    "in proportion to servings"
+                },
+                pred.same_as(&Quantity::new(official, unit.clone())),
+            );
         }
     }
 
@@ -211,11 +268,25 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path, o
     for (v, ss) in &steps {
         let ys = yields.get(v).cloned().unwrap_or_default();
         let base = text_base(&ys, ss.iter().map(|s| &s.template));
-        let ctx = Context { base, scale_plain: false, line_amount: &no_lines };
+        let ctx = Context {
+            base,
+            scale_plain: false,
+            line_amount: &no_lines,
+        };
         for s in ss {
             for p in &s.template.parts {
-                let Part::Amount { base: b, alts, line: Some(line), .. } = p else { continue };
-                let Some(list) = amounts.get(&(*v, line.clone())) else { continue };
+                let Part::Amount {
+                    base: b,
+                    alts,
+                    line: Some(line),
+                    ..
+                } = p
+                else {
+                    continue;
+                };
+                let Some(list) = amounts.get(&(*v, line.clone())) else {
+                    continue;
+                };
                 let official = |t: f64| {
                     list.iter()
                         .find(|(x, _, _)| (x - t).abs() < 1e-9)
@@ -223,12 +294,18 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path, o
                 };
                 let whole = official(base).is_some_and(|q| q.same_as(b))
                     && !alts.is_empty()
-                    && alts.iter().all(|(at, q)| official(*at).is_some_and(|l| l.same_as(q)));
+                    && alts
+                        .iter()
+                        .all(|(at, q)| official(*at).is_some_and(|l| l.same_as(q)));
                 if !whole {
                     continue;
                 }
                 for (target, tally) in [(3.0, &mut whole3), (6.0, &mut whole6)] {
-                    let (Some(truth), Some((pred, m))) = (official(target), amount_at(p, target, &ctx, true)) else { continue };
+                    let (Some(truth), Some((pred, m))) =
+                        (official(target), amount_at(p, target, &ctx, true))
+                    else {
+                        continue;
+                    };
                     tally.add(method_name(m), pred.same_as(&truth));
                 }
             }
@@ -241,15 +318,43 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path, o
         let ys = yields.get(v).cloned().unwrap_or_default();
         let base = text_base(&ys, steps.get(v).into_iter().flatten().map(|s| &s.template));
         let line_amount = |key: &str, s: f64| line_value(&amounts, *v, key, s);
-        let any_alts = steps.get(v).is_some_and(|ss| ss.iter().any(|s| s.template.has_alts()));
-        let ctx = Context { base, scale_plain: !any_alts, line_amount: &line_amount };
-        write_card(&mut cards, no + 1, *dish, title, *v, &names, &amounts, &counts, steps.get(v).map(Vec::as_slice).unwrap_or(&[]), &ctx);
+        let any_alts = steps
+            .get(v)
+            .is_some_and(|ss| ss.iter().any(|s| s.template.has_alts()));
+        let ctx = Context {
+            base,
+            scale_plain: !any_alts,
+            line_amount: &line_amount,
+        };
+        write_card(
+            &mut cards,
+            no + 1,
+            *dish,
+            title,
+            *v,
+            &names,
+            &amounts,
+            &counts,
+            steps.get(v).map(Vec::as_slice).unwrap_or(&[]),
+            &ctx,
+        );
     }
 
     let mut top: Vec<(String, usize)> = misses.into_iter().collect();
     top.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
     top.truncate(40);
-    let html = page(&overall, &sampled, &ing3, &ing6, &whole3, &whole6, &top, picks.len(), seed, &cards);
+    let html = page(
+        &overall,
+        &sampled,
+        &ing3,
+        &ing6,
+        &whole3,
+        &whole6,
+        &top,
+        picks.len(),
+        seed,
+        &cards,
+    );
     if let Some(dir) = out.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -266,13 +371,21 @@ pub async fn write_report(pool: &PgPool, sample: usize, seed: u64, out: &Path, o
 
 fn line_value(amounts: &LineAmounts, v: Uuid, key: &str, s: f64) -> Option<f64> {
     let list = amounts.get(&(v, key.to_string()))?;
-    list.iter().find(|(x, _, _)| (x - s).abs() < 1e-9).map(|(_, a, _)| *a)
+    list.iter()
+        .find(|(x, _, _)| (x - s).abs() < 1e-9)
+        .map(|(_, a, _)| *a)
 }
 
 fn base_text(p: &Part) -> String {
     match p {
         Part::Amount { base, alts, .. } => {
-            format!("{base} ({})", alts.iter().map(|(s, q)| format!("{q} for {s}")).collect::<Vec<_>>().join(", "))
+            format!(
+                "{base} ({})",
+                alts.iter()
+                    .map(|(s, q)| format!("{q} for {s}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         }
         _ => String::new(),
     }
@@ -289,7 +402,12 @@ fn render_html(t: &Template, target: f64, ctx: &Context) -> String {
                 match m {
                     Method::Published | Method::Unchanged => h.push_str(&esc(&q.to_string())),
                     m => {
-                        let _ = write!(h, "<mark title=\"{}\">{}</mark>", esc(method_name(m)), esc(&q.to_string()));
+                        let _ = write!(
+                            h,
+                            "<mark title=\"{}\">{}</mark>",
+                            esc(method_name(m)),
+                            esc(&q.to_string())
+                        );
                     }
                 }
             }
@@ -299,25 +417,45 @@ fn render_html(t: &Template, target: f64, ctx: &Context) -> String {
                 } else if let Some((_, w)) = alts.iter().find(|(s, _)| (s - target).abs() < 1e-9) {
                     h.push_str(&esc(w));
                 } else {
-                    let mut opts: Vec<(f64, &str)> = alts.iter().map(|(s, w)| (*s, w.as_str())).collect();
+                    let mut opts: Vec<(f64, &str)> =
+                        alts.iter().map(|(s, w)| (*s, w.as_str())).collect();
                     opts.push((ctx.base, base));
-                    opts.sort_by(|a, b| (a.0 - target).abs().total_cmp(&(b.0 - target).abs()).then(b.0.total_cmp(&a.0)));
-                    let _ = write!(h, "<mark class=\"check\" title=\"wording from the nearest published yield\">{}</mark>", esc(opts[0].1));
+                    opts.sort_by(|a, b| {
+                        (a.0 - target)
+                            .abs()
+                            .total_cmp(&(b.0 - target).abs())
+                            .then(b.0.total_cmp(&a.0))
+                    });
+                    let _ = write!(
+                        h,
+                        "<mark class=\"check\" title=\"wording from the nearest published yield\">{}</mark>",
+                        esc(opts[0].1)
+                    );
                 }
             }
             Part::Note { text, from } => {
                 if target > ctx.base {
-                    let class = if (target - from).abs() < 1e-9 { "note" } else { "note check" };
+                    let class = if (target - from).abs() < 1e-9 {
+                        "note"
+                    } else {
+                        "note check"
+                    };
                     let _ = write!(h, "<span class=\"{class}\">{}</span>", esc(text));
                 }
             }
         }
     }
     if let Some(n) = pans_needed(t, target, ctx) {
-        let _ = write!(h, "<span class=\"note check\">{}</span>", esc(&pan_note(target, n)));
+        let _ = write!(
+            h,
+            "<span class=\"note check\">{}</span>",
+            esc(&pan_note(target, n))
+        );
     }
     if t.unparsed > 0 && (target - ctx.base).abs() > 1e-9 {
-        h.push_str("<span class=\"note check\"> Check amounts: this step reads as published.</span>");
+        h.push_str(
+            "<span class=\"note check\"> Check amounts: this step reads as published.</span>",
+        );
     }
     h
 }
@@ -335,7 +473,11 @@ fn write_card(
     steps: &[Step],
     ctx: &Context,
 ) {
-    let _ = write!(h, "<article class=\"card\" id=\"r-{no}\" data-id=\"{dish}\"><header><span class=\"no\">#{no}</span><h2>{}</h2></header>", esc(title));
+    let _ = write!(
+        h,
+        "<article class=\"card\" id=\"r-{no}\" data-id=\"{dish}\"><header><span class=\"no\">#{no}</span><h2>{}</h2></header>",
+        esc(title)
+    );
     // Ingredients: official amounts, and whether 3 and 6 derive correctly from 2 and 4.
     h.push_str("<table class=\"ing\"><thead><tr><th>Ingredient</th><th>2</th><th>3</th><th>4</th><th>6</th></tr></thead><tbody>");
     for (key, name) in names.get(&v).map(Vec::as_slice).unwrap_or(&[]) {
@@ -345,7 +487,8 @@ fn write_card(
         let _ = write!(h, "<tr><td>{}</td>", esc(name));
         // As the app shows it, and as the app would show it knowing only 2 and 4 servings.
         let all: Vec<(f64, f64, Option<String>)> = list.cloned().unwrap_or_default();
-        let known: Vec<(f64, f64, Option<String>)> = [2.0, 4.0].iter().filter_map(|&t| get(t).cloned()).collect();
+        let known: Vec<(f64, f64, Option<String>)> =
+            [2.0, 4.0].iter().filter_map(|&t| get(t).cloned()).collect();
         for t in [2.0, 3.0, 4.0, 6.0] {
             match servings::line_text(&all, t, count) {
                 (Some(shown), false) => {
@@ -353,7 +496,11 @@ fn write_card(
                     if t == 3.0 || t == 6.0 {
                         if let (Some(pred), _) = servings::line_text(&known, t, count) {
                             if pred != shown {
-                                let _ = write!(cell, " <span class=\"miss\" title=\"derived from 2 and 4\">≠ {}</span>", esc(&pred));
+                                let _ = write!(
+                                    cell,
+                                    " <span class=\"miss\" title=\"derived from 2 and 4\">≠ {}</span>",
+                                    esc(&pred)
+                                );
                             }
                         }
                     }
@@ -361,7 +508,11 @@ fn write_card(
                 }
                 // Not published, or left out for shrinking: what the app shows instead.
                 (Some(shown), true) => {
-                    let _ = write!(h, "<td><mark title=\"derived: the published amount shrank, or none was published\">≈ {}</mark></td>", esc(&shown));
+                    let _ = write!(
+                        h,
+                        "<td><mark title=\"derived: the published amount shrank, or none was published\">≈ {}</mark></td>",
+                        esc(&shown)
+                    );
                 }
                 (None, _) => h.push_str("<td class=\"muted\">–</td>"),
             }
@@ -370,17 +521,32 @@ fn write_card(
     }
     h.push_str("</tbody></table><ol class=\"steps\">");
     for s in steps {
-        let _ = write!(h, "<li><p class=\"pub\" title=\"as published\">{}</p>", esc(&s.text));
+        let _ = write!(
+            h,
+            "<li><p class=\"pub\" title=\"as published\">{}</p>",
+            esc(&s.text)
+        );
         for t in [3.0, 6.0] {
-            let _ = write!(h, "<p class=\"at\"><span class=\"y\">{t}</span>{}</p>", render_html(&s.template, t, ctx));
+            let _ = write!(
+                h,
+                "<p class=\"at\"><span class=\"y\">{t}</span>{}</p>",
+                render_html(&s.template, t, ctx)
+            );
         }
         // Where deriving 4 from 2 would have missed the published amount.
         for p in &s.template.parts {
-            let Part::Amount { alts, .. } = p else { continue };
+            let Part::Amount { alts, .. } = p else {
+                continue;
+            };
             for (at, published) in alts {
                 if let Some((pred, _)) = amount_at(p, *at, ctx, false) {
                     if !pred.same_as(published) {
-                        let _ = write!(h, "<p class=\"miss\">At {at}: would derive {} — published {}</p>", esc(&pred.to_string()), esc(&published.to_string()));
+                        let _ = write!(
+                            h,
+                            "<p class=\"miss\">At {at}: would derive {} — published {}</p>",
+                            esc(&pred.to_string()),
+                            esc(&published.to_string())
+                        );
                     }
                 }
             }
@@ -400,14 +566,33 @@ fn tally_rows(t: &Tally) -> String {
     let mut rows: Vec<(&&str, &(usize, usize))> = t.by_method.iter().collect();
     rows.sort_by_key(|r| std::cmp::Reverse(r.1.0));
     rows.iter()
-        .map(|(m, (n, ok))| format!("<tr><td>{m}</td><td>{n}</td><td>{:.1}%</td></tr>", 100.0 * *ok as f64 / (*n).max(1) as f64))
+        .map(|(m, (n, ok))| {
+            format!(
+                "<tr><td>{m}</td><td>{n}</td><td>{:.1}%</td></tr>",
+                100.0 * *ok as f64 / (*n).max(1) as f64
+            )
+        })
         .collect()
 }
 
 #[allow(clippy::too_many_arguments)]
-fn page(overall: &Tally, sampled: &Tally, ing3: &Tally, ing6: &Tally, whole3: &Tally, whole6: &Tally, misses: &[(String, usize)], n: usize, seed: u64, cards: &str) -> String {
+fn page(
+    overall: &Tally,
+    sampled: &Tally,
+    ing3: &Tally,
+    ing6: &Tally,
+    whole3: &Tally,
+    whole6: &Tally,
+    misses: &[(String, usize)],
+    n: usize,
+    seed: u64,
+    cards: &str,
+) -> String {
     let meta = json!({ "kind": "mise-scaling-decisions", "seed": seed, "sample": n });
-    let miss_rows: String = misses.iter().map(|(m, c)| format!("<tr><td>{}</td><td>{c}</td></tr>", esc(m))).collect();
+    let miss_rows: String = misses
+        .iter()
+        .map(|(m, c)| format!("<tr><td>{}</td><td>{c}</td></tr>", esc(m)))
+        .collect();
     format!(
         "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
 <title>Scaling check</title><style>{CSS}</style></head><body><main>\
@@ -428,8 +613,18 @@ have missed the published amount.</p>\
 <details><summary>Most common misses</summary><table><thead><tr><th>Amount</th><th>Times</th></tr></thead><tbody>{miss_rows}</tbody></table></details>\
 <p class=\"tools\"><span id=\"progress\">0</span> of {n} reviewed · <button type=\"button\" id=\"export\">Export decisions (JSON)</button></p></section>\
 {cards}</main><script id=\"meta\" type=\"application/json\">{}</script><script>{JS}</script></body></html>",
-        overall.total, overall.pct(), sampled.total, sampled.pct(), whole3.total, whole3.pct(), whole6.total, whole6.pct(),
-        ing3.total, ing3.pct(), ing6.total, ing6.pct(),
+        overall.total,
+        overall.pct(),
+        sampled.total,
+        sampled.pct(),
+        whole3.total,
+        whole3.pct(),
+        whole6.total,
+        whole6.pct(),
+        ing3.total,
+        ing3.pct(),
+        ing6.total,
+        ing6.pct(),
         tally_rows(overall),
         meta.to_string().replace("</", "<\\/"),
     )

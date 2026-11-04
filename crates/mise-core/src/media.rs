@@ -10,7 +10,11 @@ pub const WEB_SIZES: &[u32] = &[400, 1200];
 
 /// Where an original with this hash and extension is stored, relative to `MEDIA_ROOT`.
 pub fn original_path(sha256: &str, ext: &str) -> String {
-    format!("originals/{}/{}/{sha256}.{ext}", &sha256[0..2], &sha256[2..4])
+    format!(
+        "originals/{}/{}/{sha256}.{ext}",
+        &sha256[0..2],
+        &sha256[2..4]
+    )
 }
 
 /// Where the web copy of an image at this size is stored, relative to `MEDIA_ROOT`.
@@ -25,8 +29,14 @@ pub fn fit_within(width: u32, height: u32, max_side: u32) -> (u32, u32) {
     if longest <= max_side || longest == 0 {
         return (width, height);
     }
-    let scale = |side: u32| ((side as u64 * max_side as u64 + longest as u64 / 2) / longest as u64).max(1) as u32;
-    if width >= height { (max_side, scale(height)) } else { (scale(width), max_side) }
+    let scale = |side: u32| {
+        ((side as u64 * max_side as u64 + longest as u64 / 2) / longest as u64).max(1) as u32
+    };
+    if width >= height {
+        (max_side, scale(height))
+    } else {
+        (scale(width), max_side)
+    }
 }
 
 /// An image format mise stores, detected from a file's first bytes.
@@ -44,7 +54,21 @@ impl ImageKind {
         match head {
             [0xFF, 0xD8, 0xFF, ..] => Some(Self::Jpeg),
             [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, ..] => Some(Self::Png),
-            [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => Some(Self::Webp),
+            [
+                b'R',
+                b'I',
+                b'F',
+                b'F',
+                _,
+                _,
+                _,
+                _,
+                b'W',
+                b'E',
+                b'B',
+                b'P',
+                ..,
+            ] => Some(Self::Webp),
             [b'G', b'I', b'F', b'8', ..] => Some(Self::Gif),
             _ => None,
         }
@@ -78,9 +102,18 @@ mod tests {
 
     #[test]
     fn lays_out_paths_by_hash() {
-        assert_eq!(original_path(SHA, "jpg"), format!("originals/ab/12/{SHA}.jpg"));
-        assert_eq!(derivative_path(SHA, 400, "jpg"), format!("web/400/ab/{SHA}.jpg"));
-        assert_eq!(derivative_path(SHA, 1200, "png"), format!("web/1200/ab/{SHA}.png"));
+        assert_eq!(
+            original_path(SHA, "jpg"),
+            format!("originals/ab/12/{SHA}.jpg")
+        );
+        assert_eq!(
+            derivative_path(SHA, 400, "jpg"),
+            format!("web/400/ab/{SHA}.jpg")
+        );
+        assert_eq!(
+            derivative_path(SHA, 1200, "png"),
+            format!("web/1200/ab/{SHA}.png")
+        );
     }
 
     #[test]
@@ -98,9 +131,18 @@ mod tests {
 
     #[test]
     fn sniffs_formats() {
-        assert_eq!(ImageKind::sniff(&[0xFF, 0xD8, 0xFF, 0xE0, 0, 0]), Some(ImageKind::Jpeg));
-        assert_eq!(ImageKind::sniff(b"\x89PNG\r\n\x1a\n...."), Some(ImageKind::Png));
-        assert_eq!(ImageKind::sniff(b"RIFF\x10\0\0\0WEBPVP8 "), Some(ImageKind::Webp));
+        assert_eq!(
+            ImageKind::sniff(&[0xFF, 0xD8, 0xFF, 0xE0, 0, 0]),
+            Some(ImageKind::Jpeg)
+        );
+        assert_eq!(
+            ImageKind::sniff(b"\x89PNG\r\n\x1a\n...."),
+            Some(ImageKind::Png)
+        );
+        assert_eq!(
+            ImageKind::sniff(b"RIFF\x10\0\0\0WEBPVP8 "),
+            Some(ImageKind::Webp)
+        );
         assert_eq!(ImageKind::sniff(b"GIF89a"), Some(ImageKind::Gif));
         // A saved S3 error page named like an image.
         assert_eq!(ImageKind::sniff(b"<?xml version=\"1.0\"?><Error>"), None);

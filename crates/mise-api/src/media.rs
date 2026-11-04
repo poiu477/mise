@@ -1,10 +1,6 @@
 //! Photos: the stored original or a web-size copy, by media id.
 
-use axum::{
-    extract::State,
-    http::header,
-    response::IntoResponse,
-};
+use axum::{extract::State, http::header, response::IntoResponse};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -45,26 +41,57 @@ impl Image {
     params(("id" = Uuid, Path), ("size" = String, Path, description = "400, 1200 or original")),
     responses((status = 200, description = "The image"), (status = 404, body = crate::error::ErrorBody))
 )]
-pub async fn get(State(s): State<AppState>, Path((id, size)): Path<(Uuid, String)>) -> ApiResult<impl IntoResponse> {
+pub async fn get(
+    State(s): State<AppState>,
+    Path((id, size)): Path<(Uuid, String)>,
+) -> ApiResult<impl IntoResponse> {
     let max_side: Option<i32> = match size.as_str() {
         "original" => None,
-        other => Some(other.parse().ok().filter(|n| SIZES.contains(n)).ok_or_else(|| ApiError::BadRequest("size must be 400, 1200 or original".into()))?),
+        other => Some(
+            other
+                .parse()
+                .ok()
+                .filter(|n| SIZES.contains(n))
+                .ok_or_else(|| ApiError::BadRequest("size must be 400, 1200 or original".into()))?,
+        ),
     };
-    let derivative: Option<(String, String)> = match max_side {
-        Some(n) => sqlx::query_as("SELECT path, mime FROM media_derivatives WHERE media_id = $1 AND max_side = $2")
+    let derivative: Option<(String, String)> =
+        match max_side {
+            Some(n) => sqlx::query_as(
+                "SELECT path, mime FROM media_derivatives WHERE media_id = $1 AND max_side = $2",
+            )
             .bind(id)
             .bind(n)
             .fetch_optional(&s.pool)
             .await?,
-        None => None,
-    };
+            None => None,
+        };
     let (path, mime) = match derivative {
         Some(d) => d,
-        None => sqlx::query_as("SELECT path, mime FROM media WHERE id = $1").bind(id).fetch_optional(&s.pool).await?.ok_or(ApiError::NotFound)?,
+        None => sqlx::query_as("SELECT path, mime FROM media WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&s.pool)
+            .await?
+            .ok_or(ApiError::NotFound)?,
     };
-    let bytes = tokio::fs::read(s.media_root.join(&path)).await.map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound { ApiError::NotFound } else { ApiError::Internal(e.into()) }
-    })?;
+    let bytes = tokio::fs::read(s.media_root.join(&path))
+        .await
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                ApiError::NotFound
+            } else {
+                ApiError::Internal(e.into())
+            }
+        })?;
     // Content-addressed: a media id never changes its bytes.
-    Ok(([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, "public, max-age=31536000, immutable".into())], bytes))
+    Ok((
+        [
+            (header::CONTENT_TYPE, mime),
+            (
+                header::CACHE_CONTROL,
+                "public, max-age=31536000, immutable".into(),
+            ),
+        ],
+        bytes,
+    ))
 }
