@@ -118,6 +118,9 @@ export function withChanges(list: ShoppingList, changes: Change[]): ShoppingList
 
 export const isLocal = (id: string) => id.startsWith("local-");
 
+/** A fresh id for something added on this device, until the server gives it one. */
+export const localId = () => `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
 /** What sending one change came to: the list it answered with (and a change still to make, when only part of it
  * went through), refused for good (it will never apply), or the server out of reach (try again later). */
 export type Sent = { list: ShoppingList; then?: Change } | "refused" | "unreachable";

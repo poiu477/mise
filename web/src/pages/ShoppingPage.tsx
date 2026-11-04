@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type ShoppingItem, type ShoppingList, type Weights } from "../api/client";
-import { deviceCopy, isLocal, queue, sendChanges, withChanges, type Change, type Sent } from "../offline";
+import { deviceCopy, isLocal, localId, queue, sendChanges, withChanges, type Change, type Sent } from "../offline";
 import { useSession } from "../session";
 import { addWeeks, mondayOf, weekLabel, weekOf } from "../week";
 import { WEIGHTS, shortWeight } from "../weights";
@@ -131,7 +131,9 @@ export function ShoppingPage() {
     }
     load();
   }, [setPending, load]);
-  flushRef.current = flush;
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [flush]);
 
   // Another account on this device has its own waiting changes.
   useEffect(() => {
@@ -151,7 +153,7 @@ export function ShoppingPage() {
       document.removeEventListener("visibilitychange", refreshList);
       window.removeEventListener("online", refreshList);
     };
-  }, [load]);
+  }, [week, load]);
 
   // While offline, look for the server now and then.
   useEffect(() => {
@@ -195,7 +197,7 @@ export function ShoppingPage() {
   const addExtra = (e: FormEvent) => {
     e.preventDefault();
     if (!extra.trim() || !shown) return;
-    change({ kind: "add_extra", week: shown.week, id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: extra.trim(), checked: false });
+    change({ kind: "add_extra", week: shown.week, id: localId(), name: extra.trim(), checked: false });
     setExtra("");
   };
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { api, errorText } from "../api/client";
 import { addWeeks, mondayOf } from "../week";
@@ -7,22 +7,22 @@ import { addWeeks, mondayOf } from "../week";
 export function AddToPlan({ variantId, servings }: { variantId: string; servings: number }) {
   const thisWeek = mondayOf();
   const [week, setWeek] = useState(thisWeek);
-  const [state, setState] = useState<"idle" | "saving" | "added">("idle");
+  // What was last added; a different version, size or week is a new thing to add.
+  const target = `${variantId}|${servings}|${week}`;
+  const [done, setDone] = useState<{ target: string; state: "saving" | "added" } | null>(null);
+  const state = done?.target === target ? done.state : "idle";
   const [error, setError] = useState("");
 
-  // A different version or size is a new thing to add.
-  useEffect(() => setState("idle"), [variantId, servings, week]);
-
   const add = async () => {
-    setState("saving");
+    setDone({ target, state: "saving" });
     setError("");
     const { error: failed } = await api.POST("/api/plan/entries", { body: { week, variant_id: variantId, servings } });
     if (failed) {
-      setState("idle");
+      setDone(null);
       setError(errorText(failed));
       return;
     }
-    setState("added");
+    setDone({ target, state: "added" });
   };
 
   return (
