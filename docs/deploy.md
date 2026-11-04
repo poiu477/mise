@@ -27,8 +27,8 @@ The app applies database migrations whenever it starts.
 
 ## 3. Photos
 
-Photos live in `MEDIA_DIR` (default `./data/media` next to `compose.yaml`, on the container's own disk). A full
-HelloFresh-sized library takes about 40 GB of originals plus 9 GB of web-size copies.
+Photos live in `MEDIA_DIR` (default `./data/media` next to `compose.yaml`, on the container's own disk). A library of
+about 10,000 meal-kit dishes takes about 40 GB of originals plus 9 GB of web-size copies.
 
 - **Another disk or a NAS:** mount it on the Proxmox host and pass it into the LXC as a mount point
   (`pct set <id> -mp0 /mnt/nas/mise,mp=/srv/mise-media`), then set `MEDIA_DIR=/srv/mise-media`. NFS and SMB

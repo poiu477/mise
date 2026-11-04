@@ -16,7 +16,7 @@ cd web && npm install && cd ..
 | Database | What | Used for |
 | --- | --- | --- |
 | `mise_seed` | The launch seed: 237 dishes and 308 versions from meals the household received | Day-to-day use and development (`.env` points here) |
-| `mise` | The full HelloFresh archive import, about 9,900 dishes | Evidence: package sizes, pack counts, more dishes to add later |
+| `mise` | The full private archive import, about 9,900 dishes | Evidence: package sizes, pack counts, more dishes to add later |
 | `mise_test_<uuid>` | Made and dropped by each API integration test | Tests only |
 
 Switching between them is a matter of `DATABASE_URL` and `MEDIA_ROOT` in `.env`; `seed/env-full-archive` holds the
@@ -24,12 +24,13 @@ full archive's pair.
 
 ## Rebuilding the seed database
 
-The private inputs live in `seed/` (ignored by git); the photos come from the archive at `D:/Recipes`.
+The private inputs live in `seed/` (ignored by git); the photos come from the archive's folder (`ARCHIVE` below).
 
 ```bash
 docker exec mise-db-1 createdb -U mise mise_seed
 cargo build --release -p mise-cli
 M=./target/release/mise
+ARCHIVE=/path/to/archive        # the private archive's photo folder
 $M migrate
 $M import-bundle seed/mise-seed
 $M match-foods
@@ -39,7 +40,7 @@ $M dish prefer seed/preferred-versions.json
 $M group-dishes
 $M derive-options
 $M parse-steps
-$M ingest-media --from D:/Recipes
+$M ingest-media --from "$ARCHIVE"
 ```
 
 The result should be 237 dishes and 308 versions. `seed/build-seed-bundle.py`, `build-count-units.py` and

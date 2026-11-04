@@ -1,5 +1,5 @@
 //! Dish titles: strip sources' internal working notes, and find the part of a title that stays the same when
-//! only the protein changes ("Hot Honey Chicken" and "Hot Honey Pork Filet" share "hot honey").
+//! only the protein changes ("Garlic Ginger Chicken" and "Garlic Ginger Pork Filet" share "garlic ginger").
 
 use std::sync::LazyLock;
 
@@ -31,7 +31,7 @@ pub fn clean_title(title: &str) -> String {
     t = WEEK_CODE.replace(&t, "").into_owned();
     t = NOTE_SUFFIX.replace(&t, "").into_owned();
     t = SERVINGS_SUFFIX.replace(&t, "").into_owned();
-    // Parenthetical codes can stack: "(Pork Chop 10oz) (D2V)".
+    // Parenthetical codes can stack: "(Turkey 10oz) (QA)".
     loop {
         let next = CODE_PARENS.replace(&t, "").into_owned();
         if next == t {
@@ -152,76 +152,71 @@ mod tests {
     fn strips_working_notes() {
         assert_eq!(
             clean_title(
-                "[SWAP PORK CHOPS TO CHICKEN CUTLETS] MA/CA only Compliant Al Pastor Pork Chops with Mango Salsa (Pork Chop 10oz)"
+                "[SWAP BEEF TO TURKEY] NY/NJ only Compliant Smoky Turkey Chili with Corn Salsa (Turkey 10oz)"
             ),
-            "Al Pastor Pork Chops with Mango Salsa"
+            "Smoky Turkey Chili with Corn Salsa"
         );
         assert_eq!(
-            clean_title("W46 R146 Peachy Keen BBQ-Rubbed Pork Chops"),
-            "Peachy Keen BBQ-Rubbed Pork Chops"
+            clean_title("W12 R034 Maple Mustard Pork Chops"),
+            "Maple Mustard Pork Chops"
         );
         assert_eq!(
-            clean_title("Beef tacos with pineapple salsa -- RED ONION SWAP"),
-            "Beef tacos with pineapple salsa"
+            clean_title("Lentil tacos with charred corn -- LIME SWAP"),
+            "Lentil tacos with charred corn"
         );
         assert_eq!(
-            clean_title("Sweet and Smoky Chicken Cutlet with Cherry Sauce (D2V)"),
-            "Sweet and Smoky Chicken Cutlet with Cherry Sauce"
+            clean_title("Lemon Pepper Chicken Thighs with Green Beans (QA)"),
+            "Lemon Pepper Chicken Thighs with Green Beans"
         );
         assert_eq!(
-            clean_title("with Cream Cheese, Zucchini & Parm | 2 Servings"),
-            "with Cream Cheese, Zucchini & Parm"
+            clean_title("with Spinach, Feta & Lemon | 2 Servings"),
+            "with Spinach, Feta & Lemon"
         );
         assert_eq!(
-            clean_title("with Crushed Tortilla Chips | 2–4 servings"),
-            "with Crushed Tortilla Chips"
+            clean_title("with Toasted Pita Chips | 2–4 servings"),
+            "with Toasted Pita Chips"
         );
+        assert_eq!(clean_title("Veggie (Not) Lasagna"), "Veggie (Not) Lasagna");
         assert_eq!(
-            clean_title("Chicken (Not) Pot Pie"),
-            "Chicken (Not) Pot Pie"
-        );
-        assert_eq!(
-            clean_title(
-                "MA/CA only Steakhouse Pork Chop with Creamy Shallot Pan Sauce (New Sour Cream SKU)"
-            ),
-            "Steakhouse Pork Chop with Creamy Shallot Pan Sauce"
+            clean_title("NY/NJ only Herb Roasted Chicken with Shallot Gravy (New Butter SKU)"),
+            "Herb Roasted Chicken with Shallot Gravy"
         );
     }
 
     #[test]
     fn protein_swaps_share_a_core() {
         assert_eq!(
-            protein_core("Hot Honey Chicken"),
-            protein_core("Hot Honey Pork Filet")
+            protein_core("Garlic Ginger Chicken"),
+            protein_core("Garlic Ginger Pork Filet")
         );
         assert_eq!(
-            protein_core("Bulgogi Beef Tenderloin"),
-            protein_core("Bulgogi Chicken")
+            protein_core("Sesame Beef Tenderloin"),
+            protein_core("Sesame Chicken")
         );
         assert_eq!(
-            protein_core("One-Pan Pineapple Salsa & 2x Shrimp Tacos"),
-            protein_core("One-Pan Pineapple Salsa & 2x Beef Tacos")
+            protein_core("Sheet-Pan Mango Salsa & 2x Shrimp Tacos"),
+            protein_core("Sheet-Pan Mango Salsa & 2x Beef Tacos")
         );
         assert_ne!(
-            protein_core("Chicken Schnitzel"),
-            protein_core("Sweet Thai Chili Chicken")
+            protein_core("Chicken Milanese"),
+            protein_core("Coconut Lime Chicken")
         );
     }
 
     #[test]
     fn and_reads_like_ampersand() {
         assert_eq!(
-            title_key("Spring Asparagus and Shrimp Risotto"),
-            title_key("Spring Asparagus & Shrimp Risotto")
+            title_key("Lemon Pea and Shrimp Orzo"),
+            title_key("Lemon Pea & Shrimp Orzo")
         );
     }
 
     #[test]
     fn core_similarity_ignores_proteins() {
-        assert!(core_similarity("Chicken Caesar Salad", "Chicken, Chickpea & Kale Salad") < 0.34);
-        assert!(core_similarity("Tuscan-Spiced Chicken", "Tuscan Pork Filet") >= 0.34);
+        assert!(core_similarity("Chicken Cobb Salad", "Chicken, Lentil & Spinach Salad") < 0.34);
+        assert!(core_similarity("Cajun-Spiced Chicken", "Cajun Pork Filet") >= 0.34);
         assert_eq!(
-            core_similarity("Hot Honey Chicken", "Hot Honey Pork Filet"),
+            core_similarity("Garlic Ginger Chicken", "Garlic Ginger Pork Filet"),
             1.0
         );
     }

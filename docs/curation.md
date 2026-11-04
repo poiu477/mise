@@ -41,9 +41,9 @@ re-imports and a rebuilt database:
 
 ```json
 [
-  { "decision": "merge", "a": ["seed:hellofresh-us", "<id>"], "b": ["seed:hellofresh-us", "<id>"],
+  { "decision": "merge", "a": ["seed:my-archive", "<id>"], "b": ["seed:my-archive", "<id>"],
     "by": "user", "note": "renamed: same recipe" },
-  { "decision": "keep_apart", "a": ["seed:hellofresh-us", "<id>"], "b": ["seed:hellofresh-us", "<id>"], "by": "claude" }
+  { "decision": "keep_apart", "a": ["seed:my-archive", "<id>"], "b": ["seed:my-archive", "<id>"], "by": "claude" }
 ]
 ```
 
@@ -56,6 +56,6 @@ opens on the version had most, among those with steps, and those versions count 
 
 ```json
 [
-  { "record": ["seed:hellofresh-us", "<id>"], "times": 14 }
+  { "record": ["seed:my-archive", "<id>"], "times": 14 }
 ]
 ```

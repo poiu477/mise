@@ -20,8 +20,8 @@ use uuid::Uuid;
 /// count as the same dish.
 const MIN_TITLE_SIMILARITY: f64 = 0.6;
 const MIN_SHIPPED_OVERLAP: f64 = 0.5;
-/// Near-identical shipped ingredients alone mean the same dish (a renamed protein swap such as "Tuscan-Spiced
-/// Chicken" ↔ "Tuscan Pork Filet"), provided both versions ship enough items for the overlap to mean something.
+/// Near-identical shipped ingredients alone mean the same dish (a renamed protein swap such as "Cajun-Spiced
+/// Chicken" ↔ "Cajun Pork Filet"), provided both versions ship enough items for the overlap to mean something.
 const STRONG_SHIPPED_OVERLAP: f64 = 0.8;
 const MIN_SHIPPED_ITEMS: usize = 4;
 /// Within a dish every title must share this much of its protein-neutral core with the dish's anchor title,
@@ -273,8 +273,8 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         }
     }
 
-    // 3. Split families that drifted along a chain of small changes ("Chicken Caesar Salad" → … → "Shrimp,
-    //    Chickpea & Kale Salad"). Every title group must be the same dish as its cluster's anchor (the most
+    // 3. Split families that drifted along a chain of small changes ("Chicken Cobb Salad" → … → "Shrimp,
+    //    Lentil & Spinach Salad"). Every title group must be the same dish as its cluster's anchor (the most
     //    common title), not merely as its neighbour in the chain.
     let mut by_root: HashMap<usize, Vec<usize>> = HashMap::new();
     for i in 0..vs.len() {
