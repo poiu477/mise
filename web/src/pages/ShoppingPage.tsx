@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type ShoppingItem, type ShoppingList, type Weights } from "../api/client";
 import {
@@ -181,7 +189,9 @@ export function ShoppingPage() {
     }
     load();
   }, [setPending, load]);
-  useEffect(() => {
+  // A layout effect runs in the same task as the render's commit, before any awaited answer can resume, so a
+  // request finishing just after a week change never calls the previous week's flush.
+  useLayoutEffect(() => {
     flushRef.current = flush;
   }, [flush]);
 
