@@ -1,30 +1,29 @@
 //! Single sign-on end to end. A fake OpenID Connect provider runs inside each test (discovery, signing keys and a
 //! token endpoint that checks PKCE) and signs its own ID tokens with RS256, ES256 and EdDSA, independently of the
-//! openidconnect crate that mise verifies them with. Each test runs on a fresh database created on the dev server
-//! from DATABASE_URL (skipped when it is not set; CI fails instead).
+//! openidconnect crate that mise verifies them with. Each test runs on its own throwaway database (see `common`).
+
+#[macro_use]
+mod common;
 
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use axum::{
     Form, Json, Router,
-    body::Body,
     extract::State,
-    http::{Request, StatusCode, header},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use base64::Engine;
-use http_body_util::BodyExt;
-use mise_api::auth::{Auth, AuthConfig, oidc::OidcConfig};
+use common::{As, HOST, TestApp};
+use mise_api::auth::oidc::OidcConfig;
 use openidconnect::IssuerUrl;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use sqlx::PgPool;
-use tower::ServiceExt;
 
 const CLIENT_ID: &str = "mise-test";
-const HOST: &str = "mise.test";
 
 fn b64(bytes: impl AsRef<[u8]>) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
@@ -187,12 +186,18 @@ async fn provider() -> Arc<Provider> {
 
 // --- mise, set up to use it -----------------------------------------------------------------------------------
 
-struct TestApp {
-    router: Router,
-    pool: PgPool,
-    admin: PgPool,
-    db: String,
+/// The app with single sign-on through the fake provider.
+struct Sso {
+    app: TestApp,
     idp: Arc<Provider>,
+}
+
+impl Deref for Sso {
+    type Target = TestApp;
+
+    fn deref(&self) -> &TestApp {
+        &self.app
+    }
 }
 
 /// One sign-in as the browser sees it: where mise sent it, and the session it got.
@@ -202,101 +207,34 @@ struct Finished {
     cookie: Option<String>,
 }
 
-impl TestApp {
-    async fn new() -> Option<TestApp> {
-        dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.env")).ok();
-        // Skipping is for a laptop without Postgres; in CI a missing or unreachable database must fail, not pass
-        // quietly.
-        let in_ci = std::env::var_os("CI").is_some();
-        let url = match std::env::var("DATABASE_URL") {
-            Ok(url) => url,
-            Err(_) if in_ci => panic!("DATABASE_URL must be set in CI"),
-            Err(_) => return None,
-        };
-        let admin = match mise_db::connect(&url).await {
-            Ok(pool) => pool,
-            Err(e) if in_ci => panic!("can't connect to DATABASE_URL in CI: {e}"),
-            Err(_) => return None,
-        };
-        let db = format!("mise_test_{}", uuid::Uuid::now_v7().simple());
-        // The name is ours (a UUID), not input.
-        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {db}")))
-            .execute(&admin)
-            .await
-            .unwrap();
-        let base = url.rsplit_once('/').unwrap().0;
-        let pool = mise_db::connect(&format!("{base}/{db}")).await.unwrap();
-        mise_db::migrate(&pool).await.unwrap();
+impl Sso {
+    async fn new() -> Option<Sso> {
         let idp = provider().await;
-        let config = AuthConfig {
-            local: true,
-            oidc: Some(OidcConfig {
-                issuer: IssuerUrl::new(idp.issuer.clone()).unwrap(),
-                client_id: CLIENT_ID.into(),
-                client_secret: Some("test-secret".into()),
-                name: "Test sign-on".into(),
-                scopes: vec!["email".into(), "profile".into()],
-                admin_group: Some("mise-admins".into()),
-                household: None,
-            }),
-            public_base_url: None,
-            session_days: 30,
-        };
-        let state = mise_api::AppState {
-            pool: pool.clone(),
-            media_root: "./no-media".into(),
-            auth: Arc::new(Auth::new(config)),
-        };
-        Some(TestApp {
-            router: mise_api::router(state, None),
-            pool,
-            admin,
-            db,
-            idp,
+        let app = TestApp::with_oidc(OidcConfig {
+            issuer: IssuerUrl::new(idp.issuer.clone()).unwrap(),
+            client_id: CLIENT_ID.into(),
+            client_secret: Some("test-secret".into()),
+            name: "Test sign-on".into(),
+            scopes: vec!["email".into(), "profile".into()],
+            admin_group: Some("mise-admins".into()),
+            household: None,
         })
-    }
-
-    async fn get(&self, path: &str, cookie: Option<&str>) -> axum::response::Response {
-        let mut b = Request::builder().uri(path).header(header::HOST, HOST);
-        if let Some(c) = cookie {
-            b = b.header(header::COOKIE, format!("mise_session={c}"));
-        }
-        self.router
-            .clone()
-            .oneshot(b.body(Body::empty()).unwrap())
-            .await
-            .unwrap()
-    }
-
-    async fn json(&self, method: &str, path: &str, cookie: &str, body: Option<Value>) -> Value {
-        let b = Request::builder()
-            .method(method)
-            .uri(path)
-            .header(header::HOST, HOST)
-            .header(header::COOKIE, format!("mise_session={cookie}"));
-        let req = match body {
-            Some(v) => b
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(v.to_string())),
-            None => b.body(Body::empty()),
-        };
-        let res = self.router.clone().oneshot(req.unwrap()).await.unwrap();
-        assert!(
-            res.status().is_success(),
-            "{method} {path}: {}",
-            res.status()
-        );
-        let bytes = res.into_body().collect().await.unwrap().to_bytes();
-        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+        .await?;
+        Some(Sso { app, idp })
     }
 
     /// Start a sign-in and check the redirect to the provider; returns the state and nonce it carries.
     async fn begin(&self, return_to: &str) -> (String, String) {
-        let res = self
-            .get(&format!("/api/auth/oidc/start?return_to={return_to}"), None)
+        let reply = self
+            .send(
+                "GET",
+                &format!("/api/auth/oidc/start?return_to={return_to}"),
+                As::Nobody,
+                None,
+            )
             .await;
-        assert_eq!(res.status(), StatusCode::SEE_OTHER);
-        let to = url::Url::parse(res.headers()[header::LOCATION].to_str().unwrap()).unwrap();
+        assert_eq!(reply.status, StatusCode::SEE_OTHER);
+        let to = url::Url::parse(reply.header(header::LOCATION).unwrap()).unwrap();
         assert_eq!(
             to.as_str().split('?').next().unwrap(),
             format!("{}/authorize", self.idp.issuer)
@@ -334,30 +272,21 @@ impl TestApp {
             g.alg = alg;
             g.claims = claims;
         }
-        let res = self
-            .get(
+        let reply = self
+            .send(
+                "GET",
                 &format!("/api/auth/oidc/callback?code={code}&state={state}"),
+                As::Nobody,
                 None,
             )
             .await;
-        let cookie = res
-            .headers()
-            .get_all(header::SET_COOKIE)
-            .iter()
-            .filter_map(|h| h.to_str().ok())
-            .find_map(|c| {
-                c.strip_prefix("mise_session=")
-                    .map(|v| v.split(';').next().unwrap().to_string())
-            })
-            .filter(|v| !v.is_empty());
         Finished {
-            status: res.status(),
-            location: res
-                .headers()
-                .get(header::LOCATION)
-                .map(|l| l.to_str().unwrap().to_string())
-                .unwrap_or_default(),
-            cookie,
+            status: reply.status,
+            location: reply
+                .header(header::LOCATION)
+                .unwrap_or_default()
+                .to_string(),
+            cookie: reply.session().filter(|v| !v.is_empty()),
         }
     }
 
@@ -385,28 +314,6 @@ impl TestApp {
             .await
             .unwrap()
     }
-
-    async fn drop(self) {
-        self.pool.close().await;
-        let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
-            "DROP DATABASE IF EXISTS {} WITH (FORCE)",
-            self.db
-        )))
-        .execute(&self.admin)
-        .await;
-    }
-}
-
-macro_rules! app {
-    () => {
-        match TestApp::new().await {
-            Some(a) => a,
-            None => {
-                eprintln!("DATABASE_URL not set; skipping");
-                return;
-            }
-        }
-    };
 }
 
 fn alice(groups: &[&str]) -> Value {
@@ -446,7 +353,7 @@ const EXPIRED: &str = "That sign-in expired. Try again.";
 
 #[tokio::test]
 async fn a_new_person_signs_in_and_comes_back_to_the_same_account() {
-    let app = app!();
+    let app = test_app!(Sso::new());
     let first = signed_in(
         &app.sign_in(Alg::Rs256, alice(&["cooks", "mise-admins"]))
             .await,
@@ -472,12 +379,11 @@ async fn a_new_person_signs_in_and_comes_back_to_the_same_account() {
     assert_eq!(me2["id"], me["id"]);
     assert_eq!(me2["is_admin"], false);
     assert_eq!(app.users().await, 1);
-    app.drop().await;
 }
 
 #[tokio::test]
 async fn tokens_signed_with_each_accepted_algorithm_verify() {
-    let app = app!();
+    let app = test_app!(Sso::new());
     for (alg, sub) in [(Alg::Rs256, "rs"), (Alg::Es256, "es"), (Alg::EdDsa, "ed")] {
         let person = json!({"sub": sub, "preferred_username": sub});
         let cookie = signed_in(&app.sign_in(alg, person).await, "/plan");
@@ -485,39 +391,13 @@ async fn tokens_signed_with_each_accepted_algorithm_verify() {
         assert_eq!(me["username"], sub, "{alg:?}");
     }
     assert_eq!(app.users().await, 3);
-    app.drop().await;
 }
 
 #[tokio::test]
 async fn only_a_verified_email_links_to_an_existing_account() {
-    let app = app!();
+    let app = test_app!(Sso::new());
     // An admin made through first-run setup adds Bea, who has a local password and an email.
-    let res = app
-        .router
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/auth/setup")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    json!({"username": "paul", "password": "a long password"}).to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let admin = res
-        .headers()
-        .get_all(header::SET_COOKIE)
-        .iter()
-        .find_map(|h| {
-            h.to_str()
-                .ok()?
-                .strip_prefix("mise_session=")
-                .map(|v| v.split(';').next().unwrap().to_string())
-        })
-        .unwrap();
+    let admin = app.setup_owner().await;
     let bea = app
         .json(
             "POST",
@@ -541,12 +421,11 @@ async fn only_a_verified_email_links_to_an_existing_account() {
     let me = app.json("GET", "/api/me", &cookie, None).await;
     assert_eq!(me["id"], bea["id"]);
     assert_eq!(me["has_password"], true, "linking keeps the local password");
-    app.drop().await;
 }
 
 #[tokio::test]
 async fn forged_or_mismatched_tokens_are_refused() {
-    let app = app!();
+    let app = test_app!(Sso::new());
     let person = || json!({"sub": "mallory", "preferred_username": "mallory"});
 
     // Signed with a key the provider never published, under the real key's id.
@@ -578,12 +457,11 @@ async fn forged_or_mismatched_tokens_are_refused() {
         refused(&f, DIDNT_WORK);
     }
     assert_eq!(app.users().await, 0);
-    app.drop().await;
 }
 
 #[tokio::test]
 async fn a_sign_in_finishes_once_and_only_with_its_own_state() {
-    let app = app!();
+    let app = test_app!(Sso::new());
     let (state, nonce) = app.begin("/dishes/x").await;
     let claims = app.claims(&nonce, alice(&[]));
     signed_in(
@@ -598,19 +476,23 @@ async fn a_sign_in_finishes_once_and_only_with_its_own_state() {
         EXPIRED,
     );
     // And a reply with no code.
-    let res = app
-        .get(&format!("/api/auth/oidc/callback?state={state}"), None)
+    let reply = app
+        .send(
+            "GET",
+            &format!("/api/auth/oidc/callback?state={state}"),
+            As::Nobody,
+            None,
+        )
         .await;
     assert_eq!(
-        res.headers()[header::LOCATION].to_str().unwrap(),
+        reply.header(header::LOCATION).unwrap(),
         "/login?error=The+sign-in+reply+was+incomplete."
     );
-    app.drop().await;
 }
 
 #[tokio::test]
 async fn a_turned_off_account_cannot_sign_in() {
-    let app = app!();
+    let app = test_app!(Sso::new());
     signed_in(&app.sign_in(Alg::EdDsa, alice(&[])).await, "/plan");
     sqlx::query("UPDATE users SET disabled = true")
         .execute(&app.pool)
@@ -620,5 +502,4 @@ async fn a_turned_off_account_cannot_sign_in() {
         &app.sign_in(Alg::EdDsa, alice(&[])).await,
         "This account is turned off.",
     );
-    app.drop().await;
 }
