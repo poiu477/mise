@@ -60,7 +60,8 @@ order: the remote and CI baseline first (it makes everything after it checked), 
 - [ ] Database code a reviewer expects: `#[derive(sqlx::FromRow)]` structs instead of row tuples; compile-time checked
       queries with the `.sqlx` offline data committed so CI builds without a database; SQL moved out of the HTTP
       handlers into per-domain data modules.
-- [ ] Architecture decision records in `docs/adr/` for the decisions below, with the alternatives weighed.
+- [x] Architecture decision records in [`docs/adr/`](adr/README.md) for the decisions below, with the alternatives
+      weighed.
 - [ ] Security: response headers (Content-Security-Policy, frame-ancestors, nosniff, referrer policy), the CSRF stance
       written down (SameSite=Lax cookies plus JSON-only bodies), `SECURITY.md`, dependency audits in CI. Login
       throttling exists.
