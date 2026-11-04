@@ -68,6 +68,27 @@ Claude desktop app doesn't run it, so offline start-up has to be tried in a real
 
 ## Tests
 
+`./check` runs what CI runs, in CI's order, and stops at the first failure, naming the step:
+
+```bash
+./check            # Rust formatting, clippy, tests, the API document check, then web formatting, lint, tests, build
+./check --e2e      # the same, then the browser journeys
+./check --fast     # formatting and lints only
+```
+
+It needs the dev Postgres: the API tests fail under `./check`, as in CI, when `DATABASE_URL` (from the environment or
+`.env`) is missing or unreachable, rather than skipping. It installs the web packages with `npm ci` only when
+`web/node_modules` is missing, and checks `web/src/api/schema.d.ts` against the working copy, not the last commit.
+CI also runs `cargo deny`, `npm audit` and the Docker image build, which `./check` leaves out.
+
+A pre-commit hook runs `./check --fast` on the working tree before each commit. Turn it on once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`git commit --no-verify` skips it for one commit. The steps one by one:
+
 | What | Command | Notes |
 | --- | --- | --- |
 | Rust formatting | `cargo fmt --all` (CI: `--check`) | rustfmt at its defaults (`rustfmt.toml`) |
@@ -81,8 +102,8 @@ Claude desktop app doesn't run it, so offline start-up has to be tried in a real
 | Scaling report | `mise scaling-report --sample 300 --out reports/scaling.html` | Compares derived amounts with what the source published; read-only |
 | Grouping report | `mise gate-report` | A stratified sample of dishes to check grouping by hand |
 
-The fuzz suite in `crates/mise-core/tests/fuzz.rs` takes about 25 seconds in a debug build. The plan for repeatable
-gates (a `./check` command, browser journeys, a seed gate) is in [status.md](status.md) and the design document.
+The fuzz suite in `crates/mise-core/tests/fuzz.rs` takes about 25 seconds in a debug build. The plan for the
+remaining repeatable gates (a seed gate) is in [status.md](status.md) and the design document.
 
 ## CI
 
