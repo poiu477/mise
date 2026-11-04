@@ -77,15 +77,19 @@ export function forgetDevice(store: Store = browserStore) {
 export function deviceCopy(user: string, store: Store = browserStore) {
   const listKey = (week: string) => `${PREFIX}${user}:list:${week}`;
   const pendingKey = `${PREFIX}${user}:pending`;
+  // Only while this account is the one signed in here: an answer still on its way when someone signs out must
+  // not put the household's list back on the device.
+  const mine = () => rememberedMe(store)?.id === user;
   return {
     save(list: ShoppingList, now = Date.now()) {
-      store.set(listKey(list.week), JSON.stringify({ list, savedAt: now } satisfies Saved));
+      if (mine())
+        store.set(listKey(list.week), JSON.stringify({ list, savedAt: now } satisfies Saved));
     },
     saved: (week: string) => read<Saved>(store, listKey(week)),
     pending: () => read<Change[]>(store, pendingKey) ?? [],
     setPending(changes: Change[]) {
-      if (changes.length) store.set(pendingKey, JSON.stringify(changes));
-      else store.remove(pendingKey);
+      if (!changes.length) store.remove(pendingKey);
+      else if (mine()) store.set(pendingKey, JSON.stringify(changes));
     },
   };
 }

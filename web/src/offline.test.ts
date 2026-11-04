@@ -66,9 +66,25 @@ const tick = (key: string, checked: boolean, week = WEEK): Change => ({
   checked,
 });
 
+/** Signed in on this device as `id`, as the session does after `/api/me` answers. */
+const signedIn = (store: Store, id = "me") =>
+  rememberMe(
+    {
+      id,
+      username: "paul",
+      display_name: "Paul",
+      email: null,
+      is_admin: true,
+      has_password: true,
+      household: { id: "h", name: "Home" },
+    },
+    store,
+  );
+
 describe("the device copy", () => {
   it("keeps each week's list and the waiting changes, per account", () => {
     const store = memory();
+    signedIn(store);
     const mine = deviceCopy("me", store);
     mine.save(list(), 1000);
     expect(mine.saved(WEEK)).toEqual({ list: list(), savedAt: 1000 });
@@ -83,23 +99,27 @@ describe("the device copy", () => {
   it("is forgotten on signing out, along with who was signed in", () => {
     const store = memory();
     store.set("other-app", "kept");
-    rememberMe(
-      {
-        id: "me",
-        username: "paul",
-        display_name: "Paul",
-        email: null,
-        is_admin: true,
-        has_password: true,
-        household: { id: "h", name: "Home" },
-      },
-      store,
-    );
+    signedIn(store);
     deviceCopy("me", store).save(list());
     expect(rememberedMe(store)?.username).toBe("paul");
     forgetDevice(store);
     expect([...store.data.keys()]).toEqual(["other-app"]);
     expect(rememberedMe(store)).toBeNull();
+  });
+
+  it("saves nothing once the account has signed out, even from an answer still on its way", () => {
+    const store = memory();
+    signedIn(store);
+    const mine = deviceCopy("me", store);
+    forgetDevice(store);
+    // A list that was being fetched when the person signed out arrives now.
+    mine.save(list());
+    mine.setPending([tick("onion", true)]);
+    expect([...store.data.keys()]).toEqual([]);
+    // Nor for an account that isn't the one signed in here.
+    signedIn(store, "someone else");
+    mine.save(list());
+    expect(mine.saved(WEEK)).toBeNull();
   });
 
   it("reads a damaged copy as none", () => {
