@@ -42,13 +42,12 @@ Agreed direction (design document, "Tests and gates"): every gate becomes a comm
 mise is a portfolio project, so it is held to production standards, not "good enough for one household". Recommended
 order: the remote and CI baseline first (it makes everything after it checked), the gates above, then the rest.
 
-- [x] GitHub repository (`poiu477/mise`, private for now) with CI on every push and pull request: formatting,
+- [x] GitHub repository (`poiu477/mise`, public since 2026-11-04) with CI on every push and pull request: formatting,
       clippy with warnings as errors, Rust tests against a Postgres service, an API-types check, web format, lint,
       tests and build, `cargo deny`, `npm audit` of shipped packages, the Docker image built. Dependabot weekly.
 - [x] Standard formatting: rustfmt at its defaults and Prettier, each applied in one commit; ESLint with the React
       hooks rules.
-- [ ] Protect `main` (require CI and a pull request). Branch rules on a private repo need a paid plan, so this comes
-      with making the repo public.
+- [x] Protect `main`: changes arrive through a pull request with CI passing; no force-pushes or deletion.
 - [ ] Move page data loading to a data-fetching layer (TanStack Query or one shared hook), then turn ESLint's
       `react-hooks/set-state-in-effect` back from a warning (9 places) to an error.
 - [x] Test single sign-on end to end: `crates/mise-api/tests/oidc.rs` runs a fake OpenID Connect provider that signs
@@ -131,4 +130,5 @@ order: the remote and CI baseline first (it makes everything after it checked), 
 | 2026-11-03 | The shopping list works offline from a device copy, with ticks and additions queued |
 | 2026-11-03 | Gates become repeatable checks; demo data written for mise for public tests, the private seed for the seed gate |
 | 2026-11-03 | mise is a portfolio project held to production standards; "only for one household" no longer justifies a shortcut |
+| 2026-11-04 | The repository goes public with its history as it is; the private seed's details live in the ignored `CLAUDE.local.md` |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |
