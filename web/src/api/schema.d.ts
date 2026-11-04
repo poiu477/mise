@@ -1224,8 +1224,26 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not signed in, or the current password is wrong */
+            /** @description The current password is wrong, or the new one has fewer than 8 characters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with an API token; only a browser session can change the password */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

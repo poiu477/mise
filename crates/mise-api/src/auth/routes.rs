@@ -238,7 +238,7 @@ pub struct PasswordChange {
 
 /// Set or change this account's password. Signs out every other browser.
 #[utoipa::path(post, path = "/api/me/password", operation_id = "change_password", tag = "account", request_body = PasswordChange,
-    responses((status = 204, description = "Password changed; other sessions are signed out"), (status = 401, description = "Not signed in, or the current password is wrong", body = crate::error::ErrorBody)))]
+    responses((status = 204, description = "Password changed; other sessions are signed out"), (status = 400, description = "The current password is wrong, or the new one has fewer than 8 characters", body = crate::error::ErrorBody), (status = 401, description = "Not signed in", body = crate::error::ErrorBody), (status = 403, description = "Called with an API token; only a browser session can change the password", body = crate::error::ErrorBody)))]
 pub async fn change_password(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
