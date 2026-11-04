@@ -24,13 +24,19 @@ struct TestApp {
 impl TestApp {
     async fn new() -> Option<TestApp> {
         dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.env")).ok();
+        // Skipping is for a laptop without Postgres; in CI a missing or unreachable database must fail, not pass
+        // quietly.
+        let in_ci = std::env::var_os("CI").is_some();
         let url = match std::env::var("DATABASE_URL") {
             Ok(url) => url,
-            // Skipping is for a laptop without Postgres; in CI a missing database must fail, not pass quietly.
-            Err(_) if std::env::var_os("CI").is_some() => panic!("DATABASE_URL must be set in CI"),
+            Err(_) if in_ci => panic!("DATABASE_URL must be set in CI"),
             Err(_) => return None,
         };
-        let admin = mise_db::connect(&url).await.ok()?;
+        let admin = match mise_db::connect(&url).await {
+            Ok(pool) => pool,
+            Err(e) if in_ci => panic!("can't connect to DATABASE_URL in CI: {e}"),
+            Err(_) => return None,
+        };
         let db = format!("mise_test_{}", uuid::Uuid::now_v7().simple());
         // The name is ours (a UUID), not input.
         sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {db}")))
