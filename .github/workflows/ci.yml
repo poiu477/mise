@@ -11,9 +11,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request replaces its older run. On main every commit gets a group of its own, so none is
+# skipped: within one group GitHub keeps a single waiting run and cancels the one before it, even without
+# cancel-in-progress.
 concurrency:
-  group: ci-${{ github.ref }}
-  # A newer push to a pull request replaces its older run; every commit on main keeps its own result.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
