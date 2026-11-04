@@ -85,10 +85,10 @@ static QTY: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(&format!(r"({NUM})\s*({UNIT})\b")).unwrap());
 /// "(… for 4 servings)", "(… for 4)".
 static ALT: LazyLock<Regex> = LazyLock::new(|| {
-    // A remark may follow the yield: "(5 TBSP for 4 servings; we sent more)".
+    // A remark may follow the yield: "(5 TBSP for 4 servings; add more to taste)".
     Regex::new(r"(?i)\s*\(\s*([^()]*?)[\s,;]+for\s+(\d+)(?:\s+(?:servings?|people|portions))?(?:\s*[;,]\s*([^()]*?))?\s*\)").unwrap()
 });
-/// "(For 4 servings, spread squash across the entire sheet.)".
+/// "(For 4 servings, use two baking sheets.)".
 static NOTE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\s*\(\s*for\s+(\d+)\s+servings?\s*[,:]\s*[^()]*\)").unwrap());
 /// A share or count word that a word-alternative replaces ("half the lime (whole lime for 4)").
@@ -202,7 +202,7 @@ fn noun(after: &str) -> Option<String> {
 }
 
 /// The line an amount measures: the longest line name that the words just after the amount begin with
-/// ("1 TBSP butter" → Butter, "1 TBSP bulgogi sauce" → Bulgogi Sauce).
+/// ("1 TBSP butter" → Butter, "1 TBSP teriyaki sauce" → Teriyaki Sauce).
 fn link(after: &str, lines: Lines) -> Option<String> {
     let words = normalize_name(&after.chars().take(48).collect::<String>());
     let words = words.strip_prefix("of ").unwrap_or(&words);
@@ -882,7 +882,7 @@ mod tests {
     fn lines() -> Vec<(String, String)> {
         vec![
             ("butter".into(), "Butter".into()),
-            ("bulgogi".into(), "Bulgogi Sauce".into()),
+            ("teriyaki".into(), "Teriyaki Sauce".into()),
             ("lime".into(), "Lime".into()),
         ]
     }
@@ -1013,30 +1013,30 @@ used 2 tsp kosher salt) and pepper."
     #[test]
     fn remarks_after_the_yield_stay() {
         let t = parse(
-            "Stir in 2½ TBSP sweet soy glaze (5 TBSP for 4 servings; we sent more), then serve.",
+            "Stir in 2½ TBSP hoisin sauce (5 TBSP for 4 servings; add more to taste), then serve.",
             &lines(),
         );
         assert_eq!(t.unparsed, 0);
         let c = ctx(2.0, &none);
         assert_eq!(
             render(&t, 2.0, &c).text,
-            "Stir in 2½ TBSP sweet soy glaze (we sent more), then serve."
+            "Stir in 2½ TBSP hoisin sauce (add more to taste), then serve."
         );
         assert_eq!(
             render(&t, 4.0, &c).text,
-            "Stir in 5 TBSP sweet soy glaze (we sent more), then serve."
+            "Stir in 5 TBSP hoisin sauce (add more to taste), then serve."
         );
         assert_eq!(
             render(&t, 5.0, &c).text,
-            "Stir in ⅓ cup + 2¾ tsp sweet soy glaze (we sent more), then serve."
+            "Stir in ⅓ cup + 2¾ tsp hoisin sauce (add more to taste), then serve."
         );
     }
 
     #[test]
     fn amounts_the_text_keeps_fixed_ignore_their_line() {
-        let lines = vec![("p".to_string(), "Potatoes".to_string())];
+        let lines = vec![("p".to_string(), "Chickpeas".to_string())];
         let t = parse(
-            "Reserve ½ cup potatoes cooking liquid, then drain. Add 1 TBSP butter (2 TBSP for 4).",
+            "Reserve ½ cup chickpeas canning liquid, then drain. Add 1 TBSP butter (2 TBSP for 4).",
             &lines,
         );
         let line = |k: &str, s: f64| -> Option<f64> { (k == "p").then_some(s * 6.0) };
@@ -1108,25 +1108,28 @@ used 2 tsp kosher salt) and pepper."
     #[test]
     fn notes_for_larger_yields() {
         let t = parse(
-            "Roast on top rack. (For 4 servings, spread squash across entire sheet.) Then flip.",
+            "Roast on the top rack. (For 4 servings, use two baking sheets.) Then flip.",
             &lines(),
         );
         let c = ctx(2.0, &none);
-        assert_eq!(render(&t, 2.0, &c).text, "Roast on top rack. Then flip.");
+        assert_eq!(
+            render(&t, 2.0, &c).text,
+            "Roast on the top rack. Then flip."
+        );
         assert_eq!(
             render(&t, 4.0, &c).text,
-            "Roast on top rack. (For 4 servings, spread squash across entire sheet.) Then flip."
+            "Roast on the top rack. (For 4 servings, use two baking sheets.) Then flip."
         );
     }
 
     #[test]
     fn derives_from_official_line_amounts() {
         let t = parse(
-            "Add 1 TBSP bulgogi sauce (2 TBSP for 4 servings).",
+            "Add 1 TBSP teriyaki sauce (2 TBSP for 4 servings).",
             &lines(),
         );
         let line = |k: &str, s: f64| -> Option<f64> {
-            if k != "bulgogi" {
+            if k != "teriyaki" {
                 return None;
             }
             Some(match s as i32 {
@@ -1138,7 +1141,7 @@ used 2 tsp kosher salt) and pepper."
         };
         let c = ctx(2.0, &line);
         let three = render(&t, 3.0, &c);
-        assert_eq!(three.text, "Add 1½ TBSP bulgogi sauce.");
+        assert_eq!(three.text, "Add 1½ TBSP teriyaki sauce.");
         assert!(three.scaled);
     }
 
@@ -1246,12 +1249,12 @@ used 2 tsp kosher salt) and pepper."
     #[test]
     fn a_yield_it_cannot_place_reads_as_published_and_asks_for_a_check() {
         let t = parse(
-            "Add stock and1 TBSP butter (2 TBSP for 4 servings) to the pan.",
+            "Add broth and1 TBSP butter (2 TBSP for 4 servings) to the pot.",
             &lines(),
         );
         assert_eq!(t.unparsed, 1);
         assert!(t.has_alts());
-        let published = "Add stock and1 TBSP butter (2 TBSP for 4 servings) to the pan.";
+        let published = "Add broth and1 TBSP butter (2 TBSP for 4 servings) to the pot.";
         let c = ctx(2.0, &none);
         let base = render(&t, 2.0, &c);
         assert_eq!(base.text, published);

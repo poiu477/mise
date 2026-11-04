@@ -33,7 +33,7 @@ Agreed direction (design document, "Tests and gates"): every gate becomes a comm
       scroll at 375 px; an axe scan with no serious problems; sign-out leaving nothing on the device.
 - [ ] `mise gate seed`: rebuild the private seed and check the invariants on every recipe at 1 to 6 servings, with a
       snapshot of rendered amounts kept in `seed/` and shown as a diff to approve. Replace the scaling report's
-      "matches HelloFresh" score, which counts every round-up as a miss.
+      "matches the source" score, which counts every round-up as a miss.
 - [ ] Deploy gate: `docker compose up` on an empty volume, upgrade from the previous release's database, backup and
       restore.
 
@@ -71,8 +71,8 @@ order: the remote and CI baseline first (it makes everything after it checked), 
       routes can all return 401 and 412 (`X-Mise-Account`), browser-only actions 403, and validation 400s are missing
       on some. Add a test that
       the documented statuses match what the handlers return.
-- [ ] Public-repo hygiene: replace the HelloFresh step text quoted in tests (about 23 lines) with our own; decide
-      whether to publish the git history as it is or start the public repo fresh.
+- [x] Public-repo hygiene: test strings and examples written for mise; private paths and seed details moved to the
+      ignored `CLAUDE.local.md`; the git history is published as it is (it never held recipe records or photos).
 - [ ] Presentation: a README with screenshots and a short demo, a hosted demo running the demo bundle, versioned
       releases with a changelog.
 
@@ -101,7 +101,6 @@ order: the remote and CI baseline first (it makes everything after it checked), 
       to the server's archive (use the `-seed` versions of curation, dish decisions and preferred versions).
 - [ ] HTTPS in front of the server (through the reverse proxy), which phones need for offline start-up.
 - [ ] A remote repository and off-machine backups of the database and `seed/`.
-- [ ] LICENSE holder name: "Paul Hughes" or "Paul D Hughes".
 
 ## Known issues and limits
 
@@ -124,12 +123,12 @@ order: the remote and CI baseline first (it makes everything after it checked), 
 | Date | Decision |
 | --- | --- |
 | 2026-10 | Build our own app (Rust, Postgres, React) rather than adapt Mealie or Tandoor, which don't model dishes with versions |
-| 2026-10 | No automated HelloFresh access and nothing of theirs in the repo; the archive is a private, one-time seed |
+| 2026-10 | No automated access to the seed's source and nothing of its content in the repo; the archive is a private, one-time seed |
 | 2026-11-01 | Launch from the meals actually received (237 dishes, 308 versions); the full archive stays in `mise` |
 | 2026-11-01 | A dish opens on the version had most, among those with steps |
 | 2026-11-02 | Shopping totals are exact; weights read in the household's units, overridable per food |
 | 2026-11-02 | Scaled recipe amounts round up, never down, into standard measures (one measure within 5%, else the fewest closest) |
 | 2026-11-03 | The shopping list works offline from a device copy, with ticks and additions queued |
-| 2026-11-03 | Gates become repeatable checks; HelloFresh-free demo data for public tests, the private seed for the seed gate |
+| 2026-11-03 | Gates become repeatable checks; demo data written for mise for public tests, the private seed for the seed gate |
 | 2026-11-03 | mise is a portfolio project held to production standards; "only for one household" no longer justifies a shortcut |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |

@@ -1,5 +1,5 @@
 //! Render the gate report as one self-contained HTML page: inline CSS and JS, no external requests.
-//! Every piece of data text goes through `esc` (titles and ingredient names are scraped).
+//! Every piece of data text goes through `esc` (titles and ingredient names come from outside sources).
 
 use std::fmt::Write;
 

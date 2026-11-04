@@ -20,13 +20,13 @@ Read these before changing anything:
 
 ## Rules that are easy to break
 
-- **No HelloFresh content in the repo.** Recipes, photos, the scraper, order history and anything derived from them
-  stay out of git (HelloFresh Terms of Use §16.8; personal, non-commercial use only). Private material lives in the
-  ignored `seed/` and `reports/` folders and in `D:/Recipes` and `../hellofresh-backup/`. Tests use made-up data.
+- **No third-party recipe content in the repo.** The household's own seed comes from a private archive kept for
+  personal, non-commercial use: its recipes, photos, the tools that collected it, order history and anything derived
+  from them stay out of git. Private material lives in the ignored `seed/` and `reports/` folders and outside the
+  repo (see `CLAUDE.local.md`, which is ignored too). Tests and fixtures use text written for mise.
 - **Stage files by name.** `git add <paths>`, never `git add -A` or `git add .`: an env file was committed that way
   once. Commit only when asked.
-- **Work on a branch and merge through a pull request.** The repo is `poiu477/mise` on GitHub (private until the
-  public-repo hygiene task is done). CI (`.github/workflows/ci.yml`) must pass before merging; never push to `main`.
+- **Work on a branch and merge through a pull request.** The repo is `poiu477/mise` on GitHub. CI (`.github/workflows/ci.yml`) must pass before merging; never push to `main`.
 - **LF line endings.** sqlx checksums migrations, so `.gitattributes` pins LF. Scripts that rewrite files must write
   bytes (`Path.write_bytes(s.encode())` in Python), not `write_text`, which writes CRLF on Windows.
 - **Never edit an applied migration.** Add a new numbered file in `migrations/`.
@@ -34,8 +34,7 @@ Read these before changing anything:
   check adds to `mise_seed` (accounts, plans, ticks) must be removed afterwards; use a far-off week such as
   2027-01-04 for trial plans.
 - **Windows can't replace a running exe.** `cargo build --release` fails with "Access is denied" while
-  `target/release/mise-server.exe` runs. Ask Paul to stop his server (it usually runs in his Terminal 1) or use the
-  debug build on another port: `MISE_BIND=127.0.0.1:8091 MISE_WEB_DIR=web/dist ./target/debug/mise-server.exe`.
+  `target/release/mise-server.exe` runs. Stop that server first, or use the debug build on another port: `MISE_BIND=127.0.0.1:8091 MISE_WEB_DIR=web/dist ./target/debug/mise-server.exe`.
 
 ## Everyday commands
 
@@ -55,9 +54,7 @@ When the release build is locked, regenerate the types from the debug build inst
 
 ## Environment
 
-- Repo: `H:\Dev\Projects\Claude Code\mise` (Windows 11; Git Bash and PowerShell). Postgres 16 runs in Docker as
-  `mise-db-1` on port 5433, user and password `mise`.
-- Databases: `mise_seed` is the live one (237 dishes, 308 versions from meals the household received); `.env` points
-  at it with `MEDIA_ROOT=./data/media-seed`. `mise` holds the full archive (about 9,900 dishes) as evidence for
-  package sizes; `seed/env-full-archive` has its settings.
-- Paul runs `./target/release/mise-server` on port 8080 and uses it day to day.
+- Postgres 16 runs in Docker (`compose.dev.yaml`) as `mise-db-1` on port 5433, user and password `mise`. The
+  databases are described in [docs/development.md](docs/development.md).
+- Machine-specific notes (paths, the private archive, which server runs where) live in `CLAUDE.local.md`, which git
+  ignores. Read it when it exists.

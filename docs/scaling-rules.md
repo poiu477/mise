@@ -1,7 +1,8 @@
 # Scaling recipes: established rules, exceptions, and what mise does
 
-How food professionals change a recipe's yield, where the simple rule breaks, what 44,000 HelloFresh recipes
-(each written for 2 and 4 servings) show in practice, and how mise applies it. The archive figures come from
+How food professionals change a recipe's yield, where the simple rule breaks, what a private archive of 44,000
+meal-kit recipes (each written for 2 and 4 servings) shows in practice, and how mise applies it. The archive
+figures come from
 every step amount published for both 2 and 4 servings: "×2" means it exactly doubles.
 
 ## The standard method: the conversion factor
@@ -30,7 +31,7 @@ household's chosen units (pounds and ounces, ounces, pounds, or metric, per food
 Wisconsin's school-nutrition guidance lists the four classic exceptions: "herbs and spices, leavening agents,
 thickening agents, and liquids". Cooking time and equipment are the other two.
 
-| Ingredient or factor | Established guidance | HelloFresh archive (2 → 4 servings) | mise |
+| Ingredient or factor | Established guidance | Meal-kit archive (2 → 4 servings) | mise |
 |---|---|---|---|
 | Proteins, produce, grains, pasta | Scale by the factor | ×2 in 100% of weighed/counted amounts | Factor |
 | Fats and oils, butter | Scale by the factor | ×2 in 95% (5,465 amounts) | Factor |
@@ -53,7 +54,7 @@ Water added to a pan sauce, braise or stir-fry is partly **fixed** (what the ope
 
 > water(*n*) = water(*n₀*) × ( *f* + (1 − *f*) × *n* ÷ *n₀* )
 
-Fitted on 3,436 HelloFresh pan-sauce water amounts of ¼ cup or more, predicting the 4-serving amount from the
+Fitted on 3,436 pan-sauce water amounts from the archive, of ¼ cup or more, predicting the 4-serving amount from the
 2-serving one:
 
 | Rule | Exact after rounding | Within 15% | Mean error |
@@ -93,8 +94,8 @@ amounts the rule covers are 56.5% exact.
 
 ### Amounts never shrink
 
-Not in the textbooks but found in the archive: some sources publish extra yields by formula (HelloFresh's 3 and
-6 servings are ¾ and 1½ × the 4-serving amount, so 1 tsp oil "for 2 and 4" became ¾ tsp for 3). mise trusts the
+Not in the textbooks but found in the archive: some sources publish extra yields by formula (one meal-kit
+source's 3 and 6 servings are ¾ and 1½ × the 4-serving amount, so 1 tsp oil "for 2 and 4" became ¾ tsp for 3). mise trusts the
 yields the steps are written for first and derives any published amount that would get smaller as servings grow.
 The one exception kept is the source's own step text: "½ cup water (⅓ cup for 4 servings)" appears 80 times
 across five recipe families since 2019, deliberately: the water loosens a sauce base that doubles ("half the

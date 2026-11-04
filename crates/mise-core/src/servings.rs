@@ -58,7 +58,7 @@ pub fn amount_at(published: &[(f64, f64)], target: f64) -> Option<(f64, bool)> {
 }
 
 /// Published amounts that make sense together: an amount never shrinks as the serving count grows. Some sources
-/// publish extra yields by formula (HelloFresh's 3 and 6 servings are ¾ and 1½ times the 4-serving amount, even
+/// publish extra yields by formula (one meal-kit source's 3 and 6 servings are ¾ and 1½ times the 4-serving amount, even
 /// where 2 and 4 servings share one amount, so 3 servings would get less than 2). Yields are accepted in order of
 /// trust (`trusted` first, as given, then the rest from small to large); one that would break the order is left
 /// out, to be derived from the others.
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn amounts_never_shrink_as_servings_grow() {
-        // HelloFresh: 1 lemon for 2 and for 4, but ¾ for 3 (¾ of the 4-serving amount).
+        // As one meal-kit source publishes it: 1 lemon for 2 and for 4, but ¾ for 3.
         let lemon = [(2.0, 1.0), (3.0, 0.75), (4.0, 1.0), (6.0, 2.0)];
         let kept = consistent(&lemon, &[2.0, 4.0]);
         assert_eq!(kept, vec![(2.0, 1.0), (4.0, 1.0), (6.0, 2.0)]);

@@ -4,7 +4,7 @@
 
 use crate::text::normalize_name;
 
-/// Brands HelloFresh and others mark with ® or ™; multi-word brands first so they match whole.
+/// Brands that recipe sources mark with ® or ™; multi-word brands first so they match whole.
 pub const BRANDS: &[&str] = &[
     "mike's hot honey",
     "frank's redhot",

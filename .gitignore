@@ -5,6 +5,8 @@
 /seed/
 # Gate and other reports contain personal data (decisions, titles from private sources).
 /reports/
+# Machine-specific agent notes
+/CLAUDE.local.md
 # Agent worktrees
 /.claude/
 # Web app: dependencies, build output, and the spec copy its types are generated from
