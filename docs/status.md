@@ -22,14 +22,15 @@ Agreed direction (design document, "Tests and gates"): every gate becomes a comm
 
 - [ ] `./check`: one command running clippy, all Rust and web tests, TypeScript, the web build, and a check that the
       generated API types match the server, and a git pre-commit hook that runs it (formatting: see below).
-- [ ] Demo bundle: a dozen recipes we write ourselves (no HelloFresh content), in the repo, covering two yields,
-      pinches, packets, pan sauces and a dish with two versions.
+- [x] Demo bundle: `fixtures/demo-bundle`, four dishes (five versions) written for mise, covering two yields, a
+      single yield, a pinch, a sized packet, pan-sauce water and a dish with two versions. Grow it as tests need.
 - [ ] Pipeline test: import the demo bundle through every stage; check counts and a committed snapshot of every
       dish page at 1 to 6 servings.
 - [ ] API tests for dishes, versions and photos (only sign-in, plan and shopping are covered today).
-- [ ] Browser journeys with Playwright against the demo bundle: first-run setup; search, dish, servings; plan four
-      dishes and reach the list in under 20 interactions; tick offline, reconnect, saved once; sign-out clears the
-      device; no sideways scroll at 375 px; an accessibility scan.
+- [x] Browser journeys with Playwright against the demo bundle (`web/e2e/`, in CI): first-run setup; a dish at
+      published and scaled counts; planning and the list in under 20 interactions with exact totals; ticks surviving
+      a reload; ticking and adding offline, opening with no connection, and sending once back online; no sideways
+      scroll at 375 px; an axe scan with no serious problems; sign-out leaving nothing on the device.
 - [ ] `mise gate seed`: rebuild the private seed and check the invariants on every recipe at 1 to 6 servings, with a
       snapshot of rendered amounts kept in `seed/` and shown as a diff to approve. Replace the scaling report's
       "matches HelloFresh" score, which counts every round-up as a miss.
@@ -103,7 +104,6 @@ order: the remote and CI baseline first (it makes everything after it checked), 
 
 ## Known issues and limits
 
-- Opening the app from cold with no connection is untested; the built-in browser pane can't run the service worker.
 - 36 versions (269 lines) publish 3-serving amounts equal to their 4-serving ones; left as published.
 - Two review items stay open: green beans swapped for broccoli or carrots between versions; nothing records swaps yet.
 - Some step text from the source lost a space in a mixed number ("10-12 11⁄2-inch meatballs").
