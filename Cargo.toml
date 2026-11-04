@@ -14,3 +14,7 @@ uuid = { version = "1.29.0", features = ["v7", "serde"] }
 
 [profile.dev.package.sqlx-macros]
 opt-level = 3
+
+# RSA key generation in the single sign-on tests takes minutes unoptimised.
+[profile.dev.package.num-bigint-dig]
+opt-level = 3

@@ -50,8 +50,11 @@ order: the remote and CI baseline first (it makes everything after it checked), 
       with making the repo public.
 - [ ] Move page data loading to a data-fetching layer (TanStack Query or one shared hook), then turn ESLint's
       `react-hooks/set-state-in-effect` back from a warning (9 places) to an error.
-- [ ] Test single sign-on end to end (ID-token verification against a mock OIDC issuer): today the tests run with
-      OIDC off, so a change to `openidconnect` or its signing crates isn't exercised.
+- [x] Test single sign-on end to end: `crates/mise-api/tests/oidc.rs` runs a fake OpenID Connect provider that signs
+      its own RS256, ES256 and EdDSA tokens, covering sign-up, return visits, admin by group, email linking, forged
+      and mismatched tokens, replayed state and turned-off accounts.
+- [ ] Share one test harness across `crates/mise-api/tests/` (auth, plan and oidc each set up a throwaway database
+      and router the same way).
 - [ ] Add Playwright to CI with the browser journeys, and push the Docker image to GitHub's registry on release
       tags.
 - [ ] Database code a reviewer expects: `#[derive(sqlx::FromRow)]` structs instead of row tuples; compile-time checked
