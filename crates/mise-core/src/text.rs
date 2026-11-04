@@ -41,7 +41,10 @@ mod tests {
             normalize_name("  Frank’s RedHot®  Sauce "),
             "frank's redhot sauce"
         );
-        assert_eq!(normalize_name("Tex-Mex Paste"), "tex mex paste");
+        assert_eq!(
+            normalize_name("Sun-Dried Tomato Paste"),
+            "sun dried tomato paste"
+        );
     }
 
     #[test]

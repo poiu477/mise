@@ -1,6 +1,6 @@
 //! Amounts inside step text. Published steps are written for the base yield with the larger yield in
 //! parentheses: "1 TBSP butter (2 TBSP for 4 servings)", "half the lime zest (all for 4)", "(For 4 servings,
-//! spread squash across the entire sheet.)". A step is parsed once into parts, then rendered for any yield:
+//! use two baking sheets.)". A step is parsed once into parts, then rendered for any yield:
 //! a published yield reads exactly as published; any other is derived from the ingredient's official amounts
 //! or interpolated between the published ones, measured up in standard measures, and flagged.
 
@@ -1048,7 +1048,7 @@ used 2 tsp kosher salt) and pepper."
     #[test]
     fn text_that_never_varies_scales_steadily() {
         let t = parse(
-            "Add remaining Tuscan Heat Spice, 1 tsp sugar, and water.",
+            "Add remaining Italian seasoning, 1 tsp sugar, and water.",
             &lines(),
         );
         let c = Context {
@@ -1059,15 +1059,15 @@ used 2 tsp kosher salt) and pepper."
         let at = |n: f64| render(&t, n, &c).text;
         assert_eq!(
             at(4.0),
-            "Add remaining Tuscan Heat Spice, 2 tsp sugar, and water."
+            "Add remaining Italian seasoning, 2 tsp sugar, and water."
         );
         assert_eq!(
             at(5.0),
-            "Add remaining Tuscan Heat Spice, 2½ tsp sugar, and water."
+            "Add remaining Italian seasoning, 2½ tsp sugar, and water."
         );
         assert_eq!(
             at(6.0),
-            "Add remaining Tuscan Heat Spice, 1 TBSP sugar, and water."
+            "Add remaining Italian seasoning, 1 TBSP sugar, and water."
         );
     }
 

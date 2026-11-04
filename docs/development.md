@@ -24,12 +24,13 @@ full archive's pair.
 
 ## Rebuilding the seed database
 
-The private inputs live in `seed/` (ignored by git); the photos come from the archive's folder (`<archive>` below).
+The private inputs live in `seed/` (ignored by git); the photos come from the archive's folder (`ARCHIVE` below).
 
 ```bash
 docker exec mise-db-1 createdb -U mise mise_seed
 cargo build --release -p mise-cli
 M=./target/release/mise
+ARCHIVE=/path/to/archive        # the private archive's photo folder
 $M migrate
 $M import-bundle seed/mise-seed
 $M match-foods
@@ -39,7 +40,7 @@ $M dish prefer seed/preferred-versions.json
 $M group-dishes
 $M derive-options
 $M parse-steps
-$M ingest-media --from <archive>
+$M ingest-media --from "$ARCHIVE"
 ```
 
 The result should be 237 dishes and 308 versions. `seed/build-seed-bundle.py`, `build-count-units.py` and

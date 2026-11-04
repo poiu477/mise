@@ -1,5 +1,5 @@
 //! Dish titles: strip sources' internal working notes, and find the part of a title that stays the same when
-//! only the protein changes ("Garlic Ginger Chicken" and "Garlic Ginger Pork Filet" share "hot honey").
+//! only the protein changes ("Garlic Ginger Chicken" and "Garlic Ginger Pork Filet" share "garlic ginger").
 
 use std::sync::LazyLock;
 
@@ -31,7 +31,7 @@ pub fn clean_title(title: &str) -> String {
     t = WEEK_CODE.replace(&t, "").into_owned();
     t = NOTE_SUFFIX.replace(&t, "").into_owned();
     t = SERVINGS_SUFFIX.replace(&t, "").into_owned();
-    // Parenthetical codes can stack: "(Pork Chop 10oz) (D2V)".
+    // Parenthetical codes can stack: "(Turkey 10oz) (QA)".
     loop {
         let next = CODE_PARENS.replace(&t, "").into_owned();
         if next == t {
