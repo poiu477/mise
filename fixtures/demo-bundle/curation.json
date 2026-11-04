@@ -1,0 +1,176 @@
+[
+  {
+    "op": "set",
+    "food": "Yellow Onion",
+    "key": "store_section",
+    "value": "Produce"
+  },
+  {
+    "op": "set",
+    "food": "Garlic",
+    "key": "store_section",
+    "value": "Produce"
+  },
+  {
+    "op": "set",
+    "food": "Lemon",
+    "key": "store_section",
+    "value": "Produce"
+  },
+  {
+    "op": "set",
+    "food": "Lime",
+    "key": "store_section",
+    "value": "Produce"
+  },
+  {
+    "op": "set",
+    "food": "Parsley",
+    "key": "store_section",
+    "value": "Produce"
+  },
+  {
+    "op": "set",
+    "food": "Scallions",
+    "key": "store_section",
+    "value": "Produce"
+  },
+  {
+    "op": "set",
+    "food": "Chicken Breasts",
+    "key": "store_section",
+    "value": "Meat & Seafood"
+  },
+  {
+    "op": "set",
+    "food": "Butter",
+    "key": "store_section",
+    "value": "Dairy & Eggs"
+  },
+  {
+    "op": "set",
+    "food": "Cheddar Cheese",
+    "key": "store_section",
+    "value": "Dairy & Eggs"
+  },
+  {
+    "op": "set",
+    "food": "Monterey Jack Cheese",
+    "key": "store_section",
+    "value": "Dairy & Eggs"
+  },
+  {
+    "op": "set",
+    "food": "Parmesan",
+    "key": "store_section",
+    "value": "Dairy & Eggs"
+  },
+  {
+    "op": "set",
+    "food": "Sour Cream",
+    "key": "store_section",
+    "value": "Dairy & Eggs"
+  },
+  {
+    "op": "set",
+    "food": "Flour Tortillas",
+    "key": "store_section",
+    "value": "Bakery"
+  },
+  {
+    "op": "set",
+    "food": "Spaghetti",
+    "key": "store_section",
+    "value": "Pasta & Grains"
+  },
+  {
+    "op": "set",
+    "food": "Jasmine Rice",
+    "key": "store_section",
+    "value": "Pasta & Grains"
+  },
+  {
+    "op": "set",
+    "food": "Crushed Tomatoes",
+    "key": "store_section",
+    "value": "Canned & Jarred"
+  },
+  {
+    "op": "set",
+    "food": "Black Beans",
+    "key": "store_section",
+    "value": "Canned & Jarred"
+  },
+  {
+    "op": "set",
+    "food": "Soy Sauce",
+    "key": "store_section",
+    "value": "Sauces & Condiments"
+  },
+  {
+    "op": "set",
+    "food": "Sesame Oil",
+    "key": "store_section",
+    "value": "Sauces & Condiments"
+  },
+  {
+    "op": "set",
+    "food": "Chicken Stock Concentrate",
+    "key": "store_section",
+    "value": "Sauces & Condiments"
+  },
+  {
+    "op": "set",
+    "food": "Red Pepper Flakes",
+    "key": "store_section",
+    "value": "Spices & Seasonings"
+  },
+  {
+    "op": "set",
+    "food": "Taco Spice Blend",
+    "key": "store_section",
+    "value": "Spices & Seasonings"
+  },
+  {
+    "op": "set",
+    "food": "Yellow Onion",
+    "key": "count_unit",
+    "value": "onion"
+  },
+  {
+    "op": "set",
+    "food": "Lemon",
+    "key": "count_unit",
+    "value": "lemon"
+  },
+  {
+    "op": "set",
+    "food": "Lime",
+    "key": "count_unit",
+    "value": "lime"
+  },
+  {
+    "op": "set",
+    "food": "Scallions",
+    "key": "count_unit",
+    "value": "stalk"
+  },
+  {
+    "op": "set",
+    "food": "Flour Tortillas",
+    "key": "count_unit",
+    "value": "tortilla"
+  },
+  {
+    "op": "set",
+    "food": "Chicken Stock Concentrate",
+    "key": "count_unit",
+    "value": "packet"
+  },
+  {
+    "op": "set",
+    "food": "Chicken Stock Concentrate",
+    "key": "count_size",
+    "value": "2 tsp"
+  }
+]
