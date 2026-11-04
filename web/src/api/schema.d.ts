@@ -561,7 +561,7 @@ export interface components {
             default_variant?: string | null;
             /** Format: uuid */
             id: string;
-            image?: null | components["schemas"]["Image"];
+            image?: components["schemas"]["Image"] | null;
             slug: string;
             subtitle?: string | null;
             title: string;
@@ -589,7 +589,7 @@ export interface components {
              * @description Any day in the week to answer with (default: today).
              */
             week?: string | null;
-            weight_unit?: null | components["schemas"]["Weights"];
+            weight_unit?: components["schemas"]["Weights"] | null;
         };
         Health: {
             status: string;
@@ -617,7 +617,7 @@ export interface components {
             food?: string | null;
             /** Format: uuid */
             food_id?: string | null;
-            image?: null | components["schemas"]["Image"];
+            image?: components["schemas"]["Image"] | null;
             name: string;
             note?: string | null;
             /** @description Derived rather than published for this yield. */
@@ -727,7 +727,7 @@ export interface components {
             dish_slug?: string | null;
             /** Format: uuid */
             id: string;
-            image?: null | components["schemas"]["Image"];
+            image?: components["schemas"]["Image"] | null;
             /** Format: double */
             servings: number;
             subtitle?: string | null;
@@ -763,7 +763,7 @@ export interface components {
             recipes: string[];
             /** @description Some of it is a weight, so the household can choose how it reads. */
             weighed: boolean;
-            weight_unit?: null | components["schemas"]["Weights"];
+            weight_unit?: components["schemas"]["Weights"] | null;
         };
         ShoppingList: {
             extras: components["schemas"]["ShoppingExtra"][];
@@ -848,7 +848,7 @@ export interface components {
             dish_slug?: string | null;
             /** Format: uuid */
             id: string;
-            image?: null | components["schemas"]["Image"];
+            image?: components["schemas"]["Image"] | null;
             ingredients: components["schemas"]["Ingredient"][];
             /** @description Source details kept with the version: prep and total time, difficulty, tags, cuisines, nutrition. */
             meta: {
@@ -877,7 +877,7 @@ export interface components {
             has_steps: boolean;
             /** Format: uuid */
             id: string;
-            image?: null | components["schemas"]["Image"];
+            image?: components["schemas"]["Image"] | null;
             /** Format: date-time */
             published_at?: string | null;
             subtitle?: string | null;
@@ -908,6 +908,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description How this install signs people in */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -931,6 +932,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Signed in */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -939,6 +941,7 @@ export interface operations {
                     "application/json": components["schemas"]["Me"];
                 };
             };
+            /** @description Wrong username or password */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -947,6 +950,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            /** @description Too many attempts; try again after Retry-After seconds */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -966,6 +970,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Signed out */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1025,6 +1030,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The admin account, signed in */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1033,6 +1039,7 @@ export interface operations {
                     "application/json": components["schemas"]["Me"];
                 };
             };
+            /** @description An account already exists */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1062,6 +1069,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Matching dishes, a page at a time */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1083,6 +1091,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The dish with its versions and options */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1091,6 +1100,7 @@ export interface operations {
                     "application/json": components["schemas"]["Dish"];
                 };
             };
+            /** @description No such dish */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1110,6 +1120,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The server is up */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1129,6 +1140,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Every household */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1152,6 +1164,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The new household */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1171,6 +1184,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The signed-in account */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1179,6 +1193,7 @@ export interface operations {
                     "application/json": components["schemas"]["Me"];
                 };
             };
+            /** @description Not signed in */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -1202,12 +1217,14 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Password changed; other sessions are signed out */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description Not signed in, or the current password is wrong */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -1227,6 +1244,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description This account's API tokens */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1250,6 +1268,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The new token, shown only this once */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1271,12 +1290,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Revoked */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description No such token */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1307,6 +1328,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description No such image or size */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1330,6 +1352,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The list without that food */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1338,6 +1361,7 @@ export interface operations {
                     "application/json": components["schemas"]["ShoppingList"];
                 };
             };
+            /** @description No such food */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1362,6 +1386,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The list with that food back on it */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1384,6 +1409,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The week's plan */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1407,6 +1433,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The week's plan with the dish added */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1415,6 +1442,7 @@ export interface operations {
                     "application/json": components["schemas"]["Plan"];
                 };
             };
+            /** @description No such version */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1436,6 +1464,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The week's plan without it */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1444,6 +1473,7 @@ export interface operations {
                     "application/json": components["schemas"]["Plan"];
                 };
             };
+            /** @description No such entry in this household's plan */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1469,6 +1499,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The week's plan */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1477,6 +1508,7 @@ export interface operations {
                     "application/json": components["schemas"]["Plan"];
                 };
             };
+            /** @description No such entry in this household's plan */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1499,6 +1531,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The week's shopping list */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1522,6 +1555,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The list with the item added */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1530,6 +1564,7 @@ export interface operations {
                     "application/json": components["schemas"]["ShoppingList"];
                 };
             };
+            /** @description The name is empty or too long */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -1551,6 +1586,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The list without it */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1559,6 +1595,7 @@ export interface operations {
                     "application/json": components["schemas"]["ShoppingList"];
                 };
             };
+            /** @description No such item on this household's list */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1584,6 +1621,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The updated list */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1592,6 +1630,7 @@ export interface operations {
                     "application/json": components["schemas"]["ShoppingList"];
                 };
             };
+            /** @description No such item on this household's list */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1615,6 +1654,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The updated list */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1623,6 +1663,7 @@ export interface operations {
                     "application/json": components["schemas"]["ShoppingList"];
                 };
             };
+            /** @description No such food */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1646,6 +1687,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The updated list */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1665,6 +1707,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The household's shopping settings */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1688,6 +1731,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The saved settings */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1707,6 +1751,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Every account */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1730,6 +1775,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The new account */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1738,6 +1784,7 @@ export interface operations {
                     "application/json": components["schemas"]["Me"];
                 };
             };
+            /** @description That username or email is taken */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1763,6 +1810,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The updated account */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1771,6 +1819,7 @@ export interface operations {
                     "application/json": components["schemas"]["Me"];
                 };
             };
+            /** @description No such account */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1795,6 +1844,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description The version at the requested serving count */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1803,6 +1853,7 @@ export interface operations {
                     "application/json": components["schemas"]["Variant"];
                 };
             };
+            /** @description No such version */
             404: {
                 headers: {
                     [name: string]: unknown;

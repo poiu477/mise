@@ -64,7 +64,7 @@ type SummaryRow = (
 );
 
 /// Search and browse dishes.
-#[utoipa::path(get, path = "/api/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams), responses((status = 200, body = DishPage)))]
+#[utoipa::path(get, path = "/api/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams), responses((status = 200, description = "Matching dishes, a page at a time", body = DishPage)))]
 pub async fn list(
     State(s): State<AppState>,
     Query(p): Query<ListParams>,
@@ -171,7 +171,7 @@ pub struct Dish {
 /// A dish with its options and versions.
 #[utoipa::path(
     get, path = "/api/dishes/{slug}", operation_id = "get_dish", tag = "dishes", params(("slug" = String, Path)),
-    responses((status = 200, body = Dish), (status = 404, body = crate::error::ErrorBody))
+    responses((status = 200, description = "The dish with its versions and options", body = Dish), (status = 404, description = "No such dish", body = crate::error::ErrorBody))
 )]
 pub async fn get(State(s): State<AppState>, Path(slug): Path<String>) -> ApiResult<Json<Dish>> {
     let (id, slug, title, subtitle, content_type, default_variant): (Uuid, String, String, Option<String>, String, Option<Uuid>) =

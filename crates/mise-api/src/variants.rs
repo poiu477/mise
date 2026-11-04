@@ -94,7 +94,7 @@ type LineRow = (
 /// A version of a dish at a serving count.
 #[utoipa::path(
     get, path = "/api/variants/{id}", operation_id = "get_variant", tag = "dishes", params(("id" = Uuid, Path), RenderParams),
-    responses((status = 200, body = Variant), (status = 404, body = crate::error::ErrorBody))
+    responses((status = 200, description = "The version at the requested serving count", body = Variant), (status = 404, description = "No such version", body = crate::error::ErrorBody))
 )]
 pub async fn get(
     State(s): State<AppState>,
