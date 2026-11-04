@@ -122,6 +122,39 @@ describe("the device copy", () => {
     expect(mine.saved(WEEK)).toBeNull();
   });
 
+  it("can't touch a later sign-in's copy, even for the same account", () => {
+    const store = memory();
+    signedIn(store);
+    const before = deviceCopy("me", store);
+    // Signed out and straight back in as the same account, with an answer from before still on its way.
+    forgetDevice(store);
+    signedIn(store);
+    const now = deviceCopy("me", store);
+    now.setPending([tick("onion", true)]);
+    before.save(list());
+    before.setPending([]);
+    expect(now.saved(WEEK)).toBeNull();
+    expect(now.pending()).toEqual([tick("onion", true)]);
+    // Checking who is signed in again (every time the app opens) keeps the same sign-in.
+    signedIn(store);
+    now.save(list());
+    expect(now.saved(WEEK)?.list).toEqual(list());
+  });
+
+  it("keeps working on a device remembered before sign-ins had ids", () => {
+    const store = memory();
+    signedIn(store);
+    store.remove("mise:sign-in");
+    // Opened offline, so no fresh sign-in: the remembered account's copy still saves ticks.
+    const mine = deviceCopy("me", store);
+    mine.setPending([tick("onion", true)]);
+    expect(mine.pending()).toEqual([tick("onion", true)]);
+    // But never once signed out.
+    forgetDevice(store);
+    deviceCopy("me", store).save(list());
+    expect([...store.data.keys()]).toEqual([]);
+  });
+
   it("reads a damaged copy as none", () => {
     const store = memory();
     store.set("mise:me:list:2026-11-02", "{not json");

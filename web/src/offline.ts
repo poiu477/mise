@@ -63,9 +63,16 @@ function read<T>(store: Store, key: string): T | null {
   }
 }
 
-/** The signed-in account, remembered so the app opens without the server. */
-export const rememberMe = (me: Me, store: Store = browserStore) =>
+const SIGN_IN = `${PREFIX}sign-in`;
+const newSignIn = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+/** The signed-in account, remembered so the app opens without the server. Each sign-in gets an id of its own,
+ * kept while the same account stays signed in (the app checks again every time it opens) and gone on signing
+ * out, so work begun in one sign-in can't touch the next. */
+export function rememberMe(me: Me, store: Store = browserStore) {
+  if (rememberedMe(store)?.id !== me.id || !store.get(SIGN_IN)) store.set(SIGN_IN, newSignIn());
   store.set(`${PREFIX}me`, JSON.stringify(me));
+}
 export const rememberedMe = (store: Store = browserStore) => read<Me>(store, `${PREFIX}me`);
 
 /** Signing out leaves nothing of the household's on the device. */
@@ -77,9 +84,13 @@ export function forgetDevice(store: Store = browserStore) {
 export function deviceCopy(user: string, store: Store = browserStore) {
   const listKey = (week: string) => `${PREFIX}${user}:list:${week}`;
   const pendingKey = `${PREFIX}${user}:pending`;
-  // Only while this account is the one signed in here: an answer still on its way when someone signs out must
-  // not put the household's list back on the device.
-  const mine = () => rememberedMe(store)?.id === user;
+  // A device that remembered this account before sign-ins had ids gets one now, so it keeps working offline;
+  // after signing out nothing is remembered, so none is made.
+  if (!store.get(SIGN_IN) && rememberedMe(store)?.id === user) store.set(SIGN_IN, newSignIn());
+  const signIn = store.get(SIGN_IN);
+  // Only within the sign-in this copy was made in: an answer still on its way when someone signs out must not put
+  // the household's list back on the device, nor change a later sign-in's copy, even for the same account.
+  const mine = () => !!signIn && store.get(SIGN_IN) === signIn && rememberedMe(store)?.id === user;
   return {
     save(list: ShoppingList, now = Date.now()) {
       if (mine())
@@ -88,8 +99,9 @@ export function deviceCopy(user: string, store: Store = browserStore) {
     saved: (week: string) => read<Saved>(store, listKey(week)),
     pending: () => read<Change[]>(store, pendingKey) ?? [],
     setPending(changes: Change[]) {
-      if (!changes.length) store.remove(pendingKey);
-      else if (mine()) store.set(pendingKey, JSON.stringify(changes));
+      if (!mine()) return;
+      if (changes.length) store.set(pendingKey, JSON.stringify(changes));
+      else store.remove(pendingKey);
     },
   };
 }
