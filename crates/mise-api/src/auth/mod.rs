@@ -354,13 +354,13 @@ async fn from_token(pool: &PgPool, token: &str) -> Result<Option<CurrentUser>, A
     }))
 }
 
-/// Resolve the caller and refuse what they may not do. Paths outside /api (the web app) and the public
-/// routes pass through untouched.
 /// Names the account a request is made for. The web app sends it with every request, so work a page started as
 /// one person (a queued tick, say) is refused with 412 rather than applied to whoever signed in since, in another
 /// tab, with the shared cookie. Scripts and integrations can leave it out.
 pub const ACCOUNT_HEADER: &str = "x-mise-account";
 
+/// Resolve the caller and refuse what they may not do. Paths outside /api (the web app) and the public
+/// routes pass through untouched.
 pub async fn require_auth(
     State(s): State<AppState>,
     jar: CookieJar,

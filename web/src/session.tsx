@@ -1,5 +1,13 @@
 // Who is signed in, for the whole app. Loaded once; refreshed after signing in or out.
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   actAs,
   api,
@@ -24,11 +32,15 @@ const SessionContext = createContext<Ctx | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session>({ status: "loading" });
 
+  // Only the latest check counts: an older one finishing late must not put back an account that has changed since.
+  const latest = useRef(0);
   const refresh = useCallback(async () => {
+    const mine = ++latest.current;
     // A weak signal can hang rather than fail: give up after a few seconds and open from the device.
     const cfg = await api
       .GET("/api/auth/config", { signal: AbortSignal.timeout(6000) })
       .catch(() => null);
+    if (mine !== latest.current) return;
     if (!cfg?.data) {
       const me = rememberedMe();
       actAs(me?.id ?? null);
@@ -40,6 +52,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return setSession({ status: "setup", info });
     }
     const me = await api.GET("/api/me").catch(() => null);
+    if (mine !== latest.current) return;
     if (me?.data) rememberMe(me.data);
     actAs(me?.data?.id ?? null);
     setSession(me?.data ? { status: "in", info, me: me.data } : { status: "out", info });
