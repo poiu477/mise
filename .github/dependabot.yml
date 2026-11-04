@@ -13,6 +13,11 @@ updates:
     directory: /web
     schedule:
       interval: weekly
+    ignore:
+      # Held until every tool that depends on TypeScript (openapi-typescript, typescript-eslint) accepts the next
+      # major. The "TypeScript major watch" workflow opens an issue when they do; then delete this rule.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       web:
         patterns: ["*"]
