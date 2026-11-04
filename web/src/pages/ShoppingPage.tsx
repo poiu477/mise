@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
 } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -27,16 +28,16 @@ import { WEIGHTS, shortWeight } from "../weights";
 
 type Reached<T> = { data: T } | { refused: unknown } | "unreachable";
 
-/** A call's outcome. No answer, a server error or an ended session count as out of reach: worth trying again. */
+/** A call's outcome. No answer, a server error or an ended session count as out of reach: worth trying again.
+ * So does a 412, work made for an account that's no longer the one signed in: it waits until that one is back. */
 async function reach<T>(
   call: Promise<{ data?: T; error?: unknown; response: Response }>,
 ): Promise<Reached<T>> {
   try {
     const r = await call;
     if (r.data !== undefined) return { data: r.data };
-    return r.response.status >= 500 || r.response.status === 401
-      ? "unreachable"
-      : { refused: r.error };
+    const status = r.response.status;
+    return status >= 500 || status === 401 || status === 412 ? "unreachable" : { refused: r.error };
   } catch {
     return "unreachable";
   }
@@ -110,8 +111,7 @@ export function ShoppingPage() {
   const { session, refresh } = useSession();
   const user = session.status === "in" || session.status === "offline" ? session.me?.id : undefined;
   // A new sign-in in another tab replaces this page's device copy; work begun under the old one stays blocked.
-  const [signIn, setSignIn] = useState(currentSignIn);
-  useEffect(() => onSignInChange(() => setSignIn(currentSignIn())), []);
+  const signIn = useSyncExternalStore(onSignInChange, () => currentSignIn());
   // eslint-disable-next-line react-hooks/exhaustive-deps -- signIn isn't read here, but a new one needs a new copy
   const copy = useMemo(() => (user ? deviceCopy(user) : null), [user, signIn]);
   const [params, setParams] = useSearchParams();

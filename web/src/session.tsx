@@ -1,6 +1,13 @@
 // Who is signed in, for the whole app. Loaded once; refreshed after signing in or out.
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, whenUnauthorized, type AuthInfo, type Me } from "./api/client";
+import {
+  actAs,
+  api,
+  whenAccountChanged,
+  whenUnauthorized,
+  type AuthInfo,
+  type Me,
+} from "./api/client";
 import { forgetDevice, rememberedMe, rememberMe } from "./offline";
 
 export type Session =
@@ -22,17 +29,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const cfg = await api
       .GET("/api/auth/config", { signal: AbortSignal.timeout(6000) })
       .catch(() => null);
-    if (!cfg?.data) return setSession({ status: "offline", me: rememberedMe() });
+    if (!cfg?.data) {
+      const me = rememberedMe();
+      actAs(me?.id ?? null);
+      return setSession({ status: "offline", me });
+    }
     const info = cfg.data;
-    if (info.setup_required) return setSession({ status: "setup", info });
+    if (info.setup_required) {
+      actAs(null);
+      return setSession({ status: "setup", info });
+    }
     const me = await api.GET("/api/me").catch(() => null);
     if (me?.data) rememberMe(me.data);
+    actAs(me?.data?.id ?? null);
     setSession(me?.data ? { status: "in", info, me: me.data } : { status: "out", info });
   }, []);
 
   const signOut = useCallback(async () => {
     await api.POST("/api/auth/logout").catch(() => null);
     forgetDevice();
+    actAs(null);
     await refresh();
   }, [refresh]);
 
@@ -41,6 +57,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     whenUnauthorized(() =>
       setSession((s) => (s.status === "in" ? { status: "out", info: s.info } : s)),
     );
+    // Someone else signed in, in another tab: find out who, and the app follows.
+    whenAccountChanged(() => refresh());
   }, [refresh]);
 
   // Back in reach: check again.

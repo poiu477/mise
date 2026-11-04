@@ -165,6 +165,49 @@ test("a list left open in one tab keeps saving after another tab signs in", asyn
   await expect(page.getByRole("status")).toHaveCount(0, { timeout: 15_000 });
 });
 
+test("work queued as one person never lands on whoever signs in after them", async () => {
+  // Robin, the admin, adds Sam, in a household of Sam's own.
+  const made = await page.request.post("/api/users", {
+    data: { username: "sam", password: "sam's long password", household_name: "Sam's household" },
+  });
+  expect(made.ok()).toBe(true);
+  await page.goto("/shopping");
+  await expect(shoppingItem("Black Beans")).toBeVisible();
+
+  // Robin adds something the server can't take just now, so it waits on the device.
+  await page.route("**/api/shopping/extras", (r) => r.abort());
+  await page.getByRole("textbox", { name: "Add something else" }).fill("Robin's foil");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByText("not sent yet")).toBeVisible();
+  await page.unroute("**/api/shopping/extras");
+
+  // Sam signs in, in another tab: the cookie is shared, so every tab now talks to the server as Sam.
+  const other = await context.newPage();
+  await other.request.post("/api/auth/logout");
+  const login = await other.request.post("/api/auth/login", {
+    data: { username: "sam", password: "sam's long password" },
+  });
+  expect(login.ok()).toBe(true);
+  await other.goto("/plan");
+  await expect(other.getByText("Nothing planned yet")).toBeVisible();
+
+  // Robin's tab notices the new sign-in and tries again, with its waiting work made as Robin: the server refuses
+  // it as meant for someone else, and the tab follows Sam instead of sending it as Sam.
+  await expect(page.getByText("Nothing planned for this week yet")).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  const sams = await (await other.request.get("/api/shopping")).json();
+  expect(sams.extras).toEqual([]);
+  // Robin's addition is still waiting on the device, for Robin.
+  const waiting = await page.evaluate(() =>
+    Object.keys(localStorage)
+      .filter((k) => k.endsWith(":pending"))
+      .map((k) => localStorage.getItem(k))
+      .join(""),
+  );
+  expect(waiting).toContain("Robin's foil");
+  await other.close();
+});
+
 const pages = ["/", "/dishes/weeknight-tomato-pasta", "/plan", "/shopping", "/account"];
 
 test("every page fits a phone without sideways scrolling", async () => {
