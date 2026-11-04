@@ -73,7 +73,10 @@ Doubtful merges go to review, and recorded decisions always win.
 
 `lib.rs` builds the router; every route sits behind `auth::require_auth` except health, the OpenAPI document and
 sign-in. A session cookie (`mise_session`) or a bearer token (`mise_…`, read or read-write) identifies a
-`CurrentUser` with their `household_id`, and every planning query is scoped by it. Handlers return `ApiResult<T>`;
+`CurrentUser` with their `household_id`, and every planning query is scoped by it. The web app also sends
+`X-Mise-Account` with the account it is working as; when that isn't the account signed in (someone else signed in
+since, in another tab, with the shared cookie) the request is refused with 412, so queued work never lands in
+another household, and the app re-checks who is signed in. Handlers return `ApiResult<T>`;
 `error.rs` maps errors to JSON `{ "error": "…" }` with the right status. `extract.rs` wraps axum's extractors so bad
 input reads as a 400 with a plain message. Endpoints that change a plan or a list answer with the whole plan or list,
 so the client never has to merge.

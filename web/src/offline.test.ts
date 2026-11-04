@@ -7,6 +7,7 @@ import {
   rememberedMe,
   rememberMe,
   sendChanges,
+  startSignIn,
   withChanges,
   type Change,
   type Sent,
@@ -66,9 +67,25 @@ const tick = (key: string, checked: boolean, week = WEEK): Change => ({
   checked,
 });
 
+/** Signed in on this device as `id`, as the session does after `/api/me` answers. */
+const signedIn = (store: Store, id = "me") =>
+  rememberMe(
+    {
+      id,
+      username: "paul",
+      display_name: "Paul",
+      email: null,
+      is_admin: true,
+      has_password: true,
+      household: { id: "h", name: "Home" },
+    },
+    store,
+  );
+
 describe("the device copy", () => {
   it("keeps each week's list and the waiting changes, per account", () => {
     const store = memory();
+    signedIn(store);
     const mine = deviceCopy("me", store);
     mine.save(list(), 1000);
     expect(mine.saved(WEEK)).toEqual({ list: list(), savedAt: 1000 });
@@ -83,23 +100,75 @@ describe("the device copy", () => {
   it("is forgotten on signing out, along with who was signed in", () => {
     const store = memory();
     store.set("other-app", "kept");
-    rememberMe(
-      {
-        id: "me",
-        username: "paul",
-        display_name: "Paul",
-        email: null,
-        is_admin: true,
-        has_password: true,
-        household: { id: "h", name: "Home" },
-      },
-      store,
-    );
+    signedIn(store);
     deviceCopy("me", store).save(list());
     expect(rememberedMe(store)?.username).toBe("paul");
     forgetDevice(store);
     expect([...store.data.keys()]).toEqual(["other-app"]);
     expect(rememberedMe(store)).toBeNull();
+  });
+
+  it("saves nothing once the account has signed out, even from an answer still on its way", () => {
+    const store = memory();
+    signedIn(store);
+    const mine = deviceCopy("me", store);
+    forgetDevice(store);
+    // A list that was being fetched when the person signed out arrives now.
+    mine.save(list());
+    mine.setPending([tick("onion", true)]);
+    expect([...store.data.keys()]).toEqual([]);
+    // Nor for an account that isn't the one signed in here.
+    signedIn(store, "someone else");
+    mine.save(list());
+    expect(mine.saved(WEEK)).toBeNull();
+  });
+
+  it("can't touch a later sign-in's copy, even for the same account", () => {
+    const store = memory();
+    signedIn(store);
+    const before = deviceCopy("me", store);
+    // Signed out and straight back in as the same account, with an answer from before still on its way.
+    forgetDevice(store);
+    signedIn(store);
+    const now = deviceCopy("me", store);
+    now.setPending([tick("onion", true)]);
+    before.save(list());
+    before.setPending([]);
+    expect(now.saved(WEEK)).toBeNull();
+    expect(now.pending()).toEqual([tick("onion", true)]);
+    // Checking who is signed in again (every time the app opens) keeps the same sign-in.
+    signedIn(store);
+    now.save(list());
+    expect(now.saved(WEEK)?.list).toEqual(list());
+  });
+
+  it("starts a new sign-in when the same account signs in again after its session ended", () => {
+    const store = memory();
+    signedIn(store);
+    const before = deviceCopy("me", store);
+    // The session expired (nothing was cleared), and the same person signs in again on the sign-in page.
+    startSignIn(store);
+    signedIn(store);
+    const now = deviceCopy("me", store);
+    now.setPending([tick("onion", true)]);
+    before.setPending([]);
+    before.save(list());
+    expect(now.pending()).toEqual([tick("onion", true)]);
+    expect(now.saved(WEEK)).toBeNull();
+  });
+
+  it("keeps working on a device remembered before sign-ins had ids", () => {
+    const store = memory();
+    signedIn(store);
+    store.remove("mise:sign-in");
+    // Opened offline, so no fresh sign-in: the remembered account's copy still saves ticks.
+    const mine = deviceCopy("me", store);
+    mine.setPending([tick("onion", true)]);
+    expect(mine.pending()).toEqual([tick("onion", true)]);
+    // But never once signed out.
+    forgetDevice(store);
+    deviceCopy("me", store).save(list());
+    expect([...store.data.keys()]).toEqual([]);
   });
 
   it("reads a damaged copy as none", () => {

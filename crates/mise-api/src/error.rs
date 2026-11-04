@@ -21,6 +21,9 @@ pub enum ApiError {
     Forbidden(String),
     #[error("{0}")]
     Conflict(String),
+    /// The request was made for another account than the one now signed in (see `ACCOUNT_HEADER`).
+    #[error("signed in as a different account")]
+    AccountChanged,
     /// Too many attempts; try again after this many seconds.
     #[error("too many attempts; try again in {0} seconds")]
     TooManyRequests(u64),
@@ -47,6 +50,7 @@ impl IntoResponse for ApiError {
             ApiError::Unauthorized | ApiError::BadCredentials => StatusCode::UNAUTHORIZED,
             ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
+            ApiError::AccountChanged => StatusCode::PRECONDITION_FAILED,
             ApiError::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             ApiError::Internal(e) => {
                 tracing::error!(error = ?e, "request failed");

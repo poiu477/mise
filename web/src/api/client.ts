@@ -9,10 +9,30 @@ let onUnauthorized: (() => void) | null = null;
 export const whenUnauthorized = (f: () => void) => {
   onUnauthorized = f;
 };
+
+// The account this page works as, sent with every request so the server refuses (412) work meant for one person
+// once another has signed in, in another tab, with the shared cookie. Asking who is signed in, and signing in,
+// go without it. Set by the session.
+let account: string | null = null;
+export const actAs = (id: string | null) => {
+  account = id;
+};
+let onAccountChanged: (() => void) | null = null;
+export const whenAccountChanged = (f: () => void) => {
+  onAccountChanged = f;
+};
+const asks = (path: string) => path === "/api/me" || path.startsWith("/api/auth/");
+
 api.use({
+  onRequest({ request }) {
+    if (account && !asks(new URL(request.url).pathname))
+      request.headers.set("x-mise-account", account);
+    return request;
+  },
   onResponse({ response }) {
-    if (response.status === 401 && !new URL(response.url).pathname.startsWith("/api/auth/"))
-      onUnauthorized?.();
+    const path = new URL(response.url).pathname;
+    if (response.status === 401 && !path.startsWith("/api/auth/")) onUnauthorized?.();
+    if (response.status === 412) onAccountChanged?.();
     return response;
   },
 });

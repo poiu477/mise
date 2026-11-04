@@ -76,6 +76,7 @@ Claude desktop app doesn't run it, so offline start-up has to be tried in a real
 | Web formatting and lints | `cd web && npm run format` and `npm run lint` | Prettier at width 100; ESLint with the React hooks rules |
 | Web unit tests | `cd web && npm test` | Vitest; pure modules (`choose.ts`, `offline.ts`, `week.ts`) |
 | Types and build | `cd web && npm run build` | Runs the TypeScript check first |
+| Browser journeys | `cd web && npm run e2e` | Playwright in Chromium against `mise-server` on a fresh `mise_e2e` database built from the demo recipes (`fixtures/demo-bundle`). Build first: `cargo build -p mise-cli -p mise-api` and `npm run build`; once, `npx playwright install chromium`. Covers first-run setup, scaling, planning (the Phase 3 gate: under 20 interactions), shopping offline including opening with no connection, phone width, an axe accessibility scan and sign-out |
 | Scaling report | `mise scaling-report --sample 300 --out reports/scaling.html` | Compares derived amounts with what the source published; read-only |
 | Grouping report | `mise gate-report` | A stratified sample of dishes to check grouping by hand |
 
@@ -86,7 +87,8 @@ gates (a `./check` command, browser journeys, a seed gate) is in [status.md](sta
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request: the Rust job (formatting, clippy,
 tests against a Postgres service, a check that every response in the OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-openapi.mjs`), and a check that `web/src/api/schema.d.ts` matches the server), the web job
-(formatting, lint, tests, build, an audit of shipped npm packages), `cargo deny`, and a build of the Docker image.
+(formatting, lint, tests, build, an audit of shipped npm packages), the browser journeys (keeping Playwright's report
+and traces when they fail), `cargo deny`, and a build of the Docker image.
 Dependabot opens grouped update pull requests weekly. TypeScript majors are held back until every tool that depends on TypeScript accepts them: the weekly "TypeScript major watch" workflow (`npm run typescript:ready` in `web/`) opens an issue when that happens, and deleting the `typescript` ignore rule in `.github/dependabot.yml` lets Dependabot propose the upgrade. `.git-blame-ignore-revs` lists the formatting-only commits;
 run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once per clone.
 

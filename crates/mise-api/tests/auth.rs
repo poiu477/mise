@@ -603,3 +603,40 @@ async fn changing_the_password_signs_out_other_browsers() {
     );
     app.drop().await;
 }
+
+#[tokio::test]
+async fn work_meant_for_another_account_is_refused() {
+    let app = app!();
+    let cookie = app.setup().await;
+    let (_, me, _, _) = app
+        .call("GET", "/api/me", Auth_::Cookie(&cookie), None)
+        .await;
+    let me = me["id"].as_str().unwrap().to_string();
+    let as_account = |account: &str| {
+        Request::builder()
+            .uri("/api/me")
+            .header(header::COOKIE, format!("mise_session={cookie}"))
+            .header("x-mise-account", account)
+            .body(Body::empty())
+            .unwrap()
+    };
+    let status =
+        |req: Request<Body>| async { app.router.clone().oneshot(req).await.unwrap().status() };
+    // The page's account is the one signed in: fine.
+    assert_eq!(status(as_account(&me)).await, StatusCode::OK);
+    // Someone else signed in since (in another tab, with the shared cookie), or the header is nonsense: refused.
+    assert_eq!(
+        status(as_account(&uuid::Uuid::now_v7().to_string())).await,
+        StatusCode::PRECONDITION_FAILED
+    );
+    assert_eq!(
+        status(as_account("not-an-id")).await,
+        StatusCode::PRECONDITION_FAILED
+    );
+    // Without the header (scripts, integrations) nothing changes.
+    let (s, _, _, _) = app
+        .call("GET", "/api/me", Auth_::Cookie(&cookie), None)
+        .await;
+    assert_eq!(s, StatusCode::OK);
+    app.drop().await;
+}

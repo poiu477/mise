@@ -46,6 +46,7 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                 # needs the dev Postgres (port 5433); API tests make throwaway databases
 cd web && npm run format:check && npm run lint && npm test && npm run build
+cd web && npm run e2e                  # browser journeys; needs `cargo build -p mise-cli -p mise-api` and the build above
 cd web && npm run api                  # regenerate src/api/schema.d.ts after changing the API (needs a release build)
 ```
 
