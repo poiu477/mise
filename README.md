@@ -17,21 +17,22 @@ See [docs/deploy.md](docs/deploy.md).
 
 ## Development
 
-Requirements: Rust 1.99.1 (pinned in `rust-toolchain.toml`; rustup installs it), Node 26, Docker. The full guide, including rebuilding a seed database and running
-the tests, is [docs/development.md](docs/development.md).
+Requirements: Rust 1.99.1 (pinned in `rust-toolchain.toml`; rustup installs it), Node 26, Docker. The full guide,
+including rebuilding a seed database and running the tests, is [docs/development.md](docs/development.md). The
+commands below work in bash, zsh and PowerShell.
 
 ```bash
 cp .env.example .env
 docker compose -f compose.dev.yaml up -d db
-M="cargo run -q --release -p mise-cli --"
-$M migrate
-$M import-bundle fixtures/demo-bundle   # four demo dishes written for mise
-$M match-foods
-$M food apply fixtures/demo-bundle/curation.json
-$M group-dishes
-$M derive-options
-$M parse-steps
-cargo run --release -p mise-api        # API on :8080; OpenAPI at /api/openapi.json
+cargo build --release -p mise-cli -p mise-api
+./target/release/mise migrate
+./target/release/mise import-bundle fixtures/demo-bundle   # four demo dishes written for mise
+./target/release/mise match-foods
+./target/release/mise food apply fixtures/demo-bundle/curation.json
+./target/release/mise group-dishes
+./target/release/mise derive-options
+./target/release/mise parse-steps
+./target/release/mise-server           # API on :8080; OpenAPI at /api/openapi.json
 ```
 
 The web app lives in `web/` (React, Vite, TypeScript). `npm run dev` serves it on :5173 with `/api` forwarded to the

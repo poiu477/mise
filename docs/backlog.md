@@ -18,11 +18,15 @@ Take tasks from **Ready** in roughly the order listed. When a task is merged, de
 
 ### T1 · One local check command
 
-Contributors should run what CI runs with one command, before pushing.
+Contributors should run CI's code checks with one command, before pushing.
 
-- Add `./check` (a bash script; it must work in Git Bash on Windows and on Linux). It runs, in CI's order:
-  `cargo fmt --check`, clippy with `-D warnings`, `cargo test --workspace`, the API document check, then web
-  format, lint, test and build. `--e2e` adds the browser journeys. It stops at the first failure and names it.
+- Add `./check` (a bash script; it must work in Git Bash on Windows and on Linux). It runs CI's commands with CI's
+  flags, in CI's order: `cargo fmt --all --check`; `cargo clippy --workspace --all-targets --locked -- -D warnings`;
+  `cargo test --workspace --locked`; the API step (write the OpenAPI document, run `check-openapi.mjs`, regenerate
+  `schema.d.ts` and fail if it differs); then in `web/` format, lint, test and build. `--e2e` adds the browser
+  journeys. It stops at the first failure and names it.
+- Out of scope, and said so in `./check --help` and development.md: `npm audit`, `cargo deny` and the Docker image
+  build stay in CI only (they need the network or take minutes and rarely fail on a code change).
 - Add `.githooks/pre-commit` running the fast part (formatting and lint only), enabled with
   `git config core.hooksPath .githooks`; document that in development.md.
 - **Touches:** `check`, `.githooks/`, `docs/development.md`, the commands block in `CLAUDE.md`.
@@ -119,7 +123,9 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
 - **Touches:** `.github/workflows/release.yml`, `CHANGELOG.md`, `docs/deploy.md` (pulling the image instead of
   building it).
 - **Needs:** **Paul** to push the first tag.
-- **Done when:** the workflow passes `actionlint` and its steps are pinned to SHAs like `ci.yml`.
+- **Done when:** the workflow passes `actionlint` with its steps pinned to SHAs like `ci.yml`, and a test tag
+  (`v0.1.0-rc.1`, pushed by Paul) publishes the image to GitHub's registry and drafts the release; the test release
+  and image are deleted afterwards. Syntax checks alone don't prove the release path.
 
 ### T11 · Merge shopping lines across related foods and units
 
