@@ -17,9 +17,8 @@ export default tseslint.config(
     ],
     languageOptions: { globals: globals.browser },
     rules: {
-      // Pages still reset and load their data inside effects; moving loading to a data-fetching layer is on the task
-      // list (docs/status.md), after which this goes back to an error.
-      "react-hooks/set-state-in-effect": "warn",
+      // Pages load server data through TanStack Query (src/api/query.ts), never by setting state in an effect.
+      "react-hooks/set-state-in-effect": "error",
     },
   },
   {

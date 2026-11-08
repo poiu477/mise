@@ -38,6 +38,8 @@ What a reviewer can rely on today:
 - **Dependencies:** Dependabot weekly, grouped; TypeScript 7 held back until its tools support it, with a weekly
   workflow (`typescript-watch.yml`) that opens an issue when they do.
 - **Reviews:** Mira (`@mira`) and CodeRabbit review every pull request.
+- **Web app:** pages load server data through TanStack Query; ESLint's React hooks rules run as errors, including
+  `set-state-in-effect`.
 - **Decisions:** architecture decision records in [`docs/adr/`](adr/README.md), each with the alternatives weighed.
 
 ## Known issues and limits
@@ -50,6 +52,8 @@ What a reviewer can rely on today:
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
 - An item added to the list offline can appear twice if the server saves it but its answer is lost: adding has no
   idempotency key, so the device sends it again.
+- When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
+  the list reloads a moment later.
 
 ## Open questions
 
@@ -74,4 +78,5 @@ What a reviewer can rely on today:
 | 2026-11-03 | mise is a portfolio project held to production standards; "only for one household" no longer justifies a shortcut |
 | 2026-11-04 | Work moves to self-contained tasks in `docs/backlog.md`, one task per branch and pull request, so agent sessions can run in parallel |
 | 2026-11-04 | The repository goes public with its history as it is; the private seed's details live in the ignored `CLAUDE.local.md` |
+| 2026-11-08 | The web app loads server data with TanStack Query; the shopping list's device copy and queue stay its own |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |

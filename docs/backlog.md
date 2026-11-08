@@ -55,17 +55,6 @@ A change to grouping, matching, step parsing or rounding should show up as a rev
 - **Done when:** the test passes in CI; changing one rounding rule makes it fail with a readable diff (try it, then
   revert).
 
-### T5 · A data-fetching layer for the web app
-
-Pages load data with `useEffect` and `useState`, which is why ESLint's `react-hooks/set-state-in-effect` is a
-warning (9 places) rather than an error.
-
-- Move page data loading to TanStack Query (or one shared hook, if that reads simpler; say which and why in the
-  pull request). Keep the offline shopping list's own device copy and queue (`web/src/offline.ts`) as it is.
-- Turn `react-hooks/set-state-in-effect` to `"error"` in `web/eslint.config.js`.
-- **Touches:** `web/src/pages/`, `web/src/components/`, `web/src/api/`, `web/package.json`.
-- **Done when:** `npm run lint` reports no warnings with the rule as an error, and the browser journeys pass.
-
 ### T6 · Security headers and a written security stance
 
 - Add response headers from the server: a Content-Security-Policy that the app and its service worker work under,
@@ -139,6 +128,24 @@ key, so the device sends it again (status.md, known issues).
   `web/src/api/schema.d.ts` (regenerated).
 - **Done when:** an API test sends the same addition twice and gets one item; a unit test in `web/` shows a retried
   queue sends the same id; the known issue is removed from status.md.
+
+### T13 · Doc comments on the rest of the web app
+
+style.md asks for a `/** … */` comment on every exported function, component, hook, class and type, and on
+internal functions whose job isn't plain from their name. The pages T5 rewrote have them; the rest of `web/src`
+mostly doesn't (`api/client.ts` documents 1 of its 24 exports).
+
+- Add them where missing, in style.md's voice: what it is or does, an example in quotes where it helps, no
+  restated types. Comments only; no behaviour changes.
+- Then make lint enforce it: add `eslint-plugin-jsdoc` and turn on `jsdoc/require-jsdoc` as an error for
+  `web/src`, with `publicOnly: true`. Cover exported function declarations, classes, type aliases and interfaces,
+  and exported `const` arrow functions, so React components and hooks written either way count.
+- **Touches:** `web/src/api/client.ts`, `offline.ts`, `choose.ts`, `week.ts`, `weights.ts`, `main.tsx`,
+  `pages/LoginPage.tsx`, `pages/SetupPage.tsx`, `pages/NotFound.tsx`, `components/AddToPlan.tsx`,
+  `components/Servings.tsx`, `components/StepText.tsx`, `web/eslint.config.js`, `web/package.json`.
+- **Needs:** T12 (it changes `api/client.ts` and `offline.ts`).
+- **Done when:** `npm run lint` passes on the branch, and fails on an undocumented export (add one, see it fail,
+  then revert); tests and build pass. CodeRabbit's docstring check passing is a secondary signal, not the gate.
 
 ## Needs a decision first
 
