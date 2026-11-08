@@ -1,12 +1,13 @@
 // The shopping list on this device, so it works in a shop with no signal: the last copy of each week's list, and
 // the ticks and additions made since, waiting to be sent. Kept per account and cleared on signing out.
-import type { Me, ShoppingList } from "./api/client";
+import type { Me, NewExtra, ShoppingList } from "./api/client";
 
 /** A change made on this device and not yet confirmed by the server. */
 export type Change =
   | { kind: "tick"; week: string; key: string; checked: boolean }
   | { kind: "tick_extra"; week: string; id: string; checked: boolean }
-  /** Added by hand; `id` is this device's own ("local-…") until the server gives one. */
+  /** Added by hand; `id` is this device's own ("local-…") until the server gives one. It goes with the change as
+   * the item's `client_key`, so sending the change again never adds the item twice. */
   | { kind: "add_extra"; week: string; id: string; name: string; checked: boolean };
 
 export type Saved = { list: ShoppingList; savedAt: number };
@@ -165,6 +166,14 @@ export function withChanges(list: ShoppingList, changes: Change[]): ShoppingList
 }
 
 export const isLocal = (id: string) => id.startsWith("local-");
+
+/** What sending an addition asks the server for. Its key is the device's id for it, the same every time it is
+ * sent, so an addition sent again after a lost answer is added once. */
+export const addition = (c: Extract<Change, { kind: "add_extra" }>): NewExtra => ({
+  week: c.week,
+  name: c.name,
+  client_key: c.id,
+});
 
 /** A fresh id for something added on this device, until the server gives it one. */
 export const localId = () => `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

@@ -373,7 +373,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add something to a week's list by hand. Answers with the list. */
+        /**
+         * Add something to a week's list by hand. Answers with the list. With a `client_key` already used in this
+         *     household, nothing is added and the answer is the list as it stands.
+         */
         post: operations["add_shopping_extra"];
         delete?: never;
         options?: never;
@@ -672,6 +675,11 @@ export interface components {
             week?: string | null;
         };
         NewExtra: {
+            /**
+             * @description A key the device made for this addition (1 to 100 characters), unique in the household. Sending the same
+             *     key again adds nothing, so a device can resend an addition whose answer it never got.
+             */
+            client_key?: string | null;
             name: string;
             /**
              * Format: date
@@ -746,6 +754,8 @@ export interface components {
         };
         ShoppingExtra: {
             checked: boolean;
+            /** @description The key the device that added it sent, if it sent one. */
+            client_key?: string | null;
             /** Format: uuid */
             id: string;
             name: string;
@@ -1573,7 +1583,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The list with the item added */
+            /** @description The list with the item on it, added now or by an earlier request with the same key */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1582,7 +1592,7 @@ export interface operations {
                     "application/json": components["schemas"]["ShoppingList"];
                 };
             };
-            /** @description The name is empty or too long */
+            /** @description The name or the key is empty or too long */
             400: {
                 headers: {
                     [name: string]: unknown;

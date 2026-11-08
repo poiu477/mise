@@ -147,6 +147,31 @@ test("ticks survive a reload, and the list keeps working offline", async () => {
   expect(list.extras.map((x: { name: string }) => x.name)).toEqual(["Foil"]);
 });
 
+test("an addition whose answer is lost is sent again and added once", async () => {
+  // The server saves the first send, but the answer never reaches the phone, so the addition stays waiting.
+  let sends = 0;
+  await page.route("**/api/shopping/extras", async (r) => {
+    sends++;
+    if (sends > 1) return r.continue();
+    await r.fetch();
+    await r.abort();
+  });
+  await page.getByRole("textbox", { name: "Add something else" }).fill("Tape");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByText("not sent yet")).toBeVisible();
+  const saved = await (await page.request.get("/api/shopping")).json();
+  expect(saved.extras.map((x: { name: string }) => x.name)).toEqual(["Foil", "Tape"]);
+
+  // Reopening sends it again, and the server knows it already.
+  await page.reload();
+  await expect.poll(() => sends, { timeout: 15_000 }).toBe(2);
+  await expect(page.getByText("not sent yet")).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: "Tape", exact: true })).toHaveCount(1);
+  const list = await (await page.request.get("/api/shopping")).json();
+  expect(list.extras.map((x: { name: string }) => x.name)).toEqual(["Foil", "Tape"]);
+  await page.unroute("**/api/shopping/extras");
+});
+
 test("a list left open in one tab keeps saving after another tab signs in", async () => {
   await page.goto("/shopping");
   await expect(shoppingItem("Black Beans")).toBeVisible();

@@ -11,6 +11,7 @@ import { Link, useSearchParams } from "react-router";
 import { api, errorText, type ShoppingItem, type ShoppingList, type Weights } from "../api/client";
 import { queryClient } from "../api/query";
 import {
+  addition,
   currentSignIn,
   deviceCopy,
   isLocal,
@@ -59,8 +60,9 @@ export async function keepListsOnDevice(user: string) {
   }
 }
 
-/** Sends one waiting change. Adding something that was ticked offline goes as two changes, the add and then
- * the tick, so a lost answer can't add it twice. */
+/** Sends one waiting change. Each is safe to send again when its answer was lost: a tick sets a state, and an
+ * addition carries its key. Adding something that was ticked offline goes as two changes, the add and then the
+ * tick, since ticking needs the id the server gives it. */
 async function send(c: Change): Promise<Sent> {
   const sent = (r: Reached<ShoppingList>, then?: Change): Sent =>
     r === "unreachable" ? r : "data" in r ? { list: r.data, then } : "refused";
@@ -88,14 +90,14 @@ async function send(c: Change): Promise<Sent> {
     case "add_extra": {
       const r = await reach(
         api.POST("/api/shopping/extras", {
-          body: { week: c.week, name: c.name },
+          body: addition(c),
           signal: patience(),
         }),
       );
-      // Added; ticking it is a change of its own, so a lost answer can't add it twice.
+      // The item this addition made, found by its key: two items can share a name.
       const made =
         r !== "unreachable" && "data" in r
-          ? r.data.extras.filter((x) => x.name === c.name.trim()).at(-1)
+          ? r.data.extras.find((x) => x.client_key === c.id)
           : undefined;
       return sent(
         r,

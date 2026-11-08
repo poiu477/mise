@@ -78,6 +78,8 @@ pub struct ShoppingExtra {
     pub id: Uuid,
     pub name: String,
     pub checked: bool,
+    /// The key the device that added it sent, if it sent one.
+    pub client_key: Option<String>,
 }
 
 /// Something left off the list, to put back.
@@ -308,13 +310,13 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
     removed.sort_by_key(|l: &LeftOut| l.name.to_lowercase());
     left_out.sort_by_key(|l: &LeftOut| l.name.to_lowercase());
 
-    let extras = sqlx::query_as::<_, (Uuid, String, bool)>("SELECT id, name, checked FROM shopping_extras WHERE household_id = $1 AND week = $2 ORDER BY created_at, id")
+    let extras = sqlx::query_as::<_, (Uuid, String, bool, Option<String>)>("SELECT id, name, checked, client_key FROM shopping_extras WHERE household_id = $1 AND week = $2 ORDER BY created_at, id")
         .bind(household)
         .bind(week)
         .fetch_all(&s.pool)
         .await?
         .into_iter()
-        .map(|(id, name, checked)| ShoppingExtra { id, name, checked })
+        .map(|(id, name, checked, client_key)| ShoppingExtra { id, name, checked, client_key })
         .collect();
     Ok(ShoppingList {
         week,
@@ -388,12 +390,19 @@ pub struct NewExtra {
     /// Any day in the week (default: today).
     pub week: Option<NaiveDate>,
     pub name: String,
+    /// A key the device made for this addition (1 to 100 characters), unique in the household. Sending the same
+    /// key again adds nothing, so a device can resend an addition whose answer it never got.
+    pub client_key: Option<String>,
 }
 
-/// Add something to a week's list by hand. Answers with the list.
+/// Add something to a week's list by hand. Answers with the list. With a `client_key` already used in this
+/// household, nothing is added and the answer is the list as it stands.
 #[utoipa::path(
     post, path = "/api/shopping/extras", operation_id = "add_shopping_extra", tag = "shopping", request_body = NewExtra,
-    responses((status = 200, description = "The list with the item added", body = ShoppingList), (status = 400, description = "The name is empty or too long", body = crate::error::ErrorBody))
+    responses(
+        (status = 200, description = "The list with the item on it, added now or by an earlier request with the same key", body = ShoppingList),
+        (status = 400, description = "The name or the key is empty or too long", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn add_extra(
     State(s): State<AppState>,
@@ -401,13 +410,22 @@ pub async fn add_extra(
     JsonBody(b): JsonBody<NewExtra>,
 ) -> ApiResult<Json<ShoppingList>> {
     let week = monday(b.week);
+    let key = b.client_key.as_deref();
+    if key.is_some_and(|k| k.is_empty() || k.chars().count() > 100 || k.contains('\0')) {
+        return Err(ApiError::BadRequest(
+            "client_key must be between 1 and 100 characters".into(),
+        ));
+    }
+    // Two missing keys never conflict, so additions without one always go in.
     sqlx::query(
-        "INSERT INTO shopping_extras (id, household_id, week, name) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO shopping_extras (id, household_id, week, name, client_key) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (household_id, client_key) DO NOTHING",
     )
     .bind(Uuid::now_v7())
     .bind(me.household_id)
     .bind(week)
     .bind(clean(&b.name)?)
+    .bind(key)
     .execute(&s.pool)
     .await?;
     Ok(Json(build(&s, me.household_id, week).await?))

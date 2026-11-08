@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ShoppingList } from "./api/client";
 import {
+  addition,
   deviceCopy,
   forgetDevice,
   queue,
@@ -255,5 +256,28 @@ describe("sending", () => {
     // The addition went through; only the tick is still to send, so it isn't added twice.
     expect(seen).toEqual([add, then]);
     expect(r.remaining).toEqual([then]);
+  });
+
+  it("sends an addition again with the same key when its answer was lost", async () => {
+    const store = memory();
+    signedIn(store);
+    const copy = deviceCopy("me", store);
+    copy.setPending(
+      queue([], { kind: "add_extra", week: WEEK, id: "local-1", name: "Foil", checked: false }),
+    );
+    const asked: unknown[] = [];
+    const send = (answer: Sent) => async (c: Change) => {
+      if (c.kind === "add_extra") asked.push(addition(c));
+      return answer;
+    };
+
+    // The server saved it, but the answer never came: it stays waiting on the device.
+    const lost = await sendChanges(copy.pending(), send("unreachable"));
+    copy.setPending(lost.remaining);
+    // Reopened later, the device sends it again, as the same addition.
+    const again = await sendChanges(deviceCopy("me", store).pending(), send({ list: list() }));
+    expect(again.remaining).toEqual([]);
+    const foil = { week: WEEK, name: "Foil", client_key: "local-1" };
+    expect(asked).toEqual([foil, foil]);
   });
 });
