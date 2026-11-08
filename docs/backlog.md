@@ -16,22 +16,6 @@ Take tasks from **Ready** in roughly the order listed. When a task is merged, de
 
 ## Ready
 
-### T1 · One local check command
-
-Contributors should run CI's code checks with one command, before pushing.
-
-- Add `./check` (a bash script; it must work in Git Bash on Windows and on Linux). It runs CI's commands with CI's
-  flags, in CI's order: `cargo fmt --all --check`; `cargo clippy --workspace --all-targets --locked -- -D warnings`;
-  `cargo test --workspace --locked`; the API step (write the OpenAPI document, run `check-openapi.mjs`, regenerate
-  `schema.d.ts` and fail if it differs); then in `web/` format, lint, test and build. `--e2e` adds the browser
-  journeys. It stops at the first failure and names it.
-- Out of scope, and said so in `./check --help` and development.md: `npm audit`, `cargo deny` and the Docker image
-  build stay in CI only (they need the network or take minutes and rarely fail on a code change).
-- Add `.githooks/pre-commit` running the fast part (formatting and lint only), enabled with
-  `git config core.hooksPath .githooks`; document that in development.md.
-- **Touches:** `check`, `.githooks/`, `docs/development.md`, the commands block in `CLAUDE.md`.
-- **Done when:** `./check` passes on a clean `main`, and exits non-zero after breaking formatting in one Rust and
-  one TypeScript file (try it, then revert). CI itself is unchanged.
 
 ### T3 · API tests for dishes, versions and photos
 

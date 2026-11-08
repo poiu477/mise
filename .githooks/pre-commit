@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Formatting and lints before each commit: the fast part of ./check. Enable once per clone with
+#   git config core.hooksPath .githooks
+# and skip it for one commit with `git commit --no-verify` (CI still runs everything).
+set -euo pipefail
+exec "$(git rev-parse --show-toplevel)/check" --fast
