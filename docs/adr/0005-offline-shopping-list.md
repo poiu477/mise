@@ -24,8 +24,9 @@ in one tab while a list is open in another.
   sign-in lasts, so an answer that arrives after signing out can't put the list back. Signing out clears everything
   under `mise:`.
 - **The server refuses work meant for someone else.** The app sends `X-Mise-Account` with every API request except
-  asking who is signed in (`/api/me`) and signing in (`/api/auth/…`); when it isn't the signed-in account, `auth::require_auth` answers 412 ([auth/mod.rs](../../crates/mise-api/src/auth/mod.rs)).
-  The list treats 412 like no signal: the change keeps waiting for its own account, and the app checks again who
+  asking who is signed in (`/api/me`) and signing in (`/api/auth/…`); when it isn't the signed-in account,
+  `auth::require_auth` answers 412 ([auth/mod.rs](../../crates/mise-api/src/auth/mod.rs)). The list treats 412
+  like no signal: the change keeps waiting for its own account, and the app checks again who
   is signed in. Scripts and integrations can leave the header out.
 
 ## Alternatives
