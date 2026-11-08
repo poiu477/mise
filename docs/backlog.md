@@ -99,15 +99,6 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
 - **Needs:** T2.
 - **Done when:** the new test passes; `web/scripts/check-openapi.mjs` still passes.
 
-### T8 · Architecture decision records
-
-- Write `docs/adr/` records for the decisions in status.md that a reviewer would ask about, with the alternatives
-  weighed: building our own app rather than adapting Mealie or Tandoor; Rust with axum and sqlx; Postgres; React
-  with a generated OpenAPI client; the offline list's device copy and queue; rounding up into standard measures;
-  one pinned Rust. One short file each, in the usual context, decision, consequences shape.
-- **Touches:** `docs/adr/`, a link from `docs/architecture.md`.
-- **Done when:** each record names at least one alternative and why it lost; links resolve.
-
 ### T9 · Observability
 
 - An option for JSON logs, a request id on every log line (and in the response), a readiness check that the
@@ -136,6 +127,18 @@ Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" 
 - **Touches:** `crates/mise-core/src/shopping.rs`, `crates/mise-api/src/shopping.rs`, a new migration, the demo
   bundle (add a case that exercises it).
 - **Done when:** unit tests cover both merges; a browser journey shows one onion line for the demo week.
+
+### T12 · Adding to the list offline must not add twice
+
+An item added offline can appear twice if the server saves it but its answer is lost: adding has no idempotency
+key, so the device sends it again (status.md, known issues).
+
+- Give each queued addition a client-made id (a UUID made when it is queued, kept with it in the device copy) and
+  have the server treat a repeated id from the same household as the same addition.
+- **Touches:** `web/src/offline.ts`, the add-item route in `crates/mise-api/src/shopping.rs`, a new migration,
+  `web/src/api/schema.d.ts` (regenerated).
+- **Done when:** an API test sends the same addition twice and gets one item; a unit test in `web/` shows a retried
+  queue sends the same id; the known issue is removed from status.md.
 
 ## Needs a decision first
 
