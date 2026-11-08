@@ -48,8 +48,8 @@ order: the remote and CI baseline first (it makes everything after it checked), 
 - [x] Standard formatting: rustfmt at its defaults and Prettier, each applied in one commit; ESLint with the React
       hooks rules.
 - [x] Protect `main`: changes arrive through a pull request with CI passing; no force-pushes or deletion.
-- [ ] Move page data loading to a data-fetching layer (TanStack Query or one shared hook), then turn ESLint's
-      `react-hooks/set-state-in-effect` back from a warning (9 places) to an error.
+- [x] Pages load server data through TanStack Query (`web/src/api/query.ts`), and ESLint's
+      `react-hooks/set-state-in-effect` is an error again.
 - [x] Test single sign-on end to end: `crates/mise-api/tests/oidc.rs` runs a fake OpenID Connect provider that signs
       its own RS256, ES256 and EdDSA tokens, covering sign-up, return visits, admin by group, email linking, forged
       and mismatched tokens, replayed state and turned-off accounts.
@@ -109,6 +109,8 @@ order: the remote and CI baseline first (it makes everything after it checked), 
 - The pot pie dish's address still says "beef" (slugs are fixed at first import) until a fresh install.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
+- When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
+  the list reloads a moment later.
 
 ## Open questions
 
@@ -131,4 +133,5 @@ order: the remote and CI baseline first (it makes everything after it checked), 
 | 2026-11-03 | Gates become repeatable checks; demo data written for mise for public tests, the private seed for the seed gate |
 | 2026-11-03 | mise is a portfolio project held to production standards; "only for one household" no longer justifies a shortcut |
 | 2026-11-04 | The repository goes public with its history as it is; the private seed's details live in the ignored `CLAUDE.local.md` |
+| 2026-11-08 | The web app loads server data with TanStack Query; the shopping list's device copy and queue stay its own |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |

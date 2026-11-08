@@ -1,14 +1,15 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
 import {
   api,
   errorText,
-  type Household,
   type Me,
   type TokenInfo,
   type UserInfo,
   type Weights,
 } from "../api/client";
-import { useSession } from "../session";
+import { answer, queryClient } from "../api/query";
+import { useAccount, useSession } from "../session";
 import { WEIGHTS } from "../weights";
 
 export function AccountPage() {
@@ -45,19 +46,25 @@ export function AccountPage() {
 
 /** How weights read on the household's shopping list; each food can still read its own way. */
 function ShoppingUnits() {
-  const [weights, setWeights] = useState<Weights | null>(null);
+  const key = ["shopping-settings", useAccount()];
+  const settings = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => answer(api.GET("/api/shopping/settings", { signal })),
+  });
+  const weights = settings.data?.weight_unit ?? null;
   const [error, setError] = useState("");
-  useEffect(() => {
-    api.GET("/api/shopping/settings").then(({ data }) => data && setWeights(data.weight_unit));
-  }, []);
   const change = async (next: Weights) => {
-    setWeights(next);
+    // Shown at once; the server's answer, or what it still has, replaces it.
+    queryClient.setQueryData(key, { weight_unit: next });
     setError("");
     const { data, error: failed } = await api.PUT("/api/shopping/settings", {
       body: { weight_unit: next },
     });
-    if (data) setWeights(data.weight_unit);
-    else setError(errorText(failed));
+    if (data) queryClient.setQueryData(key, data);
+    else {
+      setError(errorText(failed));
+      queryClient.invalidateQueries({ queryKey: key });
+    }
   };
   return (
     <section className="panel">
@@ -151,15 +158,17 @@ function PasswordForm({ me }: { me: Me }) {
 }
 
 function Tokens() {
-  const [tokens, setTokens] = useState<TokenInfo[]>([]);
+  const key = ["tokens", useAccount()];
+  const tokens =
+    useQuery({
+      queryKey: key,
+      queryFn: ({ signal }) => answer(api.GET("/api/me/tokens", { signal })),
+    }).data ?? [];
   const [name, setName] = useState("");
   const [scope, setScope] = useState("read");
   const [fresh, setFresh] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const load = () => api.GET("/api/me/tokens").then(({ data }) => data && setTokens(data));
-  useEffect(() => {
-    load();
-  }, []);
+  const load = () => queryClient.invalidateQueries({ queryKey: key });
   const create = async (e: FormEvent) => {
     e.preventDefault();
     const { data, error } = await api.POST("/api/me/tokens", { body: { name, scope } });
@@ -243,8 +252,16 @@ function Tokens() {
 }
 
 function Admin({ me }: { me: Me }) {
-  const [users, setUsers] = useState<UserInfo[]>([]);
-  const [households, setHouseholds] = useState<Household[]>([]);
+  const users =
+    useQuery({
+      queryKey: ["users", me.id],
+      queryFn: ({ signal }) => answer(api.GET("/api/users", { signal })),
+    }).data ?? [];
+  const households =
+    useQuery({
+      queryKey: ["households", me.id],
+      queryFn: ({ signal }) => answer(api.GET("/api/households", { signal })),
+    }).data ?? [];
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     username: "",
@@ -256,10 +273,9 @@ function Admin({ me }: { me: Me }) {
   });
   const [newHousehold, setNewHousehold] = useState("");
   const load = () => {
-    api.GET("/api/users").then(({ data }) => data && setUsers(data));
-    api.GET("/api/households").then(({ data }) => data && setHouseholds(data));
+    queryClient.invalidateQueries({ queryKey: ["users", me.id] });
+    queryClient.invalidateQueries({ queryKey: ["households", me.id] });
   };
-  useEffect(load, []);
 
   const update = async (
     u: UserInfo,

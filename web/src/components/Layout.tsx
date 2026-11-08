@@ -68,10 +68,13 @@ function TopBar() {
   const navigate = useNavigate();
   const [q, setQ] = useState(params.get("q") ?? "");
 
-  // Keep the box in step with the URL (back/forward, links).
-  useEffect(() => {
-    if (location.pathname === "/") setQ(params.get("q") ?? "");
-  }, [location.pathname, params]);
+  // Keep the box in step with the search page's URL (back/forward, links): when that changes, it wins.
+  const asked = location.pathname === "/" ? (params.get("q") ?? "") : null;
+  const [seen, setSeen] = useState(asked);
+  if (asked !== seen) {
+    setSeen(asked);
+    if (asked !== null) setQ(asked);
+  }
 
   const submit = (e: FormEvent) => {
     e.preventDefault();

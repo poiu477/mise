@@ -31,8 +31,10 @@ One numbered file per change, opening with a comment on what it adds, and a comm
 
 ## TypeScript and React
 
-- Function components and hooks; no state library. Server data comes from the typed `api` client; endpoints that
-  change things answer with the whole updated object, which replaces local state.
+- Function components and hooks; no state library. Server data loads through TanStack Query (`api/query.ts`)
+  calling the typed `api` client, never by setting state in an effect (ESLint enforces it). Data that is an
+  account's own has the account in its query key. Endpoints that change things answer with the whole updated
+  object, which replaces the cached data (`queryClient.setQueryData`).
 - A ref counter keeps only the latest answer when quick taps race (see `ShoppingPage.tsx`).
 - Pure logic goes in a plain module with a Vitest test next to it (`week.ts`, `offline.ts`, `choose.ts`).
 - Prettier (width 100) formats everything and ESLint (recommended sets plus the React hooks rules) lints it; CI

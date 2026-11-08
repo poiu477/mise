@@ -1,49 +1,35 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { api, type Dish, type Variant } from "../api/client";
+import { answer, Refused } from "../api/query";
 import { available, choose, pick, selectionOf, type Selection } from "../choose";
 import { AddToPlan } from "../components/AddToPlan";
 import { Servings } from "../components/Servings";
 import { StepText } from "../components/StepText";
 
+const NONE: Selection = {};
+
 export function DishPage() {
   const { slug = "" } = useParams();
   const [params, setParams] = useSearchParams();
-  const [dish, setDish] = useState<Dish | null>(null);
-  const [missing, setMissing] = useState(false);
-  const [sel, setSel] = useState<Selection>({});
-  const [variant, setVariant] = useState<Variant | null>(null);
-  const [loadingVariant, setLoadingVariant] = useState(false);
 
   // ?v=<version id> pins a version; ?s=<servings> keeps the serving count across reloads and shares.
   const pinned = params.get("v");
   const servingsParam = Number(params.get("s")) || undefined;
-  // Servings live in state (so quick taps queue up) and are mirrored to ?s= for reloads and links.
-  const [chosenServings, setChosenServings] = useState<number | undefined>(servingsParam);
 
-  useEffect(() => {
-    const ctrl = new AbortController();
-    setDish(null);
-    setMissing(false);
-    api
-      .GET("/api/dishes/{slug}", { params: { path: { slug } }, signal: ctrl.signal })
-      .then(({ data, response }) => {
-        if (ctrl.signal.aborted) return;
-        if (!data) return setMissing(response.status === 404);
-        setDish(data);
-        // Choices in the URL (?protein=Pork) win; the rest come from the pinned or default version.
-        const start =
-          data.variants.find((v) => v.id === pinned) ??
-          data.variants.find((v) => v.id === data.default_variant);
-        const fromUrl = Object.fromEntries(
-          data.options.flatMap((o) => (params.get(o.key) ? [[o.key, params.get(o.key)!]] : [])),
-        );
-        const wanted = { ...selectionOf(start, data.options), ...fromUrl };
-        setSel(pick(data.variants, wanted) ? wanted : selectionOf(start, data.options));
-      });
-    return () => ctrl.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
+  const dishQuery = useQuery({
+    queryKey: ["dish", slug],
+    queryFn: ({ signal }) =>
+      answer(api.GET("/api/dishes/{slug}", { params: { path: { slug } }, signal })),
+  });
+  const dish = dishQuery.data;
+  const missing = dishQuery.error instanceof Refused && dishQuery.error.status === 404;
+
+  // The options chosen: where the dish starts when it first shows, then whatever is tapped.
+  const [picked, setPicked] = useState<{ slug: string; sel: Selection } | null>(null);
+  if (dish && picked?.slug !== slug) setPicked({ slug, sel: startingChoice(dish, params) });
+  const sel = picked?.slug === slug ? picked.sel : NONE;
 
   const chosen = useMemo(() => {
     if (!dish) return undefined;
@@ -55,26 +41,27 @@ export function DishPage() {
   }, [dish, sel, pinned]);
 
   const defaultServings = (chosen?.yields.includes(2) ? 2 : chosen?.yields[0]) ?? 2;
+  // Servings follow the URL until changed here; then they live in state (so quick taps queue up), mirrored to ?s=
+  // for reloads and links.
+  const [tapped, setTapped] = useState<{ slug: string; n: number } | null>(null);
+  const chosenServings = tapped?.slug === slug ? tapped.n : servingsParam;
   const servings = chosenServings ?? defaultServings;
 
-  useEffect(() => setChosenServings(Number(params.get("s")) || undefined), [slug]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!chosen) return;
-    const ctrl = new AbortController();
-    setLoadingVariant(true);
-    api
-      .GET("/api/variants/{id}", {
-        params: { path: { id: chosen.id }, query: { servings } },
-        signal: ctrl.signal,
-      })
-      .then(({ data }) => {
-        if (ctrl.signal.aborted) return;
-        if (data) setVariant(data);
-        setLoadingVariant(false);
-      });
-    return () => ctrl.abort();
-  }, [chosen, servings]);
+  const variantQuery = useQuery({
+    queryKey: ["variant", chosen?.id, servings],
+    queryFn: ({ signal }) =>
+      answer(
+        api.GET("/api/variants/{id}", {
+          params: { path: { id: chosen!.id }, query: { servings } },
+          signal,
+        }),
+      ),
+    enabled: !!chosen,
+    // The last version or serving count stays on screen, dimmed, until the new one arrives.
+    placeholderData: keepPreviousData,
+  });
+  const variant = variantQuery.data;
+  const loadingVariant = variantQuery.isPlaceholderData;
 
   // Always from the current URL, so quick taps never act on a stale value.
   const update = (changes: (prev: URLSearchParams) => Record<string, string | null>) =>
@@ -90,7 +77,10 @@ export function DishPage() {
       { replace: true },
     );
   const setServings = (n: number | ((cur: number) => number)) =>
-    setChosenServings((cur) => (typeof n === "function" ? n(cur ?? defaultServings) : n));
+    setTapped((cur) => {
+      const was = cur?.slug === slug ? cur.n : (servingsParam ?? defaultServings);
+      return { slug, n: typeof n === "function" ? n(was) : n };
+    });
   useEffect(() => {
     if (chosenServings !== undefined && String(chosenServings) !== params.get("s"))
       update(() => ({ s: String(chosenServings) }));
@@ -155,7 +145,7 @@ export function DishPage() {
                       title={c.years ? `${c.label}: published ${c.years}` : c.label}
                       onClick={() => {
                         const next = choose(dish.variants, dish.options, sel, o.key, c.value);
-                        setSel(next);
+                        setPicked({ slug, sel: next });
                         update(() => ({
                           v: null,
                           ...Object.fromEntries(
@@ -274,6 +264,18 @@ export function DishPage() {
       )}
     </article>
   );
+}
+
+/** Where a dish starts: choices in the URL (?protein=Pork) win, the rest come from the pinned or default version. */
+function startingChoice(dish: Dish, params: URLSearchParams): Selection {
+  const start =
+    dish.variants.find((v) => v.id === params.get("v")) ??
+    dish.variants.find((v) => v.id === dish.default_variant);
+  const fromUrl = Object.fromEntries(
+    dish.options.flatMap((o) => (params.get(o.key) ? [[o.key, params.get(o.key)!]] : [])),
+  );
+  const wanted = { ...selectionOf(start, dish.options), ...fromUrl };
+  return pick(dish.variants, wanted) ? wanted : selectionOf(start, dish.options);
 }
 
 function minutes(iso: unknown): number | undefined {

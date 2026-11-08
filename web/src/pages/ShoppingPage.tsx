@@ -1,8 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   useCallback,
-  useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -10,6 +9,7 @@ import {
 } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type ShoppingItem, type ShoppingList, type Weights } from "../api/client";
+import { queryClient } from "../api/query";
 import {
   currentSignIn,
   deviceCopy,
@@ -107,28 +107,34 @@ async function send(c: Change): Promise<Sent> {
 const when = (t: number) =>
   new Date(t).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
 
+/** The list as last heard: from the server (`reached`), or else the device's copy (`savedAt`, when it was saved). */
+type Seen = { list: ShoppingList | null; savedAt: number | null; reached: boolean };
+
 export function ShoppingPage() {
-  const { session, refresh } = useSession();
+  const { session } = useSession();
   const user = session.status === "in" || session.status === "offline" ? session.me?.id : undefined;
   // A new sign-in in another tab replaces this page's device copy; work begun under the old one stays blocked.
   const signIn = useSyncExternalStore(onSignInChange, () => currentSignIn());
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- signIn isn't read here, but a new one needs a new copy
-  const copy = useMemo(() => (user ? deviceCopy(user) : null), [user, signIn]);
+  if (!user) return null;
+  // Each account and sign-in starts afresh, with that copy's own waiting changes.
+  return <WeekList key={`${user} ${signIn}`} user={user} />;
+}
+
+function WeekList({ user }: { user: string }) {
+  const { session, refresh } = useSession();
+  const [copy] = useState(() => deviceCopy(user));
   const [params, setParams] = useSearchParams();
   const week = weekOf(params.get("week") ?? mondayOf());
-  const [list, setList] = useState<ShoppingList | null>(null);
-  // When the list on screen is the device's copy: when it was saved.
-  const [savedAt, setSavedAt] = useState<number | null>(null);
-  const [offline, setOffline] = useState(false);
+  const key = ["shopping", user, week];
   const [error, setError] = useState("");
   const [extra, setExtra] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  const [pending, setPendingState] = useState<Change[]>(() => copy?.pending() ?? []);
+  const [pending, setPendingState] = useState<Change[]>(() => copy.pending());
   const pendingRef = useRef(pending);
   const setPending = useCallback(
     (next: Change[]) => {
       pendingRef.current = next;
-      copy?.setPending(next);
+      copy.setPending(next);
       setPendingState(next);
     },
     [copy],
@@ -138,41 +144,56 @@ export function ShoppingPage() {
   const flushing = useRef(false);
   const flushRef = useRef<() => void>(() => {});
 
-  const accept = useCallback(
-    (l: ShoppingList) => {
-      setList(l);
-      copy?.save(l);
-      setSavedAt(null);
-      setOffline(false);
-      if (session.status === "offline") refresh();
-    },
-    [copy, session.status, refresh],
-  );
+  /** The list now on screen, as the cache has it. */
+  const current = (): Seen =>
+    queryClient.getQueryData<Seen>(key) ?? { list: null, savedAt: null, reached: true };
+  /** The server's answer: kept on the device, and the session checked again if it thought it was offline. */
+  const keep = (l: ShoppingList) => {
+    copy.save(l);
+    if (session.status === "offline") refresh();
+  };
+  const accept = (l: ShoppingList) => {
+    keep(l);
+    queryClient.setQueryData<Seen>(key, { list: l, savedAt: null, reached: true });
+  };
+  /** Out of reach: the list stays as it is, marked offline. */
+  const unreached = () => queryClient.setQueryData<Seen>(key, { ...current(), reached: false });
 
-  const load = useCallback(async () => {
-    const asked = ++latest.current;
-    const r = await reach(
-      api.GET("/api/shopping", { params: { query: { week } }, signal: patience() }),
-    );
-    if (asked !== latest.current) return;
-    if (r === "unreachable") {
-      const saved = copy?.saved(week);
-      setOffline(true);
-      if (saved) {
-        setList(saved.list);
-        setSavedAt(saved.savedAt);
-      } else setList((l) => (l?.week === week ? l : null));
-      return;
-    }
-    if ("data" in r) {
+  // Loads when the page opens or the week changes, when the page comes back into view (someone else in the
+  // household may be shopping too) and when the signal returns; while offline, every 30 seconds.
+  const seen = useQuery({
+    queryKey: key,
+    queryFn: async (): Promise<Seen> => {
+      const asked = ++latest.current;
+      const r = await reach(
+        api.GET("/api/shopping", { params: { query: { week } }, signal: patience() }),
+      );
+      // A change made since answered with a newer list.
+      if (asked !== latest.current) return current();
+      if (r === "unreachable") {
+        const saved = copy.saved(week);
+        return saved
+          ? { list: saved.list, savedAt: saved.savedAt, reached: false }
+          : { ...current(), reached: false };
+      }
+      if ("refused" in r) {
+        setError(errorText(r.refused));
+        return current();
+      }
       setError("");
-      accept(r.data);
+      keep(r.data);
       if (pendingRef.current.length) flushRef.current();
-    } else setError(errorText(r.refused));
-  }, [week, copy, accept]);
+      return { list: r.data, savedAt: null, reached: true };
+    },
+    refetchInterval: (q) => (q.state.data?.reached === false ? 30_000 : false),
+  });
+  const list = seen.data?.list ?? null;
+  const savedAt = seen.data?.savedAt ?? null;
+  const offline = seen.data?.reached === false;
+  const load = () => queryClient.invalidateQueries({ queryKey: ["shopping", user] });
 
   /** Send what is waiting; once everything is through, fetch the list afresh. */
-  const flush = useCallback(async () => {
+  const flush = async () => {
     if (flushing.current) return;
     flushing.current = true;
     try {
@@ -186,7 +207,7 @@ export function ShoppingPage() {
             "Some changes couldn't be saved: the list changed on the server. It shows what the server has now.",
           );
         if (r.remaining.length) {
-          setOffline(true);
+          unreached();
           return;
         }
       }
@@ -194,39 +215,12 @@ export function ShoppingPage() {
       flushing.current = false;
     }
     load();
-  }, [setPending, load]);
+  };
   // A layout effect runs in the same task as the render's commit, before any awaited answer can resume, so a
   // request finishing just after a week change never calls the previous week's flush.
   useLayoutEffect(() => {
     flushRef.current = flush;
-  }, [flush]);
-
-  // Another account on this device has its own waiting changes.
-  useEffect(() => {
-    const mine = copy?.pending() ?? [];
-    pendingRef.current = mine;
-    setPendingState(mine);
-  }, [copy]);
-
-  useEffect(() => {
-    setList((l) => (l?.week === week ? l : null));
-    load();
-    // Someone else in the household may be shopping too, and the signal comes and goes.
-    const refreshList = () => document.visibilityState === "visible" && load();
-    document.addEventListener("visibilitychange", refreshList);
-    window.addEventListener("online", refreshList);
-    return () => {
-      document.removeEventListener("visibilitychange", refreshList);
-      window.removeEventListener("online", refreshList);
-    };
-  }, [week, load]);
-
-  // While offline, look for the server now and then.
-  useEffect(() => {
-    if (!offline) return;
-    const t = setInterval(load, 30000);
-    return () => clearInterval(t);
-  }, [offline, load]);
+  });
 
   const change = (c: Change) => {
     setPending(queue(pendingRef.current, c));
@@ -242,7 +236,7 @@ export function ShoppingPage() {
     const r = await reach(call);
     if (asked !== latest.current) return;
     if (r === "unreachable") {
-      setOffline(true);
+      unreached();
       setError(
         "Can't reach the server, so that wasn't saved. Ticks and added items still work offline.",
       );
