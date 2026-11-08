@@ -28,8 +28,9 @@ What a reviewer can rely on today:
   against a Postgres service (API tests fail rather than skip when it's missing), the OpenAPI document checked and
   the web types compared with it, web format, lint, tests and build, `npm audit` of shipped packages, `cargo deny`,
   browser journeys, the Docker image built.
-- **Tests:** unit and fuzz tests in `mise-core`; API tests for sign-in, plan and shopping; single sign-on end to end
-  against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on the demo bundle covering
+- **Tests:** unit and fuzz tests in `mise-core`; API tests for sign-in, plan and shopping, sharing one harness
+  (`crates/mise-api/tests/common`) that gives each test its own database and drops it even when the test fails;
+  single sign-on end to end against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on the demo bundle covering
   first-run setup, scaling, planning to a full list, ticks across reloads, offline use, a 375 px layout, an axe scan
   and sign-out.
 - **Demo data:** `fixtures/demo-bundle`, written for mise, under the MIT licence. The household's own seed is private
