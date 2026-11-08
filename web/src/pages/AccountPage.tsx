@@ -54,12 +54,17 @@ function ShoppingUnits() {
   const weights = settings.data?.weight_unit ?? null;
   const [error, setError] = useState("");
   const change = async (next: Weights) => {
-    // Shown at once; the server's answer, or what it still has, replaces it.
+    // Shown at once; the server's answer, or what it still has, replaces it. A reload still on its way would put
+    // back the old unit.
+    await queryClient.cancelQueries({ queryKey: key });
     queryClient.setQueryData(key, { weight_unit: next });
     setError("");
-    const { data, error: failed } = await api.PUT("/api/shopping/settings", {
-      body: { weight_unit: next },
-    });
+    const { data, error: failed } = await api
+      .PUT("/api/shopping/settings", { body: { weight_unit: next } })
+      .catch(() => ({
+        data: undefined,
+        error: { error: "can't reach the server, so that wasn't saved" },
+      }));
     if (data) queryClient.setQueryData(key, data);
     else {
       setError(errorText(failed));

@@ -93,6 +93,15 @@ export function DishPage() {
       </p>
     );
   }
+  if (dishQuery.isError && !dish)
+    return (
+      <p className="empty">
+        Can't reach the server, so this dish didn't load.{" "}
+        <button type="button" className="link" onClick={() => dishQuery.refetch()}>
+          Try again
+        </button>
+      </p>
+    );
   if (!dish || !chosen) return <p className="empty">Loading…</p>;
 
   const v = variant && variant.id === chosen.id ? variant : null;
@@ -195,6 +204,13 @@ export function DishPage() {
                 </li>
               ))}
             </ul>
+          ) : variantQuery.isError ? (
+            <p className="empty">
+              Can't reach the server, so this version didn't load.{" "}
+              <button type="button" className="link" onClick={() => variantQuery.refetch()}>
+                Try again
+              </button>
+            </p>
           ) : (
             <p className="empty">Loading…</p>
           )}
