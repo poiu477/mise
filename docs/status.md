@@ -28,6 +28,9 @@ What a reviewer can rely on today:
   against a Postgres service (API tests fail rather than skip when it's missing), the OpenAPI document checked and
   the web types compared with it, web format, lint, tests and build, `npm audit` of shipped packages, `cargo deny`,
   browser journeys, the Docker image built.
+- **Local checks:** `./check` runs CI's build, lint and test steps with CI's commands, in CI's order, and names the
+  step that fails; `--e2e` adds the browser journeys. `cargo deny`, `npm audit` and the image build stay CI-only. A
+  pre-commit hook (`.githooks/`, opt-in) runs the formatting and lints.
 - **Tests:** unit and fuzz tests in `mise-core`; API tests for sign-in, plan and shopping, sharing one harness
   (`crates/mise-api/tests/common`) that gives each test its own database and drops it even when the test fails;
   single sign-on end to end against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on the demo bundle covering

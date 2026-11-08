@@ -70,16 +70,20 @@ Running in parallel:
 
 ## Everyday commands
 
-What CI runs, so run it before pushing:
+Run these before pushing. `./check` runs CI's build, lint and test steps in CI's order and names the step that fails.
+It isn't the whole CI gate: the browser journeys need `--e2e`, and `cargo deny`, `npm audit` and the Docker image
+build run only in CI.
 
 ```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace                 # needs the dev Postgres (port 5433); API tests make throwaway databases
-cd web && npm run format:check && npm run lint && npm test && npm run build
-cd web && npm run e2e                  # browser journeys; needs `cargo build -p mise-cli -p mise-api` and the build above
+./check                                # needs the dev Postgres (port 5433); API tests make throwaway databases
+./check --e2e                          # and the browser journeys (one session at a time: fixed database and port)
+./check --fast                         # formatting and lints only; the pre-commit hook (git config core.hooksPath .githooks)
 cd web && npm run api                  # regenerate src/api/schema.d.ts after changing the API (needs a release build)
 ```
+
+The steps it runs, for running one alone: `cargo fmt --all --check`; `cargo clippy --workspace --all-targets -- -D
+warnings`; `cargo test --workspace`; the API document check; then in `web/`, `npm run format:check`, `lint`, `test`,
+`build` and (`--e2e`) `e2e`.
 
 When the release build is locked, regenerate the types from the debug build instead:
 `../target/debug/mise-server.exe openapi > openapi.json && npx openapi-typescript openapi.json -o src/api/schema.d.ts`.
