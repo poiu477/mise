@@ -38,7 +38,7 @@ requests and answers have to be kept the same on both sides somehow.
 ## Consequences
 
 - Changing the API means regenerating the types (`npm run api`, which needs a release build, or the debug-build
-  route in CLAUDE.md), and committing them with the change; CI fails otherwise.
+  route in AGENTS.md), and committing them with the change; CI fails otherwise.
 - The document lists only the responses the annotations name. Signed-in routes can all return 401 and 412, and not
   every one says so yet; status.md has the task to list them and test that they match.
 - Pages load data through TanStack Query calling this client ([query.ts](../../web/src/api/query.ts)), never by

@@ -1,7 +1,7 @@
 # Status
 
 As of 2026-11-08. Where things stand, known issues, open questions and the decisions made. The work still to do is
-in [backlog.md](backlog.md); the design document holds the goals and the long-range roadmap. Update both in the same
+in [backlog.md](backlog.md); the maintainer's design document (private) holds the goals and the long-range roadmap. Update both in the same
 pull request as the work.
 
 ## Where things stand
@@ -40,6 +40,9 @@ What a reviewer can rely on today:
   and never committed.
 - **Dependencies:** Dependabot weekly, grouped; TypeScript 7 held back until its tools support it, with a weekly
   workflow (`typescript-watch.yml`) that opens an issue when they do.
+- **Contributing:** [AGENTS.md](../AGENTS.md) holds the working rules for people and any coding agent (`CLAUDE.md`
+  imports it); [CONTRIBUTING.md](../CONTRIBUTING.md) is the short version, with a pull request template. A draft pull
+  request claims a backlog task. Everything but the maintainer-only tasks runs on the demo data.
 - **Reviews:** Mira (`@mira`) and CodeRabbit review every pull request.
 - **Web app:** pages load server data through TanStack Query; ESLint's React hooks rules run as errors, including
   `set-state-in-effect`.
@@ -84,3 +87,4 @@ What a reviewer can rely on today:
 | 2026-11-08 | The web app loads server data with TanStack Query; the shopping list's device copy and queue stay its own |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |
 | 2026-11-08 | Doc comments are required on public Rust items and exported TypeScript, and lints are to enforce it (`jsdoc/require-jsdoc` in T13, `missing_docs` in T14 to T16; not on yet); they say what a thing means, not its types. CodeRabbit's docstring score is not the gate |
+| 2026-11-08 | `AGENTS.md` holds the working rules for every coding agent and person, and `CLAUDE.md` imports it; a draft pull request claims a backlog task. The private seed moves to its own private repository on the maintainer's GitLab, cloned into the ignored `seed/`; GitLab also mirrors this repository |

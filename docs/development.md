@@ -1,30 +1,49 @@
 # Development
 
-Requirements: Rust 1.99.1 (pinned in `rust-toolchain.toml`; rustup installs it on first build), Node 26, Docker,
-Python 3 for the private seed scripts. The same Rust builds everywhere: locally, in CI and in the Docker image.
+Requirements: Rust 1.99.1 (pinned in `rust-toolchain.toml`; rustup installs it on first build), Node 26, Docker and
+bash (Git Bash on Windows) for `./check`. The same Rust builds everywhere: locally, in CI and in the Docker image.
 
 ## First setup
+
+This loads the demo recipes (`fixtures/demo-bundle`, written for mise) into a database of their own, `mise_demo`,
+which `.env.example` points at.
 
 ```bash
 cp .env.example .env
 docker compose -f compose.dev.yaml up -d db      # Postgres 16 on localhost:5433, user and password mise
-cd web && npm install && cd ..
+docker compose -f compose.dev.yaml exec db createdb -U mise mise_demo
+cargo build --release -p mise-cli -p mise-api
+M=./target/release/mise
+$M migrate
+$M import-bundle fixtures/demo-bundle
+$M match-foods
+$M food apply fixtures/demo-bundle/curation.json
+$M group-dishes
+$M derive-options
+$M parse-steps
+cd web && npm install && npm run build && cd ..
+git config core.hooksPath .githooks               # optional: formatting and lints before each commit
 ```
+
+Then `./target/release/mise-server` serves the app on :8080, and the first visit creates the admin account.
 
 ## Databases
 
 | Database | What | Used for |
 | --- | --- | --- |
-| `mise_seed` | The launch seed: 237 dishes and 308 versions from meals the household received | Day-to-day use and development (`.env` points here) |
-| `mise` | The full private archive import, about 9,900 dishes | Evidence: package sizes, pack counts, more dishes to add later |
+| `mise_demo` | The demo recipes (First setup above) | Development (`.env.example` points here) |
 | `mise_test_<uuid>` | Made and dropped by each API integration test | Tests only |
+| `mise_e2e` | Rebuilt from the demo recipes by each browser-journey run | The browser journeys only |
+| `mise_seed` | Maintainer only: the launch seed, 237 dishes and 308 versions from meals the household received | Day-to-day use |
+| `mise` | Maintainer only: the full private archive import, about 9,900 dishes | Evidence: package sizes, pack counts, more dishes to add later |
 
-Switching between them is a matter of `DATABASE_URL` and `MEDIA_ROOT` in `.env`; `seed/env-full-archive` holds the
-full archive's pair.
+Switching between them is a matter of `DATABASE_URL` and `MEDIA_ROOT` in `.env`.
 
-## Rebuilding the seed database
+## Rebuilding the seed database (maintainer only)
 
-The private inputs live in `seed/` (ignored by git); the photos come from the archive's folder (`ARCHIVE` below).
+The private seed lives in a separate private repository, cloned into the ignored `seed/` folder; its README says
+how to restore the databases from snapshots. Rebuilding from scratch also needs the archive's photo folder
+(`ARCHIVE` below) and Python 3 for the seed scripts. Nothing outside this section depends on any of it.
 
 ```bash
 docker exec mise-db-1 createdb -U mise mise_seed
@@ -105,7 +124,7 @@ git config core.hooksPath .githooks
 | Grouping report | `mise gate-report` | A stratified sample of dishes to check grouping by hand |
 
 The fuzz suite in `crates/mise-core/tests/fuzz.rs` takes about 25 seconds in a debug build. The plan for the
-remaining repeatable gates (a seed gate) is in [status.md](status.md) and the design document.
+remaining repeatable gate (a seed gate) is in [backlog.md](backlog.md).
 
 ## CI
 

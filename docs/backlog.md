@@ -1,18 +1,18 @@
 # Backlog
 
 The work still to do, written so one agent session (or one person) can take a task and finish it without
-other context. [status.md](status.md) says where things stand and why; the design document holds the long-range
-goals. How to take a task, branch, check and open the pull request is in [CLAUDE.md](../CLAUDE.md) under
-"Working as an agent".
+other context. [status.md](status.md) says where things stand and why. How to take a task, claim it, branch, check
+and open the pull request is in [AGENTS.md](../AGENTS.md) under "Taking a task".
 
 Each task gives:
 
 - **Touches:** the files or areas it changes. Two tasks that touch the same area shouldn't run at the same time.
 - **Done when:** the check that proves it. Every check is automated; "looks right" is not a check.
-- **Needs:** tasks to finish first, or a decision or action only Paul can take (**Paul**).
+- **Needs:** tasks to finish first, or a decision or action only Paul, the maintainer, can take (**Paul**).
 
-Take tasks from **Ready** in roughly the order listed. When a task is merged, delete it here and add a line under
-"Where things stand" or "Decisions" in status.md if it changed either, in the same pull request.
+Take tasks from **Ready** in roughly the order listed. A task with an open pull request (a draft counts) is taken.
+The pull request that finishes a task deletes it here and adds a line under "Where things stand" or "Decisions" in
+status.md if it changed either.
 
 ## Ready
 
@@ -211,7 +211,7 @@ Each of these waits on a question in status.md's "Open questions" or on Paul.
 
 ## Only on Paul's machine
 
-These need the private seed, which is not in the repo. See `CLAUDE.local.md` there.
+These need the private seed, which is not in the repo.
 
 - **`mise gate seed`:** rebuild the private seed and check the invariants on every recipe at 1 to 6 servings, with a
   snapshot of rendered amounts kept in `seed/` and shown as a diff to approve. Replace the scaling report's
