@@ -6,7 +6,8 @@ import type { Me, ShoppingList } from "./api/client";
 export type Change =
   | { kind: "tick"; week: string; key: string; checked: boolean }
   | { kind: "tick_extra"; week: string; id: string; checked: boolean }
-  /** Added by hand; `id` is this device's own ("local-…") until the server gives one. */
+  /** Added by hand; `id` is this device's own ("local-…") until the server gives one. It goes with the change as
+   * the item's `client_key`, so sending the change again never adds the item twice. */
   | { kind: "add_extra"; week: string; id: string; name: string; checked: boolean };
 
 export type Saved = { list: ShoppingList; savedAt: number };

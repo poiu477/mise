@@ -85,14 +85,15 @@ async function send(c: Change): Promise<Sent> {
     case "add_extra": {
       const r = await reach(
         api.POST("/api/shopping/extras", {
-          body: { week: c.week, name: c.name },
+          body: { week: c.week, name: c.name, client_key: c.id },
           signal: patience(),
         }),
       );
-      // Added; ticking it is a change of its own, so a lost answer can't add it twice.
+      // The server adds an item once per key, so this is safe to send again when its answer is lost. Ticking it is
+      // a change of its own, sent once the server has given it an id.
       const made =
         r !== "unreachable" && "data" in r
-          ? r.data.extras.filter((x) => x.name === c.name.trim()).at(-1)
+          ? r.data.extras.find((x) => x.client_key === c.id)
           : undefined;
       return sent(
         r,

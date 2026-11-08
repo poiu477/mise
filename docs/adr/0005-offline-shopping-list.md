@@ -19,6 +19,8 @@ in one tab while a list is open in another.
 - **Changes queued as small intents**, not a whole list: tick a line, tick an added item, add an item. They are
   sent in order once the server answers; a later tick of the same line replaces the earlier one, and an item added
   offline keeps a `local-…` id until the server gives it one, so the device queues it once and ticks it in place.
+  That id goes with the addition as its `client_key`, which the server keeps unique per household
+  ([shopping.rs](../../crates/mise-api/src/shopping.rs)), so sending it again adds nothing.
   Removing, staples and units need the server and wait for it.
 - **Work stays with the sign-in that made it.** Each sign-in gets an id on the device; a copy only saves while that
   sign-in lasts, so an answer that arrives after signing out can't put the list back. Signing out clears everything
@@ -50,9 +52,11 @@ in one tab while a list is open in another.
   a second tab starting a new sign-in, and sign-out leaving nothing on the device (`web/e2e/journeys.spec.ts`).
 - Opening the app with no signal needs a service worker, and phones allow those only over HTTPS; the reverse
   proxy for that is still an open question in status.md.
-- Sending is at least once, not exactly once. Adding an item has no idempotency key: if the server saves it and
-  the answer is lost on the way back, the device sends it again and the list shows it twice (status.md's known
-  issues). Ticks are safe to repeat, since a tick sets a state rather than toggling it.
+- A change can be sent more than once (the server saves it but the answer is lost, so the device sends it
+  again), and every change is safe to repeat: a tick sets a state rather than toggling it, and an addition with a
+  key already used in the household adds nothing. The browser journeys lose an answer on purpose to show it.
+  Added 2026-11-08; until then a lost answer could put an item on the list twice. The key goes when the item is
+  deleted, so if someone deletes it before the device sends it again, it comes back once.
 - `localStorage` can be missing or full; the list then simply isn't kept, and the app still works online.
 - Every signed-in route can answer 412, which the API document doesn't list everywhere yet
   ([0004](0004-generated-api-client.md)).
