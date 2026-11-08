@@ -77,11 +77,13 @@ impl Reply {
             })
     }
 
+    /// A response header as text, if it is set and readable.
     pub fn header(&self, name: header::HeaderName) -> Option<&str> {
         self.headers.get(name).and_then(|h| h.to_str().ok())
     }
 }
 
+/// The router on a fresh, migrated database that is dropped with it.
 pub struct TestApp {
     pub router: Router,
     /// The test database, for arranging data and checking what was stored.
@@ -101,6 +103,7 @@ impl TestApp {
         TestApp::start(Some(oidc)).await
     }
 
+    /// Make and migrate the database, then build the router with local sign-in and `oidc` if given.
     async fn start(oidc: Option<OidcConfig>) -> Option<TestApp> {
         let db = Database::create().await?;
         let pool = mise_db::connect(&db.url()).await.unwrap();
@@ -136,6 +139,7 @@ impl TestApp {
         }
     }
 
+    /// Run one request through the router and return the raw response.
     pub async fn oneshot(&self, req: Request<Body>) -> Response {
         self.router.clone().oneshot(req).await.unwrap()
     }
@@ -205,6 +209,9 @@ impl TestApp {
     }
 }
 
+/// How long dropping a test database may take before it is given up and reported.
+const DROP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// A database made for one test and dropped with it.
 struct Database {
     /// DATABASE_URL, which the test connects to as an administrator.
@@ -246,30 +253,42 @@ impl Database {
 
 impl Drop for Database {
     /// Drop runs outside async code, and also while a failed test unwinds, so the database is dropped on a thread
-    /// with its own runtime. A failure is reported, not raised: panicking here would abort the test run.
+    /// with its own runtime. A failure is reported, not raised: panicking here would abort the test run. A server
+    /// that stops answering gives up after `DROP_TIMEOUT` rather than hanging the run.
     fn drop(&mut self) {
         let (url, name) = (self.admin_url.clone(), self.name.clone());
         let dropped = std::thread::spawn(move || -> anyhow::Result<()> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
+            // The timeout is made inside the runtime: its timer needs one.
             rt.block_on(async {
-                let mut admin = PgConnection::connect(&url).await?;
-                // FORCE ends the connections the test's pool still holds.
-                sqlx::query(AssertSqlSafe(format!(
-                    "DROP DATABASE IF EXISTS {name} WITH (FORCE)"
-                )))
-                .execute(&mut admin)
-                .await?;
-                admin.close().await?;
-                Ok(())
-            })
+                tokio::time::timeout(DROP_TIMEOUT, async {
+                    let mut admin = PgConnection::connect(&url).await?;
+                    // FORCE ends the connections the test's pool still holds.
+                    sqlx::query(AssertSqlSafe(format!(
+                        "DROP DATABASE IF EXISTS {name} WITH (FORCE)"
+                    )))
+                    .execute(&mut admin)
+                    .await?;
+                    admin.close().await?;
+                    anyhow::Ok(())
+                })
+                .await
+            })?
         })
         .join();
         match dropped {
             Ok(Ok(())) => {}
             Ok(Err(e)) => eprintln!("couldn't drop test database {}: {e:#}", self.name),
-            Err(_) => eprintln!("couldn't drop test database {}", self.name),
+            Err(panic) => {
+                let why = panic
+                    .downcast_ref::<&str>()
+                    .copied()
+                    .or_else(|| panic.downcast_ref::<String>().map(String::as_str))
+                    .unwrap_or("the thread panicked");
+                eprintln!("couldn't drop test database {}: {why}", self.name);
+            }
         }
     }
 }

@@ -208,6 +208,7 @@ struct Finished {
 }
 
 impl Sso {
+    /// Start the fake provider and an app that trusts it; None when there is no database (outside CI).
     async fn new() -> Option<Sso> {
         let idp = provider().await;
         let app = TestApp::with_oidc(OidcConfig {
@@ -308,6 +309,7 @@ impl Sso {
         c
     }
 
+    /// How many accounts exist, to check that a sign-in made one or didn't.
     async fn users(&self) -> i64 {
         sqlx::query_scalar("SELECT count(*) FROM users")
             .fetch_one(&self.pool)

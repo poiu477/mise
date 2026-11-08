@@ -28,6 +28,7 @@ impl Deref for Kitchen {
 }
 
 impl Kitchen {
+    /// A fresh app with its owner set up; None when there is no database (outside CI).
     async fn new() -> Option<Kitchen> {
         let app = TestApp::new().await?;
         let cookie = app.setup_owner().await;
@@ -39,11 +40,13 @@ impl Kitchen {
         self.json(method, path, &self.cookie, body).await
     }
 
+    /// The owner's shopping list for `WEEK`.
     async fn list(&self) -> Value {
         self.call("GET", &format!("/api/shopping?week={WEEK}"), None)
             .await
     }
 
+    /// A made-up food with these properties (count unit, store section and so on).
     async fn food(&self, name: &str, props: Value) -> Uuid {
         let id = Uuid::now_v7();
         sqlx::query("INSERT INTO foods (id, name, slug, props) VALUES ($1, $2, $3, $4)")
