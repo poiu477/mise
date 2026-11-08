@@ -23,9 +23,9 @@ Read these before changing anything:
 | [docs/scaling-rules.md](docs/scaling-rules.md) | How amounts scale and round, with the evidence |
 | [docs/curation.md](docs/curation.md) | Food curation, dish decisions, preferred versions |
 
-Paul Drake Hughes (`poiu477` on GitHub) maintains mise; "Paul" in the docs means him. He also keeps a design
-document with the long-range goals, which isn't public. Nothing a task needs lives only there: the backlog, status
-and the decision records hold it.
+Paul Drake Hughes (`paulh` on GitLab, `poiu477` on GitHub) maintains mise; "Paul" in the docs means him. He also keeps a
+design document with the long-range goals, which isn't public. Nothing a task needs lives only there: the backlog,
+status and the decision records hold it.
 
 ## You don't need the private seed
 
@@ -41,8 +41,9 @@ are listed apart in the backlog ("Only on Paul's machine"); leave those to him.
   `seed/` and `reports/` folders and outside the repo.
 - **Stage files by name.** `git add <paths>`, never `git add -A` or `git add .`: an env file was committed that way
   once. Agents commit only when asked.
-- **Work on a branch and merge through a pull request.** The repo is `poiu477/mise` on GitHub; `main` is protected.
-  CI (`.github/workflows/ci.yml`) must pass before merging.
+- **Work on a branch and merge through a merge request.** The repository lives on GitLab at
+  <https://gitlab.pauldrakehughes.com/Personal/mise>, where `main` is protected and CI (`.gitlab-ci.yml`) must pass
+  before merging. GitHub (`poiu477/mise`) is a read-only mirror of `main`: never push or open pull requests there.
 - **LF line endings.** sqlx checksums migrations, so `.gitattributes` pins LF. Scripts that rewrite files must write
   bytes (`Path.write_bytes(s.encode())` in Python), not `write_text`, which writes CRLF on Windows.
 - **Never edit a migration that's on `main`.** Add a new numbered file in `migrations/`.
@@ -58,34 +59,38 @@ are listed apart in the backlog ("Only on Paul's machine"); leave those to him.
 Work is split into tasks in [docs/backlog.md](docs/backlog.md), so several people and agent sessions can work at
 once without stepping on each other.
 
-1. **Take one task** from "Ready" whose "Needs" are met. Check `gh pr list --state open` first: skip a task that has
-   a pull request open, and one whose "Touches" overlaps an open pull request's.
-2. **Claim it** by opening a draft pull request as soon as you have a first commit, titled with the task number
-   (`T4: Pipeline snapshot test`). An open pull request is the claim; there is no other list to update.
-3. **Branch from an up-to-date `main`**, named after the task (`t4-pipeline-snapshot`). Without write access to
-   `poiu477/mise`, fork it and open the pull request from your fork. When another session works in the same
-   checkout, use a separate git worktree.
+1. **Take one task** from "Ready" whose "Needs" are met. Check the open merge requests first (`glab mr list`, or
+   the project's Merge requests page): skip a task that has one open, and one whose "Touches" overlaps an open merge
+   request's.
+2. **Branch from an up-to-date `main`**, named after the task (`t4-pipeline-snapshot`). Without write access, fork
+   the project on GitLab and work from your fork. When another session works in the same checkout, use a separate
+   git worktree.
+3. **Claim it** by opening a draft merge request as soon as you have a first commit, titled with the task number
+   (`T4: Pipeline snapshot test`). An open merge request is the claim; there is no other list to update. Pushing
+   can open it: `git push -o merge_request.create -o merge_request.draft -o merge_request.title="T4: Pipeline
+   snapshot test" origin t4-pipeline-snapshot`.
 4. **Do the task to its "Done when".** Add the tests it names. Stay inside "Touches"; if the work needs more, say so
-   in the pull request rather than spreading quietly.
+   in the merge request rather than spreading quietly.
 5. **Run the everyday commands below** and fix what they report.
-6. **Update the docs in the same pull request:** delete the task from the backlog; record anything that changed in
+6. **Update the docs in the same merge request:** delete the task from the backlog; record anything that changed in
    status.md (where things stand, a decision, a known issue); fix any doc the change makes wrong.
-7. **Mark the pull request ready** once it's done, filling in the template: what changed, how it was checked,
-   anything left undone. CI runs on it (a first-time contributor's runs wait for Paul to approve them), and Mira
-   (`@mira`) and CodeRabbit review it. Fix each valid finding, or reply with why it doesn't apply.
-8. **Paul merges,** with merge commits only (`gh pr merge --merge`), or says to merge once CI is green.
+7. **Mark the merge request ready** once it's done, filling in the template: what changed, how it was checked,
+   anything left undone. CI runs on it (a fork's pipeline waits for Paul to start it). Fix each review finding, or
+   reply with why it doesn't apply.
+8. **Paul merges,** with a merge commit (the project merges no other way), or says to merge once the pipeline
+   passes.
 
-Stop and ask in the pull request (or an issue) instead of guessing when a task needs a decision listed under "Open
-questions", the private seed, a change to GitHub settings, or anything outside the pull request (a release, a
-deploy, a message).
+Stop and ask in the merge request (or an issue) instead of guessing when a task needs a decision listed under "Open
+questions", the private seed, a change to GitLab or GitHub settings, or anything outside the merge request (a
+release, a deploy, a message).
 
 Running in parallel:
 
-- **Migrations:** take the next free number when you open the pull request. If another merge took it first,
+- **Migrations:** take the next free number when you open the merge request. If another merge took it first,
   renumber yours before merging. Never edit one that's on `main`.
 - **Tests:** API tests each make their own throwaway database, so they can run side by side. The browser journeys
   use the fixed database `mise_e2e` and port 8095, so run them one session at a time on a machine (CI runs them for
-  every pull request anyway).
+  every merge request anyway).
 - **Generated files:** after rebasing over another API change, regenerate `web/src/api/schema.d.ts` rather than
   merging it by hand.
 

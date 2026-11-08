@@ -1,8 +1,8 @@
 # Status
 
-As of 2026-11-08. Where things stand, known issues, open questions and the decisions made. The work still to do is
-in [backlog.md](backlog.md); the maintainer's design document (private) holds the goals and the long-range roadmap. Update both in the same
-pull request as the work.
+As of 2026-11-08. Where things stand, known issues, open questions and the decisions made. The work still to do is in
+[backlog.md](backlog.md); the maintainer's design document (private) holds the goals and the long-range roadmap. Update
+both in the same merge request as the work.
 
 ## Where things stand
 
@@ -21,10 +21,12 @@ The live data is the launch seed: 237 dishes and 308 versions from meals receive
 
 What a reviewer can rely on today:
 
-- **Repository:** public at `poiu477/mise` since 2026-11-04, history as it is. `main` is protected: changes arrive
-  through a pull request with CI passing and the branch up to date; no force-pushes or deletion, admins included.
-  Merges are merge commits, so the SHAs in `.git-blame-ignore-revs` stay valid.
-- **CI** (`.github/workflows/ci.yml`, actions pinned to SHAs): rustfmt, clippy with warnings as errors, Rust tests
+- **Repository:** since 2026-11-08 the main repository is on the maintainer's GitLab, `Personal/mise`
+  (<https://gitlab.pauldrakehughes.com/Personal/mise>); changes arrive through a merge request whose pipeline passes.
+  Merges are merge commits, so the SHAs in `.git-blame-ignore-revs` stay valid. GitHub's `poiu477/mise`, public since
+  2026-11-04, is a read-only mirror of `main`, kept by GitLab's push mirroring, as a backup.
+- **CI** (`.gitlab-ci.yml` on every merge request; `.github/workflows/ci.yml`, actions pinned to SHAs, again on the
+  mirror): rustfmt, clippy with warnings as errors, Rust tests
   against a Postgres service (API tests fail rather than skip when it's missing), the OpenAPI document checked and
   the web types compared with it, web format, lint, tests and build, `npm audit` of shipped packages, `cargo deny`,
   browser journeys, the Docker image built.
@@ -38,12 +40,14 @@ What a reviewer can rely on today:
   and sign-out.
 - **Demo data:** `fixtures/demo-bundle`, written for mise, under the MIT licence. The household's own seed is private
   and never committed.
-- **Dependencies:** Dependabot weekly, grouped; TypeScript 7 held back until its tools support it, with a weekly
+- **Dependencies:** Dependabot weekly, grouped, on the GitHub mirror (its pull requests are applied on GitLab by
+  hand until Renovate replaces it; backlog); TypeScript 7 held back until its tools support it, with a weekly
   workflow (`typescript-watch.yml`) that opens an issue when they do.
 - **Contributing:** [AGENTS.md](../AGENTS.md) holds the working rules for people and any coding agent (`CLAUDE.md`
-  imports it); [CONTRIBUTING.md](../CONTRIBUTING.md) is the short version, with a pull request template. A draft pull
-  request claims a backlog task. Everything but the maintainer-only tasks runs on the demo data.
-- **Reviews:** Mira (`@mira`) and CodeRabbit review every pull request.
+  imports it); [CONTRIBUTING.md](../CONTRIBUTING.md) is the short version, with a merge request template. A draft
+  merge request claims a backlog task. Everything but the maintainer-only tasks runs on the demo data.
+- **Reviews:** Mira (`@mira`) and CodeRabbit reviewed every GitHub pull request up to 2026-11-08; neither reviews
+  GitLab merge requests yet (backlog).
 - **Web app:** pages load server data through TanStack Query; ESLint's React hooks rules run as errors, including
   `set-state-in-effect`.
 - **Decisions:** architecture decision records in [`docs/adr/`](adr/README.md), each with the alternatives weighed.
@@ -87,4 +91,5 @@ What a reviewer can rely on today:
 | 2026-11-08 | The web app loads server data with TanStack Query; the shopping list's device copy and queue stay its own |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |
 | 2026-11-08 | Doc comments are required on public Rust items and exported TypeScript, and lints are to enforce it (`jsdoc/require-jsdoc` in T13, `missing_docs` in T14 to T16; not on yet); they say what a thing means, not its types. CodeRabbit's docstring score is not the gate |
-| 2026-11-08 | `AGENTS.md` holds the working rules for every coding agent and person, and `CLAUDE.md` imports it; a draft pull request claims a backlog task. The private seed moves to its own private repository on the maintainer's GitLab, cloned into the ignored `seed/`; GitLab also mirrors this repository |
+| 2026-11-08 | `AGENTS.md` holds the working rules for every coding agent and person, and `CLAUDE.md` imports it; a draft merge request claims a backlog task. The private seed moves to its own private repository on the maintainer's GitLab, cloned into the ignored `seed/` |
+| 2026-11-08 | The maintainer's GitLab becomes the main repository, with merge requests and GitLab CI; GitHub is a read-only mirror of `main`, kept as a backup. GitLab CI can later reach the private seed, which GitHub never could |

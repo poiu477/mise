@@ -1,10 +1,14 @@
 # mise
 
-[![CI](https://github.com/poiu477/mise/actions/workflows/ci.yml/badge.svg)](https://github.com/poiu477/mise/actions/workflows/ci.yml)
+[![pipeline](https://gitlab.pauldrakehughes.com/Personal/mise/badges/main/pipeline.svg)](https://gitlab.pauldrakehughes.com/Personal/mise/-/pipelines?ref=main)
+[![CI on the GitHub mirror](https://github.com/poiu477/mise/actions/workflows/ci.yml/badge.svg)](https://github.com/poiu477/mise/actions/workflows/ci.yml)
 
 A self-hosted recipe system: dishes with versions, variant toggles, any-servings scaling, a shared weekly plan and
 a shopping list that works offline. Recipes come from seed bundles, websites, files, or your own kitchen, and all get
 the same treatment.
+
+mise lives on GitLab at <https://gitlab.pauldrakehughes.com/Personal/mise>; `github.com/poiu477/mise` is a
+read-only mirror.
 
 Status: phases 1 to 3 (data core; browse and cook; plan and shop) are done and in daily use. Next are the remaining
 production-quality tasks, then kitchen mode and imports. See [docs/status.md](docs/status.md) for where things stand,

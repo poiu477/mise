@@ -128,8 +128,13 @@ remaining repeatable gate (a seed gate) is in [backlog.md](backlog.md).
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push to `main` and every pull request: the Rust job (formatting, clippy,
-tests against a Postgres service, a check that every response in the OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-openapi.mjs`), and a check that `web/src/api/schema.d.ts` matches the server), the web job
+`.gitlab-ci.yml` runs on every merge request and every push to `main`, on the project's GitLab runner, and a merge
+request merges only when it passes. `.github/workflows/ci.yml` runs the same steps again on the GitHub mirror after
+each push to `main`, as a second opinion. Both run what `./check` runs, with the same commands; change all three
+together. The GitLab pipeline also runs GitLab's secret detection, and its Docker image job needs a runner that
+allows privileged jobs.
+
+The steps: the Rust job (formatting, clippy, tests against a Postgres service, a check that every response in the OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-openapi.mjs`), and a check that `web/src/api/schema.d.ts` matches the server), the web job
 (formatting, lint, tests, build, an audit of shipped npm packages), the browser journeys (keeping Playwright's report
 and traces when they fail), `cargo deny`, and a build of the Docker image.
 Dependabot opens grouped update pull requests weekly. TypeScript majors are held back until every tool that depends on TypeScript accepts them: the weekly "TypeScript major watch" workflow (`npm run typescript:ready` in `web/`) opens an issue when that happens, and deleting the `typescript` ignore rule in `.github/dependabot.yml` lets Dependabot propose the upgrade. `.git-blame-ignore-revs` lists the formatting-only commits;
