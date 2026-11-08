@@ -1,7 +1,12 @@
 # CI for every merge request and every push to main: formatting, lints, tests, the web build, dependency checks,
-# the Docker image and secret detection. A merge request merges only when all of it passes. The steps are the ones
-# ./check runs locally, with the same commands and flags; .github/workflows/ci.yml runs them again on the GitHub
-# mirror after each push to main. Change all three together.
+# the Docker image and Rust SAST. A merge request merges only when all of it passes. The steps are the ones ./check
+# runs locally, with the same commands and flags; .github/workflows/ci.yml runs them again on the GitHub mirror
+# after each push to main. Change all three together.
+#
+# The other security scans (GitLab Advanced SAST, dependency scanning, secret detection) come from the project's
+# security configuration profiles (Secure, Security configuration), not from this file, and run in the same
+# pipelines. A merge request approval policy (Personal/mise-security-policy-project) holds a merge request that adds
+# a high or critical SAST finding until the maintainer approves it.
 
 workflow:
   rules:
@@ -10,18 +15,12 @@ workflow:
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
     # Pushes to main, and the weekly schedule on main (Renovate and the TypeScript watch; see the end of this file).
+    # A newer push never cancels main's pipeline, so every merge gets its full run and its scans become the baseline
+    # the next merge request's findings are compared with.
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      auto_cancel:
+        on_new_commit: none
     - if: $CI_COMMIT_TAG
-
-include:
-  # GitLab's secret detection (Gitleaks) on every pipeline.
-  - template: Jobs/Secret-Detection.gitlab-ci.yml
-
-secret_detection:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
-    - when: on_success
 
 stages:
   - test
@@ -45,7 +44,8 @@ variables:
   DATABASE_URL: postgres://mise:mise@postgres:5432/mise
 
 default:
-  # A newer push to a merge request cancels the older pipeline's jobs; main's pipelines all run to the end.
+  # A newer push to a merge request cancels the older pipeline's jobs; main's pipelines all run to the end (see
+  # workflow above).
   interruptible: true
 
 # The checks: every merge request and push, never the weekly schedule.
@@ -194,6 +194,27 @@ docker image:
   needs: []
   script:
     - docker build --tag mise:ci .
+
+rust sast:
+  # GitLab Advanced SAST doesn't read Rust, so this runs Semgrep's Rust rules and writes GitLab's SAST format. The
+  # results join the other SAST reports: the merge request's security widget, the vulnerability report and the
+  # approval policy. As with GitLab's own analyzers, findings don't fail the job. The report has a name of its own,
+  # since two jobs writing one report file in the same build folder fail with "permission denied".
+  extends: .check
+  image:
+    name: semgrep/semgrep:1.184.0
+    entrypoint: [""]
+  stage: test
+  needs: []
+  allow_failure: true
+  script:
+    - semgrep scan --config p/rust --metrics=off --include '*.rs' --gitlab-sast --output gl-sast-rust-report.json
+  artifacts:
+    access: developer
+    reports:
+      sast: gl-sast-rust-report.json
+    paths: [gl-sast-rust-report.json]
+    expire_in: 30 days
 
 renovate config:
   # Whenever renovate.json changes, check it the way Renovate will read it.

@@ -131,11 +131,21 @@ remaining repeatable gate (a seed gate) is in [backlog.md](backlog.md).
 `.gitlab-ci.yml` runs on every merge request and every push to `main`, on the project's GitLab runner, and a merge
 request merges only when it passes. `.github/workflows/ci.yml` runs the same steps again on the GitHub mirror after
 each push to `main`, as a second opinion. Both run what `./check` runs, with the same commands; change all three
-together. The GitLab pipeline also runs GitLab's secret detection. Its Docker image job needs a runner that allows
+together. Its Docker image job needs a runner that allows
 privileged jobs, and since the other jobs already prove the code builds, it runs on a merge request only when
 something the image build depends on changes (the Dockerfile, the Cargo and npm manifests and lockfiles, the Rust
 version, the pipeline itself); on `main` and tags it always runs. The Rust caches are keyed on the Rust version, not
 `Cargo.lock`, so a dependency update rebuilds only what it changed.
+
+Security scanning comes from two places. The project's security configuration profiles (Secure, Security configuration;
+not in `.gitlab-ci.yml`) add GitLab Advanced SAST, dependency scanning and secret detection to every merge request and
+push to `main`. Advanced SAST doesn't read Rust, so the pipeline's own `rust sast` job runs Semgrep's Rust rules
+(`p/rust`) and reports in GitLab's SAST format, alongside the others. Findings appear in the merge request's security
+widget and the project's vulnerability report; scanners never fail the pipeline. A merge request approval policy, kept
+in `Personal/mise-security-policy-project`, holds a merge request that adds a new high or critical SAST finding until
+the maintainer approves it, and holds one whose pipeline has no SAST results. Authors may approve their own merge
+requests, since the project has one maintainer: the approval is the deliberate look at the finding. Fix a real finding;
+dismiss a false positive in the vulnerability report with the reason.
 
 The steps: the Rust job (formatting, clippy, tests against a Postgres service, a check that every response in the
 OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-openapi.mjs`), and a check that

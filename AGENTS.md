@@ -77,7 +77,9 @@ once without stepping on each other.
    status.md (where things stand, a decision, a known issue); fix any doc the change makes wrong.
 7. **Mark the merge request ready** once it's done, filling in the template: what changed, how it was checked,
    anything left undone. CI runs on it (a fork's pipeline waits for Paul to start it), and Mira (`@mira`), the
-   project's AI reviewer, reviews it. Fix each valid finding, or reply with why it doesn't apply.
+   project's AI reviewer, reviews it. Fix each valid finding, or reply with why it doesn't apply. The security
+   widget lists what the scanners found; a new high or critical SAST finding holds the merge request for Paul's
+   approval, so fix it, or explain in the merge request why it's a false positive.
 8. **Paul merges,** with a merge commit (the project merges no other way), or says to merge once the pipeline
    passes.
 

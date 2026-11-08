@@ -28,8 +28,12 @@ What a reviewer can rely on today:
 - **CI** (`.gitlab-ci.yml` on every merge request; `.github/workflows/ci.yml`, actions pinned to SHAs, again on the
   mirror): rustfmt, clippy with warnings as errors, Rust tests against a Postgres service (API tests fail rather than
   skip when it's missing), the OpenAPI document checked and the web types compared with it, web format, lint, tests and
-  build, `npm audit` of shipped packages, `cargo deny`, browser journeys, secret detection, and the Docker image built
+  build, `npm audit` of shipped packages, `cargo deny`, browser journeys, security scans, and the Docker image built
   (on merge requests only when its build inputs change).
+- **Security:** GitLab Advanced SAST, dependency scanning and secret detection (the project's security configuration
+  profiles) and Semgrep's Rust rules (`rust sast`) on every merge request; a new high or critical SAST finding needs the
+  maintainer's approval before merging (an approval policy). The advanced vulnerability management views run on advanced
+  search (Elasticsearch 9 on prox4, indexed since 2026-11-08).
 - **Local checks:** `./check` runs CI's build, lint and test steps with CI's commands, in CI's order, and names the
   step that fails; `--e2e` adds the browser journeys. `cargo deny`, `npm audit` and the image build stay CI-only. A
   pre-commit hook (`.githooks/`, opt-in) runs the formatting and lints.
@@ -92,3 +96,4 @@ What a reviewer can rely on today:
 | 2026-11-08 | `AGENTS.md` holds the working rules for every coding agent and person, and `CLAUDE.md` imports it; a draft merge request claims a backlog task. The private seed moves to its own private repository on the maintainer's GitLab, cloned into the ignored `seed/` |
 | 2026-11-08 | The maintainer's GitLab becomes the main repository, with merge requests and GitLab CI; GitHub is a read-only mirror of every branch, kept as a backup. GitLab CI can later reach the private seed, which GitHub never could |
 | 2026-11-08 | Mira reviews merge requests and CodeRabbit is dropped: Mira runs on the maintainer's own models, which can be more capable. Renovate, run from a scheduled GitLab pipeline, replaces Dependabot |
+| 2026-11-08 | Security scans come from GitLab's security configuration profiles (Advanced SAST, dependency scanning, secret detection) plus a Semgrep job for Rust, which Advanced SAST doesn't cover. A merge request approval policy holds new high or critical SAST findings for the maintainer's approval; authors may approve their own merge requests, since there's one maintainer |
