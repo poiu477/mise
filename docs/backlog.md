@@ -148,12 +148,15 @@ mostly doesn't (`api/client.ts` documents 1 of its 24 exports).
 
 - Add them where missing, in style.md's voice: what it is or does, an example in quotes where it helps, no
   restated types. Comments only; no behaviour changes.
+- Then make lint enforce it: add `eslint-plugin-jsdoc` and turn on `jsdoc/require-jsdoc` as an error for
+  `web/src`, with `publicOnly: true`. Cover exported function declarations, classes, type aliases and interfaces,
+  and exported `const` arrow functions, so React components and hooks written either way count.
 - **Touches:** `web/src/api/client.ts`, `offline.ts`, `choose.ts`, `week.ts`, `weights.ts`, `main.tsx`,
   `pages/LoginPage.tsx`, `pages/SetupPage.tsx`, `pages/NotFound.tsx`, `components/AddToPlan.tsx`,
-  `components/Servings.tsx`, `components/StepText.tsx`.
+  `components/Servings.tsx`, `components/StepText.tsx`, `web/eslint.config.js`, `web/package.json`.
 - **Needs:** T12 (it changes `api/client.ts` and `offline.ts`).
-- **Done when:** every export in those files has a doc comment; CodeRabbit's docstring check passes on the pull
-  request; lint, tests and build pass.
+- **Done when:** `npm run lint` passes on the branch, and fails on an undocumented export (add one, see it fail,
+  then revert); tests and build pass. CodeRabbit's docstring check passing is a secondary signal, not the gate.
 
 ## Needs a decision first
 
