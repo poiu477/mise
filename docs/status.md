@@ -28,6 +28,9 @@ What a reviewer can rely on today:
   against a Postgres service (API tests fail rather than skip when it's missing), the OpenAPI document checked and
   the web types compared with it, web format, lint, tests and build, `npm audit` of shipped packages, `cargo deny`,
   browser journeys, the Docker image built.
+- **Local checks:** `./check` runs CI's build, lint and test steps with CI's commands, in CI's order, and names the
+  step that fails; `--e2e` adds the browser journeys. `cargo deny`, `npm audit` and the image build stay CI-only. A
+  pre-commit hook (`.githooks/`, opt-in) runs the formatting and lints.
 - **Tests:** unit and fuzz tests in `mise-core`; API tests for sign-in, plan and shopping, sharing one harness
   (`crates/mise-api/tests/common`) that gives each test its own database and drops it even when the test fails;
   single sign-on end to end against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on
@@ -78,3 +81,4 @@ What a reviewer can rely on today:
 | 2026-11-04 | The repository goes public with its history as it is; the private seed's details live in the ignored `CLAUDE.local.md` |
 | 2026-11-08 | The web app loads server data with TanStack Query; the shopping list's device copy and queue stay its own |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |
+| 2026-11-08 | Doc comments are required on public Rust items and exported TypeScript, and lints are to enforce it (`jsdoc/require-jsdoc` in T13, `missing_docs` in T14 to T16; not on yet); they say what a thing means, not its types. CodeRabbit's docstring score is not the gate |
