@@ -19,11 +19,13 @@ See [docs/deploy.md](docs/deploy.md).
 
 Requirements: Rust 1.99.1 (pinned in `rust-toolchain.toml`; rustup installs it), Node 26, Docker. The full guide,
 including rebuilding a seed database and running the tests, is [docs/development.md](docs/development.md). The
-commands below work in bash, zsh and PowerShell.
+commands below work in bash, zsh and PowerShell. They load the demo recipes into a database of their own, `mise_demo`,
+so a development database you already have is left alone.
 
 ```bash
-cp .env.example .env
+cp .env.example .env    # then set DATABASE_URL in .env to postgres://mise:mise@localhost:5433/mise_demo
 docker compose -f compose.dev.yaml up -d db
+docker compose -f compose.dev.yaml exec db createdb -U mise mise_demo
 cargo build --release -p mise-cli -p mise-api
 ./target/release/mise migrate
 ./target/release/mise import-bundle fixtures/demo-bundle   # four demo dishes written for mise

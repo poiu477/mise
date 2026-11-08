@@ -56,7 +56,6 @@ What a reviewer can rely on today:
 - HTTPS: which reverse proxy and hostname, so phones can open the list offline?
 - Alexa route: a private skill through the reverse proxy, or an AWS Lambda relay (not before Phase 5)?
 - API contract: move to `/api/v1` with one error shape now, or when something outside the web app first uses it?
-- Database code (row structs, checked queries, data modules): before or after T7 documents every response?
 - Hosted demo: where does it run, and does it reset on a schedule?
 
 ## Decisions

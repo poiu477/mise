@@ -82,10 +82,14 @@ warning (9 places) rather than an error.
 - Add response headers from the server: a Content-Security-Policy that the app and its service worker work under,
   `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, a referrer policy.
 - Write `SECURITY.md` (how to report a problem, what is in scope) and a short section in `docs/architecture.md` on
-  the CSRF stance (SameSite=Lax cookies plus JSON-only bodies) and login throttling.
+  the CSRF stance as the code enforces it: SameSite=Lax session cookies, JSON bodies where a route takes one, and
+  what protects each state-changing route that takes no body (sign-out, the DELETE routes). Check each in the code;
+  if one turns out unprotected, fix it (for example by requiring a custom header) rather than describe a protection
+  that isn't there. Include login throttling.
 - **Touches:** the router setup in `crates/mise-api/src/lib.rs`, `SECURITY.md`, `docs/architecture.md`.
-- **Done when:** an API test checks each header on a page and an API response, and the browser journeys pass (they
-  would catch a policy that breaks the app).
+- **Done when:** an API test checks each header on a page and an API response; an API test shows a cross-site
+  style request (no JSON content type, no custom header) to sign-out and to a DELETE route is refused or harmless,
+  as the written stance says; the browser journeys pass (they would catch a policy that breaks the app).
 
 ### T7 · Document every response each endpoint can return
 
@@ -122,11 +126,18 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
 
 Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" of garlic stays joined.
 
-- Add lines up at the parent food when the plan uses several kinds of one food, and across units when a food has a
-  density (a new table of per-food densities, through a new migration).
+- Add lines up at the parent food when the plan uses several kinds of one food, and across units when the food has
+  the data to convert: a density for weight and volume, and a size per item (weight or volume of one clove, one
+  onion) for counts. A count with no size per item stays its own line; density alone never turns "2 cloves" into
+  tablespoons. Densities and item sizes go in a new table, through a new migration.
+- Ticks belong to lines, so define and test what happens to them: a merged line is ticked when every line it
+  replaced was ticked (a mix shows as not ticked); ticking it ticks them all; ticks queued offline for a line that
+  has since merged or split apply to whatever lines now cover that food; a plan change that splits a merged line
+  again keeps each part's tick.
 - **Touches:** `crates/mise-core/src/shopping.rs`, `crates/mise-api/src/shopping.rs`, a new migration, the demo
   bundle (add a case that exercises it).
-- **Done when:** unit tests cover both merges; a browser journey shows one onion line for the demo week.
+- **Done when:** unit tests cover both merges, the count that can't convert, and each tick rule above; a browser
+  journey shows one onion line for the demo week and keeps its tick across a reload.
 
 ### T12 · Adding to the list offline must not add twice
 
@@ -147,7 +158,8 @@ Each of these waits on a question in status.md's "Open questions" or on Paul.
 - **API contract:** `/api/v1` and one error shape, before anything outside the web app depends on the API.
 - **Database code:** `#[derive(sqlx::FromRow)]` structs, compile-time checked queries with `.sqlx` committed, SQL
   moved out of handlers into per-domain modules. It touches every file in `crates/mise-api/src/`, so it runs
-  alone, with nothing else in flight there. Decide whether to do it before or after T7.
+  alone, with nothing else in flight there. Order with T7 is settled: either can go first (T7 changes the OpenAPI
+  annotations and adds tests, this changes queries and their modules), but never both at once.
 - **Deploy gate:** a CI job that starts the Compose stack on an empty volume, upgrades a database from the previous
   release, and backs up and restores. Needs T10 (a previous release to upgrade from).
 - **Presentation:** README screenshots (taken by Playwright from the demo bundle), a hosted demo (**Paul**: where),
