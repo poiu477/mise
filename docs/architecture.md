@@ -1,7 +1,8 @@
 # Architecture
 
 One Rust workspace and one web app. The server (`mise-server`) answers the REST API and serves the built web app;
-the admin command (`mise`) imports and curates data. Both talk to one Postgres database.
+the admin command (`mise`) imports and curates data. Both talk to one Postgres database. Why it is built this way,
+and what else was weighed, is in the [architecture decision records](adr/README.md).
 
 ```text
 web/ (React PWA) ──HTTP──> mise-api (axum) ──> mise-core (pure logic)
