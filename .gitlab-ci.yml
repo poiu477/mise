@@ -207,6 +207,9 @@ rust sast:
   stage: test
   needs: []
   allow_failure: true
+  variables:
+    # The image expects the code in /src (docker run -v $PWD:/src); CI checks it out here instead.
+    SEMGREP_SRC_DIRECTORY: $CI_PROJECT_DIR
   script:
     - semgrep scan --config p/rust --metrics=off --include '*.rs' --gitlab-sast --output gl-sast-rust-report.json
   artifacts:
