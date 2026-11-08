@@ -19,7 +19,8 @@ through `DATABASE_URL`. The schema uses what Postgres gives directly:
   ([0001_data_core.sql](../../migrations/0001_data_core.sql)); dish search ranks by `similarity()`, and grouping
   and curation use it too.
 - `jsonb` for each source record's raw data and for free-form properties (`foods.props`, a version's `meta`).
-- `uuid` keys made in Rust, `timestamptz`, and closed sets as `text` with a `CHECK`
+- `uuid` keys made in Rust and `timestamptz`. Closed sets are Postgres enums in the first migration (`food_kind`,
+  `review_status` and three more) and `text` with a `CHECK` since, which is the style for new ones
   ([style.md](../style.md#migrations)).
 
 ## Alternatives

@@ -18,7 +18,10 @@ down**:
 
 - Spoons and cups become **one standard measure** when that is at most 5% over (`SIMPLER`), otherwise **the fewest
   measures that come closest**: "1 tsp + 1 pinch", "¼ cup + 1 TBSP".
-- Weights go up to the next ½ oz (¼ below one ounce), counts to the next half (quarter below one).
+- Weights, volumes by the millilitre and counts go up in steps that suit the unit: ½ oz (¼ below one ounce), ¼ lb,
+  5 g or ml (1 below 20), half an item (a quarter below one), a whole pinch.
+- "Never down" allows for one quirk: sources store some measures a hair over (⅔ cup as 0.67), so an amount within
+  0.6% over a measure counts as that measure (`SLACK`).
 - A derived amount never passes the next published one: 13.76 oz published for 2 and 4 servings reads 13¾ oz at 3,
   not 14 oz (`servings.rs`).
 - Published yields are shown exactly as published, and the shopping list uses `exact()`, never `measured()`.

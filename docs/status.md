@@ -1,6 +1,6 @@
 # Status and tasks
 
-As of 2026-11-03. The design document holds the goals and the long-range roadmap; this file is the working list.
+As of 2026-11-08. The design document holds the goals and the long-range roadmap; this file is the working list.
 Update it in the same commit as the work.
 
 ## Where things stand
@@ -110,6 +110,8 @@ order: the remote and CI baseline first (it makes everything after it checked), 
 - The pot pie dish's address still says "beef" (slugs are fixed at first import) until a fresh install.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
+- An item added to the list offline can appear twice if the server saves it but its answer is lost: adding has no
+  idempotency key, so the device sends it again.
 
 ## Open questions
 

@@ -15,10 +15,13 @@ anyway. Before this, local builds, CI and the Docker image could each use a diff
 [rust-toolchain.toml](../../rust-toolchain.toml) pins one Rust (1.99.1, with rustfmt and clippy), and everything
 builds with it:
 
-- **Local builds and CI** read the file through rustup; CI's jobs run `rustup toolchain install`.
+- **Local builds and CI's Rust jobs** read the file through rustup (`rustup toolchain install` in the Rust and
+  browser-journey jobs).
 - **Docker** uses the same `rust:1.99.1` tag and copies `rust-toolchain.toml` into the build, so rustup enforces the
   pin there too ([Dockerfile](../../Dockerfile)).
-- **`rust-version`** in [Cargo.toml](../../Cargo.toml) matches it, and CI's cargo-deny step names the same version.
+- **CI's cargo-deny step** doesn't build, so it names the same version itself.
+- **`rust-version`** in [Cargo.toml](../../Cargo.toml) is the declared minimum, `1.99`: it doesn't pin, but it is
+  kept at the pinned release and raised with it.
 - **Raised by hand**, all four in one commit. Dependabot ignores the rust image
   ([dependabot.yml](../../.github/dependabot.yml)), so the image can't move on its own.
 

@@ -18,13 +18,13 @@ in one tab while a list is open in another.
   `localStorage`. Without the server the page shows that copy.
 - **Changes queued as small intents**, not a whole list: tick a line, tick an added item, add an item. They are
   sent in order once the server answers; a later tick of the same line replaces the earlier one, and an item added
-  offline keeps a `local-…` id until the server gives it one, so it is never sent twice. Removing, staples and
-  units need the server and wait for it.
+  offline keeps a `local-…` id until the server gives it one, so the device queues it once and ticks it in place.
+  Removing, staples and units need the server and wait for it.
 - **Work stays with the sign-in that made it.** Each sign-in gets an id on the device; a copy only saves while that
   sign-in lasts, so an answer that arrives after signing out can't put the list back. Signing out clears everything
   under `mise:`.
-- **The server refuses work meant for someone else.** The app sends `X-Mise-Account` with every request; when it
-  isn't the signed-in account, `auth::require_auth` answers 412 ([auth/mod.rs](../../crates/mise-api/src/auth/mod.rs)).
+- **The server refuses work meant for someone else.** The app sends `X-Mise-Account` with every API request except
+  asking who is signed in (`/api/me`) and signing in (`/api/auth/…`); when it isn't the signed-in account, `auth::require_auth` answers 412 ([auth/mod.rs](../../crates/mise-api/src/auth/mod.rs)).
   The list treats 412 like no signal: the change keeps waiting for its own account, and the app checks again who
   is signed in. Scripts and integrations can leave the header out.
 
@@ -49,6 +49,9 @@ in one tab while a list is open in another.
   a second tab starting a new sign-in, and sign-out leaving nothing on the device (`web/e2e/journeys.spec.ts`).
 - Opening the app with no signal needs a service worker, and phones allow those only over HTTPS; the reverse
   proxy for that is still an open question in status.md.
+- Sending is at least once, not exactly once. Adding an item has no idempotency key: if the server saves it and
+  the answer is lost on the way back, the device sends it again and the list shows it twice (status.md's known
+  issues). Ticks are safe to repeat, since a tick sets a state rather than toggling it.
 - `localStorage` can be missing or full; the list then simply isn't kept, and the app still works online.
 - Every signed-in route can answer 412, which the API document doesn't list everywhere yet
   ([0004](0004-generated-api-client.md)).
