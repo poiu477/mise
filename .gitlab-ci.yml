@@ -1,194 +1,193 @@
-# CI for every merge request and every push to main: formatting, lints, tests, the web build, dependency checks,
-# the Docker image and secret detection. A merge request merges only when all of it passes. The steps are the ones
-# ./check runs locally, with the same commands and flags; .github/workflows/ci.yml runs them again on the GitHub
-# mirror after each push to main. Change all three together.
-
+# You can override the included template(s) by including variable overrides
+# SAST customization: https://docs.gitlab.com/user/application_security/sast/#available-cicd-variables
+# Secret Detection customization: https://docs.gitlab.com/user/application_security/secret_detection/pipeline/configure/
+# Dependency Scanning customization: https://docs.gitlab.com/user/application_security/dependency_scanning/dependency_scanning_sbom/#customizing-analyzer-behavior
+# Container Scanning customization: https://docs.gitlab.com/user/application_security/container_scanning/#customizing-analyzer-behavior
+# Note that environment variables can be set in several places
+# See https://docs.gitlab.com/ci/variables/#cicd-variable-precedence
 workflow:
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    # A branch with an open merge request already gets the merge request's pipeline.
-    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
-      when: never
-    # Pushes to main, and the weekly schedule on main (Renovate and the TypeScript watch; see the end of this file).
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
-
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: "$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS"
+    when: never
+  - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
+  - if: "$CI_COMMIT_TAG"
 include:
-  # GitLab's secret detection (Gitleaks) on every pipeline.
-  - template: Jobs/Secret-Detection.gitlab-ci.yml
-
+- template: Jobs/Secret-Detection.gitlab-ci.yml
+- template: Security/SAST.gitlab-ci.yml
 secret_detection:
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
-    - when: on_success
-
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - when: on_success
 stages:
-  - test
-
+- test
 variables:
-  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   CARGO_TERM_COLOR: always
-  npm_config_cache: $CI_PROJECT_DIR/.npm
-  # The postgres service, for the jobs that list it.
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
   POSTGRES_USER: mise
   POSTGRES_PASSWORD: mise
   POSTGRES_DB: mise
-  # The API tests and the browser journeys each make a database of their own on this server.
   DATABASE_URL: postgres://mise:mise@postgres:5432/mise
-
 default:
-  # A newer push to a merge request cancels the older pipeline's jobs; main's pipelines all run to the end.
   interruptible: true
-
-# The checks: every merge request and push, never the weekly schedule.
-.check:
+".check":
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
-    - when: on_success
-
-# The weekly schedule's jobs. The schedule (Build, Pipeline schedules) runs on main and sets SCHEDULE=weekly.
-.weekly:
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - when: on_success
+".weekly":
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE == "weekly"
+  - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE == "weekly"
   interruptible: false
-
-.rust:
+".rust":
   image: rust:1.99.1-bookworm
   cache:
     key:
-      files: [Cargo.lock, rust-toolchain.toml]
-    paths: [.cargo/registry/index, .cargo/registry/cache, .cargo/git/db, .cargo/bin, target/]
-
-.node:
+      files:
+      - Cargo.lock
+      - rust-toolchain.toml
+    paths:
+    - ".cargo/registry/index"
+    - ".cargo/registry/cache"
+    - ".cargo/git/db"
+    - ".cargo/bin"
+    - target/
+".node":
   image: node:26-bookworm
   cache:
     key:
-      files: [web/package-lock.json]
-    paths: [.npm/]
-
-.postgres:
+      files:
+      - web/package-lock.json
+    paths:
+    - ".npm/"
+".postgres":
   services:
-    - name: postgres:16
-      alias: postgres
-
+  - name: postgres:16
+    alias: postgres
 rust:
-  extends: [.check, .rust, .postgres]
+  extends:
+  - ".check"
+  - ".rust"
+  - ".postgres"
   stage: test
   script:
-    - rustup show active-toolchain
-    - cargo fmt --all --check
-    - cargo clippy --workspace --all-targets --locked -- -D warnings
-    - cargo test --workspace --locked
-    # For the jobs after this one: the API document, and the binaries the browser journeys run.
-    - cargo run -q --locked -p mise-api -- openapi > web/openapi.json
-    - cargo build --locked -p mise-cli -p mise-api
+  - rustup show active-toolchain
+  - cargo fmt --all --check
+  - cargo clippy --workspace --all-targets --locked -- -D warnings
+  - cargo test --workspace --locked
+  - cargo run -q --locked -p mise-api -- openapi > web/openapi.json
+  - cargo build --locked -p mise-cli -p mise-api
   artifacts:
-    paths: [web/openapi.json, target/debug/mise, target/debug/mise-server]
+    paths:
+    - web/openapi.json
+    - target/debug/mise
+    - target/debug/mise-server
     expire_in: 1 day
-
 api types:
-  extends: [.check, .node]
+  extends:
+  - ".check"
+  - ".node"
   stage: test
-  needs: [rust]
+  needs:
+  - rust
   script:
-    - cd web && npm ci --no-audit --no-fund
-    - node scripts/check-openapi.mjs
-    - npx openapi-typescript openapi.json -o src/api/schema.d.ts
-    - git diff --exit-code -- src/api/schema.d.ts
-      || { echo "web/src/api/schema.d.ts is out of date; run 'npm run api' in web/"; exit 1; }
-
+  - cd web && npm ci --no-audit --no-fund
+  - node scripts/check-openapi.mjs
+  - npx openapi-typescript openapi.json -o src/api/schema.d.ts
+  - git diff --exit-code -- src/api/schema.d.ts || { echo "web/src/api/schema.d.ts
+    is out of date; run 'npm run api' in web/"; exit 1; }
 web:
-  extends: [.check, .node]
+  extends:
+  - ".check"
+  - ".node"
   stage: test
   needs: []
   script:
-    - cd web && npm ci --no-audit --no-fund
-    - npm run format:check
-    - npm run lint
-    - npm test
-    - npm run build
-    - npm audit --omit=dev --audit-level=high
-
+  - cd web && npm ci --no-audit --no-fund
+  - npm run format:check
+  - npm run lint
+  - npm test
+  - npm run build
+  - npm audit --omit=dev --audit-level=high
 browser journeys:
-  extends: [.check, .node, .postgres]
+  extends:
+  - ".check"
+  - ".node"
+  - ".postgres"
   stage: test
-  needs: [rust]
+  needs:
+  - rust
   script:
-    - cd web && npm ci --no-audit --no-fund
-    - npm run build
-    - npx playwright install --with-deps chromium
-    - npm run e2e
+  - cd web && npm ci --no-audit --no-fund
+  - npm run build
+  - npx playwright install --with-deps chromium
+  - npm run e2e
   artifacts:
     when: on_failure
-    paths: [web/playwright-report/, web/test-results/]
+    paths:
+    - web/playwright-report/
+    - web/test-results/
     expire_in: 14 days
-
 rust dependencies:
-  extends: [.check, .rust]
+  extends:
+  - ".check"
+  - ".rust"
   stage: test
   needs: []
   script:
-    # Advisories, licenses, bans and sources (deny.toml). The cache keeps the installed binary between runs.
-    - cargo deny --version 2>/dev/null | grep -q '^cargo-deny 0\.20\.2$'
-      || cargo install cargo-deny --version 0.20.2 --locked
-    - cargo deny check
-
+  - cargo deny --version 2>/dev/null | grep -q '^cargo-deny 0\.20\.2$' || cargo install
+    cargo-deny --version 0.20.2 --locked
+  - cargo deny check
 docker image:
-  extends: .check
-  # Needs a runner that allows privileged jobs, for Docker-in-Docker.
+  extends: ".check"
   image: docker:29-cli
   services:
-    - name: docker:29-dind
-      alias: docker
+  - name: docker:29-dind
+    alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: /certs
-    DOCKER_CERT_PATH: /certs/client
-    DOCKER_TLS_VERIFY: "1"
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_CERT_PATH: "/certs/client"
+    DOCKER_TLS_VERIFY: '1'
   stage: test
   needs: []
   script:
-    - docker build --tag mise:ci .
-
+  - docker build --tag mise:ci .
 renovate config:
-  # Whenever renovate.json changes, check it the way Renovate will read it.
   image: renovate/renovate:44.222.4
   stage: test
   needs: []
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: never
-    - changes: [renovate.json]
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - changes:
+    - renovate.json
   script:
-    - renovate-config-validator --strict renovate.json
-
-# Weekly, on the schedule: dependency updates (renovate.json says what and how they're grouped). RENOVATE_TOKEN is a
-# masked, protected project variable: a project access token (role Developer, scope api) that Renovate pushes its
-# branches and opens merge requests with. GITHUB_COM_TOKEN (optional, a GitHub token with no scopes) avoids github.com's rate limit when
-# Renovate looks up the mirror's workflow actions and release notes.
+  - renovate-config-validator --strict renovate.json
 renovate:
-  extends: .weekly
+  extends: ".weekly"
   image: renovate/renovate:44.222.4
   stage: test
   needs: []
   variables:
     RENOVATE_PLATFORM: gitlab
-    RENOVATE_ENDPOINT: $CI_API_V4_URL
-    RENOVATE_REPOSITORIES: $CI_PROJECT_PATH
-    RENOVATE_ONBOARDING: "false"
+    RENOVATE_ENDPOINT: "$CI_API_V4_URL"
+    RENOVATE_REPOSITORIES: "$CI_PROJECT_PATH"
+    RENOVATE_ONBOARDING: 'false'
     RENOVATE_REQUIRE_CONFIG: required
     LOG_LEVEL: info
   script:
-    - renovate
-
-# Weekly, on the schedule: once every tool that depends on TypeScript accepts the next major, open one issue to lift
-# the hold in renovate.json.
+  - renovate
 typescript watch:
-  extends: [.weekly, .node]
+  extends:
+  - ".weekly"
+  - ".node"
   stage: test
   needs: []
   script:
-    - cd web && npm ci --no-audit --no-fund
-    - npm run -s typescript:ready | node scripts/typescript-issue.mjs
+  - cd web && npm ci --no-audit --no-fund
+  - npm run -s typescript:ready | node scripts/typescript-issue.mjs
+sast:
+  stage: test
