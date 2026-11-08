@@ -1,0 +1,41 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Dependency updates, grouped so each ecosystem arrives as one merge request. Renovate runs from the `renovate` job in .gitlab-ci.yml, on the project's weekly pipeline schedule.",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Rust crates, as one merge request.",
+      "matchManagers": ["cargo"],
+      "groupName": "Rust crates"
+    },
+    {
+      "description": "The web app's npm packages, as one merge request.",
+      "matchManagers": ["npm"],
+      "groupName": "web packages"
+    },
+    {
+      "description": "The GitHub mirror's workflow actions, kept pinned to full commit SHAs.",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "pinDigests": true
+    },
+    {
+      "description": "Container images: CI jobs, the Dockerfile and the Compose files.",
+      "matchManagers": ["gitlab-ci", "dockerfile", "docker-compose"],
+      "groupName": "container images"
+    },
+    {
+      "description": "Rust is raised by hand, in rust-toolchain.toml, the Dockerfile, .gitlab-ci.yml, ci.yml and Cargo.toml together (ADR 0007).",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["rust", "docker.io/library/rust"],
+      "enabled": false
+    },
+    {
+      "description": "A TypeScript major waits until every tool that depends on TypeScript accepts it: the scheduled `typescript watch` job opens an issue when they do, and approving the update on the Dependency Dashboard then opens its merge request.",
+      "matchPackageNames": ["typescript"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}

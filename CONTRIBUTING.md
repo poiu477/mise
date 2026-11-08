@@ -39,6 +39,7 @@ writes as you would your own work.
 ## Review
 
 Fill in the merge request template and mark the merge request ready. CI runs on it; a fork's pipeline starts once
-the maintainer approves it. Fix each review finding, or reply with why it doesn't apply. The maintainer merges.
+the maintainer approves it. Mira, the project's AI review bot, comments as well. Fix each valid finding, or reply
+with why it doesn't apply. The maintainer merges.
 
 Contributions are under the project's [MIT licence](LICENSE).
