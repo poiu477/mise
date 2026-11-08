@@ -1,14 +1,19 @@
 # mise
 
-[![CI](https://github.com/poiu477/mise/actions/workflows/ci.yml/badge.svg)](https://github.com/poiu477/mise/actions/workflows/ci.yml)
+[![pipeline](https://gitlab.pauldrakehughes.com/Personal/mise/badges/main/pipeline.svg)](https://gitlab.pauldrakehughes.com/Personal/mise/-/pipelines?ref=main)
+[![CI on the GitHub mirror](https://github.com/poiu477/mise/actions/workflows/ci.yml/badge.svg)](https://github.com/poiu477/mise/actions/workflows/ci.yml)
 
 A self-hosted recipe system: dishes with versions, variant toggles, any-servings scaling, a shared weekly plan and
 a shopping list that works offline. Recipes come from seed bundles, websites, files, or your own kitchen, and all get
 the same treatment.
 
+mise lives on GitLab at <https://gitlab.pauldrakehughes.com/Personal/mise>; `github.com/poiu477/mise` is a
+read-only mirror.
+
 Status: phases 1 to 3 (data core; browse and cook; plan and shop) are done and in daily use. Next are the remaining
 production-quality tasks, then kitchen mode and imports. See [docs/status.md](docs/status.md) for where things stand,
-[docs/backlog.md](docs/backlog.md) for the work still to do, and [CLAUDE.md](CLAUDE.md) for how to work on the code.
+[docs/backlog.md](docs/backlog.md) for the work still to do. To help, start with [CONTRIBUTING.md](CONTRIBUTING.md);
+[AGENTS.md](AGENTS.md) holds the working rules for people and coding agents alike.
 
 ## Running it
 
@@ -23,7 +28,7 @@ commands below work in bash, zsh and PowerShell. They load the demo recipes into
 so a development database you already have is left alone.
 
 ```bash
-cp .env.example .env    # then set DATABASE_URL in .env to postgres://mise:mise@localhost:5433/mise_demo
+cp .env.example .env    # DATABASE_URL points at mise_demo
 docker compose -f compose.dev.yaml up -d db
 docker compose -f compose.dev.yaml exec db createdb -U mise mise_demo
 cargo build --release -p mise-cli -p mise-api
@@ -64,6 +69,7 @@ docker compose -f compose.dev.yaml run --rm rust cargo test
 | `migrations/` | Postgres schema |
 | `fixtures/demo-bundle` | Demo recipes for tests and trying mise out |
 | `web/e2e/` | Browser journeys (Playwright) |
+| `AGENTS.md`, `CONTRIBUTING.md` | How to take a task and work on the code (`CLAUDE.md` imports `AGENTS.md`) |
 | `docs/status.md` | Where things stand, known issues, open questions, decisions |
 | `docs/backlog.md` | The work still to do, as self-contained tasks |
 | `docs/architecture.md` | How the parts fit together |

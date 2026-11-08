@@ -9,7 +9,10 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   forbidOnly: !!process.env.CI,
-  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
+  // In CI: annotations on GitHub, a plain list in GitLab's job log, and an HTML report kept when a run fails.
+  reporter: process.env.CI
+    ? [[process.env.GITHUB_ACTIONS ? "github" : "list"], ["html", { open: "never" }]]
+    : "list",
   use: {
     baseURL: "http://127.0.0.1:8095",
     trace: "retain-on-failure",

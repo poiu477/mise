@@ -1,18 +1,18 @@
 # Backlog
 
 The work still to do, written so one agent session (or one person) can take a task and finish it without
-other context. [status.md](status.md) says where things stand and why; the design document holds the long-range
-goals. How to take a task, branch, check and open the pull request is in [CLAUDE.md](../CLAUDE.md) under
-"Working as an agent".
+other context. [status.md](status.md) says where things stand and why. How to take a task, claim it, branch, check
+and open the merge request is in [AGENTS.md](../AGENTS.md) under "Taking a task".
 
 Each task gives:
 
 - **Touches:** the files or areas it changes. Two tasks that touch the same area shouldn't run at the same time.
 - **Done when:** the check that proves it. Every check is automated; "looks right" is not a check.
-- **Needs:** tasks to finish first, or a decision or action only Paul can take (**Paul**).
+- **Needs:** tasks to finish first, or a decision or action only Paul, the maintainer, can take (**Paul**).
 
-Take tasks from **Ready** in roughly the order listed. When a task is merged, delete it here and add a line under
-"Where things stand" or "Decisions" in status.md if it changed either, in the same pull request.
+Take tasks from **Ready** in roughly the order listed. A task with an open merge request (a draft counts) is taken.
+The merge request that finishes a task deletes it here and adds a line under "Where things stand" or "Decisions" in
+status.md if it changed either.
 
 ## Ready
 
@@ -75,14 +75,14 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
 
 ### T10 · Release images
 
-- On a `v*` tag, build the Docker image and push it to GitHub's container registry, and draft a GitHub release from
-  `CHANGELOG.md` (start one, in Keep a Changelog form, with what exists today as 0.1.0).
-- **Touches:** `.github/workflows/release.yml`, `CHANGELOG.md`, `docs/deploy.md` (pulling the image instead of
-  building it).
-- **Needs:** **Paul** to push the first tag.
-- **Done when:** the workflow passes `actionlint` with its steps pinned to SHAs like `ci.yml`, and a test tag
-  (`v0.1.0-rc.1`, pushed by Paul) publishes the image to GitHub's registry and drafts the release; the test release
-  and image are deleted afterwards. Syntax checks alone don't prove the release path.
+- On a `v*` tag, a release job in `.gitlab-ci.yml` builds the Docker image, pushes it to the GitLab project's
+  container registry, and creates a GitLab release from `CHANGELOG.md` (start one, in Keep a Changelog form, with
+  what exists today as 0.1.0).
+- **Touches:** `.gitlab-ci.yml`, `CHANGELOG.md`, `docs/deploy.md` (pulling the image instead of building it).
+- **Needs:** **Paul** to push the first tag, and the container registry turned on for the project.
+- **Done when:** GitLab's CI lint accepts the file, and a test tag (`v0.1.0-rc.1`, pushed by Paul) publishes the
+  image to the registry and creates the release; the test release and image are deleted afterwards. Syntax checks
+  alone don't prove the release path.
 
 ### T11 · Merge shopping lines across related foods and units
 
@@ -157,14 +157,14 @@ style.md asks for a `///` comment on every public Rust item, but nothing checks 
 
 ### T17 · Published Rust documentation
 
-- A CI job that runs `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS="-D warnings"` on every pull request
-  (broken intra-doc links and bad doc markup fail it), and on `main` publishes the result to GitHub Pages. Link it
-  from the README.
+- A CI job that runs `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS="-D warnings"` on every merge request
+  (broken intra-doc links and bad doc markup fail it), and on `main` publishes the result to GitLab Pages (a `pages`
+  job). Link it from the README.
 - Run the same `cargo doc` check from `./check` (T1), so a local run catches what this job would.
-- **Touches:** `.github/workflows/` (a new job or workflow, actions pinned to SHAs like `ci.yml`), `check`,
-  `README.md`.
-- **Needs:** T1 (`./check`), T14 (something worth reading); **Paul** to turn on Pages for the repository
-  (Settings, Pages, source "GitHub Actions").
+- **Touches:** `.gitlab-ci.yml`, `.github/workflows/ci.yml` (the same check on the mirror, without publishing),
+  `check`, `README.md`.
+- **Needs:** T14 (something worth reading); **Paul** to make sure GitLab Pages is enabled on the server and the
+  project.
 - **Done when:** the job passes, fails on a deliberately broken intra-doc link (try it, then revert), and the Pages
   URL serves `mise_core`'s documentation.
 
@@ -172,14 +172,39 @@ style.md asks for a `///` comment on every public Rust item, but nothing checks 
 
 CodeRabbit's docstring check counts every touched function with branches, internal ones included, against an 80%
 threshold. Our rule (style.md, enforced by lint once T13 and T16 land) covers public and exported items only, so
-the two can disagree on a pull request.
+the two can disagree on a merge request. Needs T20 (CodeRabbit reviewing GitLab merge requests).
 
 - Add `.coderabbit.yaml` that turns CodeRabbit's docstring check off, or sets it to match the lint, using the keys
   in CodeRabbit's configuration reference (check them there; include the schema comment it documents so editors
   validate the file). Leave the rest of CodeRabbit's settings at the organisation defaults.
 - **Touches:** `.coderabbit.yaml`.
-- **Done when:** the pull request's own CodeRabbit review reports that it applied the repository's configuration
+- **Done when:** the merge request's own CodeRabbit review reports that it applied the repository's configuration
   file, and the docstring check is off or matches.
+
+### T19 · Dependency updates on GitLab
+
+Dependabot runs on the GitHub mirror, where its pull requests can't be merged; they're applied on GitLab by hand.
+
+- Run Renovate as a scheduled pipeline on the GitLab project (`renovate/renovate` image, a `renovate.json` that
+  keeps today's grouping: one merge request each for Rust crates, npm packages, CI images and the Docker base images,
+  weekly), holding TypeScript majors back as `dependabot.yml` does.
+- Then delete `.github/dependabot.yml`, and move the TypeScript major watch (`typescript-watch.yml`) to a scheduled
+  GitLab job that opens an issue.
+- **Touches:** `renovate.json`, `.gitlab-ci.yml`, `.github/dependabot.yml`, `.github/workflows/typescript-watch.yml`,
+  `docs/development.md`, `docs/status.md`.
+- **Needs:** **Paul** to create the bot's access token and the pipeline schedule.
+- **Done when:** a scheduled run opens grouped merge requests on GitLab, and a dry run (`renovate --dry-run`) in the
+  merge request's pipeline shows TypeScript majors held back.
+
+### T20 · Reviews on GitLab merge requests
+
+Mira and CodeRabbit reviewed every GitHub pull request; since the move to GitLab, nothing reviews merge requests.
+
+- Connect CodeRabbit to the self-hosted GitLab (check which plan supports it), and point Mira at GitLab merge
+  requests, so both review every merge request again. Record how in `docs/development.md`.
+- **Touches:** `docs/development.md`, `docs/status.md`, `AGENTS.md` (step 7 names the reviewers).
+- **Needs:** **Paul**: accounts, tokens and webhooks on both services.
+- **Done when:** a merge request gets a review from each, and status.md's "Reviews" line says so again.
 
 ## Needs a decision first
 
@@ -198,7 +223,7 @@ Each of these waits on a question in status.md's "Open questions" or on Paul.
 
 ## Only on Paul's machine
 
-These need the private seed, which is not in the repo. See `CLAUDE.local.md` there.
+These need the private seed, which is not in the repo.
 
 - **`mise gate seed`:** rebuild the private seed and check the invariants on every recipe at 1 to 6 servings, with a
   snapshot of rendered amounts kept in `seed/` and shown as a diff to approve. Replace the scaling report's
@@ -207,7 +232,8 @@ These need the private seed, which is not in the repo. See `CLAUDE.local.md` the
   names to the server (the `-seed` versions of curation, dish decisions and preferred versions).
 - **HTTPS** through the reverse proxy, which phones need to open the list offline.
 - **Off-machine backups** of the database and `seed/`.
-- **GitHub settings:** turn on secret scanning and push protection (free on public repositories).
+- **GitHub mirror settings:** turn on secret scanning (free on public repositories; GitLab's pipeline already runs
+  secret detection).
 
 ## Later phases
 
