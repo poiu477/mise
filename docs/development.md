@@ -131,8 +131,11 @@ remaining repeatable gate (a seed gate) is in [backlog.md](backlog.md).
 `.gitlab-ci.yml` runs on every merge request and every push to `main`, on the project's GitLab runner, and a merge
 request merges only when it passes. `.github/workflows/ci.yml` runs the same steps again on the GitHub mirror after
 each push to `main`, as a second opinion. Both run what `./check` runs, with the same commands; change all three
-together. The GitLab pipeline also runs GitLab's secret detection, and its Docker image job needs a runner that
-allows privileged jobs.
+together. The GitLab pipeline also runs GitLab's secret detection. Its Docker image job needs a runner that allows
+privileged jobs, and since the other jobs already prove the code builds, it runs on a merge request only when
+something the image build depends on changes (the Dockerfile, the Cargo and npm manifests and lockfiles, the Rust
+version, the pipeline itself); on `main` and tags it always runs. The Rust caches are keyed on the Rust version, not
+`Cargo.lock`, so a dependency update rebuilds only what it changed.
 
 The steps: the Rust job (formatting, clippy, tests against a Postgres service, a check that every response in the
 OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-openapi.mjs`), and a check that

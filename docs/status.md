@@ -26,10 +26,10 @@ What a reviewer can rely on today:
   Merges are merge commits, so the SHAs in `.git-blame-ignore-revs` stay valid. GitHub's `poiu477/mise`, public since
   2026-11-04, is a read-only mirror of every branch, kept by GitLab's push mirroring, as a backup.
 - **CI** (`.gitlab-ci.yml` on every merge request; `.github/workflows/ci.yml`, actions pinned to SHAs, again on the
-  mirror): rustfmt, clippy with warnings as errors, Rust tests
-  against a Postgres service (API tests fail rather than skip when it's missing), the OpenAPI document checked and
-  the web types compared with it, web format, lint, tests and build, `npm audit` of shipped packages, `cargo deny`,
-  browser journeys, the Docker image built.
+  mirror): rustfmt, clippy with warnings as errors, Rust tests against a Postgres service (API tests fail rather than
+  skip when it's missing), the OpenAPI document checked and the web types compared with it, web format, lint, tests and
+  build, `npm audit` of shipped packages, `cargo deny`, browser journeys, secret detection, and the Docker image built
+  (on merge requests only when its build inputs change).
 - **Local checks:** `./check` runs CI's build, lint and test steps with CI's commands, in CI's order, and names the
   step that fails; `--e2e` adds the browser journeys. `cargo deny`, `npm audit` and the image build stay CI-only. A
   pre-commit hook (`.githooks/`, opt-in) runs the formatting and lints.
