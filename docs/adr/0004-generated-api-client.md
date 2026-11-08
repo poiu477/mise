@@ -14,7 +14,7 @@ requests and answers have to be kept the same on both sides somehow.
 ## Decision
 
 - **React 19 with React Router, Vite and TypeScript**; function components and hooks, one stylesheet, no UI or
-  state library ([style.md](../style.md#typescript-and-react)).
+  state library; server data goes through TanStack Query ([style.md](../style.md#typescript-and-react)).
 - **The server is the source of the API's types.** utoipa builds the OpenAPI 3.1 document from annotations on the
   handlers and their Rust types; `mise-server openapi` prints it and the server serves it at `/api/openapi.json`.
 - **openapi-typescript** turns that document into `web/src/api/schema.d.ts`, and **openapi-fetch** is the client
@@ -41,5 +41,5 @@ requests and answers have to be kept the same on both sides somehow.
   route in CLAUDE.md), and committing them with the change; CI fails otherwise.
 - The document lists only the responses the annotations name. Signed-in routes can all return 401 and 412, and not
   every one says so yet; status.md has the task to list them and test that they match.
-- Pages load data with `useEffect` and `useState` today, which is why ESLint's `set-state-in-effect` rule is a
-  warning; moving to a data-fetching layer is on the task list.
+- Pages load data through TanStack Query calling this client ([query.ts](../../web/src/api/query.ts)), never by
+  setting state in an effect; ESLint's `set-state-in-effect` rule is an error.
