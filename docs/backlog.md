@@ -33,17 +33,6 @@ Contributors should run CI's code checks with one command, before pushing.
 - **Done when:** `./check` passes on a clean `main`, and exits non-zero after breaking formatting in one Rust and
   one TypeScript file (try it, then revert). CI itself is unchanged.
 
-### T2 · One test harness for the API tests
-
-`crates/mise-api/tests/auth.rs`, `plan.rs` and `oidc.rs` each create a throwaway database, run migrations, build
-the router and sign people in their own way.
-
-- Move that into `crates/mise-api/tests/common/mod.rs`: a `TestApp` that owns the database (dropped afterwards), the
-  router, and helpers to set up the first owner, sign in, and send JSON with the session cookie. Keep the rule that
-  tests fail, not skip, in CI when the database is missing.
-- **Touches:** `crates/mise-api/tests/` only.
-- **Done when:** the same tests pass with the same names; no setup code is repeated across the three files.
-
 ### T3 · API tests for dishes, versions and photos
 
 Only sign-in, plan and shopping have HTTP-level tests.
