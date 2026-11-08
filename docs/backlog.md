@@ -116,7 +116,7 @@ mostly doesn't (`api/client.ts` documents 1 of its 24 exports).
   `pages/LoginPage.tsx`, `pages/SetupPage.tsx`, `pages/NotFound.tsx`, `components/AddToPlan.tsx`,
   `components/Servings.tsx`, `components/StepText.tsx`, `web/eslint.config.js`, `web/package.json`.
 - **Done when:** `npm run lint` passes on the branch, and fails on an undocumented export (add one, see it fail,
-  then revert); tests and build pass. CodeRabbit's docstring check passing is a secondary signal, not the gate.
+  then revert); tests and build pass.
 
 ### T14 · Rust doc comments: the lint, and `mise-core`
 
@@ -167,44 +167,6 @@ style.md asks for a `///` comment on every public Rust item, but nothing checks 
   project.
 - **Done when:** the job passes, fails on a deliberately broken intra-doc link (try it, then revert), and the Pages
   URL serves `mise_core`'s documentation.
-
-### T18 · Point CodeRabbit's docstring check at our rule
-
-CodeRabbit's docstring check counts every touched function with branches, internal ones included, against an 80%
-threshold. Our rule (style.md, enforced by lint once T13 and T16 land) covers public and exported items only, so
-the two can disagree on a merge request. Needs T20 (CodeRabbit reviewing GitLab merge requests).
-
-- Add `.coderabbit.yaml` that turns CodeRabbit's docstring check off, or sets it to match the lint, using the keys
-  in CodeRabbit's configuration reference (check them there; include the schema comment it documents so editors
-  validate the file). Leave the rest of CodeRabbit's settings at the organisation defaults.
-- **Touches:** `.coderabbit.yaml`.
-- **Done when:** the merge request's own CodeRabbit review reports that it applied the repository's configuration
-  file, and the docstring check is off or matches.
-
-### T19 · Dependency updates on GitLab
-
-Dependabot runs on the GitHub mirror, where its pull requests can't be merged; they're applied on GitLab by hand.
-
-- Run Renovate as a scheduled pipeline on the GitLab project (`renovate/renovate` image, a `renovate.json` that
-  keeps today's grouping: one merge request each for Rust crates, npm packages, CI images and the Docker base images,
-  weekly), holding TypeScript majors back as `dependabot.yml` does.
-- Then delete `.github/dependabot.yml`, and move the TypeScript major watch (`typescript-watch.yml`) to a scheduled
-  GitLab job that opens an issue.
-- **Touches:** `renovate.json`, `.gitlab-ci.yml`, `.github/dependabot.yml`, `.github/workflows/typescript-watch.yml`,
-  `docs/development.md`, `docs/status.md`.
-- **Needs:** **Paul** to create the bot's access token and the pipeline schedule.
-- **Done when:** a scheduled run opens grouped merge requests on GitLab, and a dry run (`renovate --dry-run`) in the
-  merge request's pipeline shows TypeScript majors held back.
-
-### T20 · Reviews on GitLab merge requests
-
-Mira and CodeRabbit reviewed every GitHub pull request; since the move to GitLab, nothing reviews merge requests.
-
-- Connect CodeRabbit to the self-hosted GitLab (check which plan supports it), and point Mira at GitLab merge
-  requests, so both review every merge request again. Record how in `docs/development.md`.
-- **Touches:** `docs/development.md`, `docs/status.md`, `AGENTS.md` (step 7 names the reviewers).
-- **Needs:** **Paul**: accounts, tokens and webhooks on both services.
-- **Done when:** a merge request gets a review from each, and status.md's "Reviews" line says so again.
 
 ## Needs a decision first
 

@@ -1,6 +1,7 @@
-# Every push to main and every pull request: formatting, lints, tests, the web build, dependency checks and the
-# Docker image. A pull request merges only when all of it passes. Actions are pinned to full commit SHAs (Dependabot
-# keeps them current), and checkout leaves no credentials behind for later steps.
+# The GitHub mirror's CI: the same formatting, lints, tests, web build, dependency checks and Docker image as
+# .gitlab-ci.yml, which gates merges on GitLab. It runs again here after each push to main as a second opinion.
+# Actions are pinned to full commit SHAs (Renovate keeps them current), and checkout leaves no credentials behind
+# for later steps.
 name: CI
 
 on:

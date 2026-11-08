@@ -22,8 +22,9 @@ builds with it:
 - **CI's cargo-deny step** doesn't build, so it names the same version itself.
 - **`rust-version`** in [Cargo.toml](../../Cargo.toml) is the declared minimum, `1.99`: it doesn't pin, but it is
   kept at the pinned release and raised with it.
-- **Raised by hand**, all four in one commit. Dependabot ignores the rust image
-  ([dependabot.yml](../../.github/dependabot.yml)), so the image can't move on its own.
+- **Raised by hand**, all four in one commit. Renovate ignores the rust images
+  ([renovate.json](../../renovate.json); Dependabot did the same until 2026-11-08), so they can't move on their
+  own.
 
 ## Alternatives
 

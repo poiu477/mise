@@ -43,7 +43,8 @@ are listed apart in the backlog ("Only on Paul's machine"); leave those to him.
   once. Agents commit only when asked.
 - **Work on a branch and merge through a merge request.** The repository lives on GitLab at
   <https://gitlab.pauldrakehughes.com/Personal/mise>, where `main` is protected and CI (`.gitlab-ci.yml`) must pass
-  before merging. GitHub (`poiu477/mise`) is a read-only mirror of `main`: never push or open pull requests there.
+  before merging. GitHub (`poiu477/mise`) is a read-only mirror of every branch: never push or open pull requests
+  there.
 - **LF line endings.** sqlx checksums migrations, so `.gitattributes` pins LF. Scripts that rewrite files must write
   bytes (`Path.write_bytes(s.encode())` in Python), not `write_text`, which writes CRLF on Windows.
 - **Never edit a migration that's on `main`.** Add a new numbered file in `migrations/`.
@@ -75,8 +76,8 @@ once without stepping on each other.
 6. **Update the docs in the same merge request:** delete the task from the backlog; record anything that changed in
    status.md (where things stand, a decision, a known issue); fix any doc the change makes wrong.
 7. **Mark the merge request ready** once it's done, filling in the template: what changed, how it was checked,
-   anything left undone. CI runs on it (a fork's pipeline waits for Paul to start it). Fix each review finding, or
-   reply with why it doesn't apply.
+   anything left undone. CI runs on it (a fork's pipeline waits for Paul to start it), and Mira (`@mira`), the
+   project's AI reviewer, reviews it. Fix each valid finding, or reply with why it doesn't apply.
 8. **Paul merges,** with a merge commit (the project merges no other way), or says to merge once the pipeline
    passes.
 

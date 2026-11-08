@@ -24,7 +24,7 @@ What a reviewer can rely on today:
 - **Repository:** since 2026-11-08 the main repository is on the maintainer's GitLab, `Personal/mise`
   (<https://gitlab.pauldrakehughes.com/Personal/mise>); changes arrive through a merge request whose pipeline passes.
   Merges are merge commits, so the SHAs in `.git-blame-ignore-revs` stay valid. GitHub's `poiu477/mise`, public since
-  2026-11-04, is a read-only mirror of `main`, kept by GitLab's push mirroring, as a backup.
+  2026-11-04, is a read-only mirror of every branch, kept by GitLab's push mirroring, as a backup.
 - **CI** (`.gitlab-ci.yml` on every merge request; `.github/workflows/ci.yml`, actions pinned to SHAs, again on the
   mirror): rustfmt, clippy with warnings as errors, Rust tests
   against a Postgres service (API tests fail rather than skip when it's missing), the OpenAPI document checked and
@@ -40,14 +40,14 @@ What a reviewer can rely on today:
   addition resent after a lost answer lands once), a 375 px layout, an axe scan and sign-out.
 - **Demo data:** `fixtures/demo-bundle`, written for mise, under the MIT licence. The household's own seed is private
   and never committed.
-- **Dependencies:** Dependabot weekly, grouped, on the GitHub mirror (its pull requests are applied on GitLab by
-  hand until Renovate replaces it; backlog); TypeScript 7 held back until its tools support it, with a weekly
-  workflow (`typescript-watch.yml`) that opens an issue when they do.
+- **Dependencies:** Renovate weekly from a scheduled pipeline, one merge request per ecosystem (`renovate.json`);
+  TypeScript 7 held back until its tools support it, with a weekly scheduled job (`typescript watch`) that opens an
+  issue when they do.
 - **Contributing:** [AGENTS.md](../AGENTS.md) holds the working rules for people and any coding agent (`CLAUDE.md`
   imports it); [CONTRIBUTING.md](../CONTRIBUTING.md) is the short version, with a merge request template. A draft
   merge request claims a backlog task. Everything but the maintainer-only tasks runs on the demo data.
-- **Reviews:** Mira (`@mira`) and CodeRabbit reviewed every GitHub pull request up to 2026-11-08; neither reviews
-  GitLab merge requests yet (backlog).
+- **Reviews:** Mira (`@mira`), the maintainer's self-hosted AI reviewer, reviews every merge request. CodeRabbit
+  also reviewed GitHub pull requests until the move to GitLab.
 - **Web app:** pages load server data through TanStack Query; ESLint's React hooks rules run as errors, including
   `set-state-in-effect`.
 - **Decisions:** architecture decision records in [`docs/adr/`](adr/README.md), each with the alternatives weighed.
@@ -90,4 +90,5 @@ What a reviewer can rely on today:
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |
 | 2026-11-08 | Doc comments are required on public Rust items and exported TypeScript, and lints are to enforce it (`jsdoc/require-jsdoc` in T13, `missing_docs` in T14 to T16; not on yet); they say what a thing means, not its types. CodeRabbit's docstring score is not the gate |
 | 2026-11-08 | `AGENTS.md` holds the working rules for every coding agent and person, and `CLAUDE.md` imports it; a draft merge request claims a backlog task. The private seed moves to its own private repository on the maintainer's GitLab, cloned into the ignored `seed/` |
-| 2026-11-08 | The maintainer's GitLab becomes the main repository, with merge requests and GitLab CI; GitHub is a read-only mirror of `main`, kept as a backup. GitLab CI can later reach the private seed, which GitHub never could |
+| 2026-11-08 | The maintainer's GitLab becomes the main repository, with merge requests and GitLab CI; GitHub is a read-only mirror of every branch, kept as a backup. GitLab CI can later reach the private seed, which GitHub never could |
+| 2026-11-08 | Mira reviews merge requests and CodeRabbit is dropped: Mira runs on the maintainer's own models, which can be more capable. Renovate, run from a scheduled GitLab pipeline, replaces Dependabot |

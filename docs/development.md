@@ -134,11 +134,22 @@ each push to `main`, as a second opinion. Both run what `./check` runs, with the
 together. The GitLab pipeline also runs GitLab's secret detection, and its Docker image job needs a runner that
 allows privileged jobs.
 
-The steps: the Rust job (formatting, clippy, tests against a Postgres service, a check that every response in the OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-openapi.mjs`), and a check that `web/src/api/schema.d.ts` matches the server), the web job
-(formatting, lint, tests, build, an audit of shipped npm packages), the browser journeys (keeping Playwright's report
-and traces when they fail), `cargo deny`, and a build of the Docker image.
-Dependabot opens grouped update pull requests weekly. TypeScript majors are held back until every tool that depends on TypeScript accepts them: the weekly "TypeScript major watch" workflow (`npm run typescript:ready` in `web/`) opens an issue when that happens, and deleting the `typescript` ignore rule in `.github/dependabot.yml` lets Dependabot propose the upgrade. `.git-blame-ignore-revs` lists the formatting-only commits;
-run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once per clone.
+The steps: the Rust job (formatting, clippy, tests against a Postgres service, a check that every response in the
+OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-openapi.mjs`), and a check that
+`web/src/api/schema.d.ts` matches the server), the web job (formatting, lint, tests, build, an audit of shipped npm
+packages), the browser journeys (keeping Playwright's report and traces when they fail), `cargo deny`, and a build of
+the Docker image.
+
+Renovate keeps dependencies current: a weekly pipeline schedule on `main` (with the variable `SCHEDULE=weekly`)
+runs the `renovate` job, which opens one merge request per ecosystem as `renovate.json` groups them (Rust crates,
+web packages, container images, the mirror's GitHub Actions). Rust stays raised by hand (ADR 0007). TypeScript majors
+wait on approval in Renovate's Dependency Dashboard issue until every tool that depends on TypeScript accepts them:
+the same schedule runs `typescript watch` (`npm run typescript:ready` in `web/`), which opens an issue when that
+happens. The `renovate config` job checks `renovate.json` whenever it changes. Mira (`@mira`), the maintainer's
+self-hosted AI reviewer, reviews every merge request.
+
+`.git-blame-ignore-revs` lists the formatting-only commits; run `git config blame.ignoreRevsFile .git-blame-ignore-revs`
+once per clone.
 
 ## Changing the API
 

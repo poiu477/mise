@@ -1,7 +1,7 @@
 // Is the web app ready for the next TypeScript major? Run from web/ (npm run typescript:ready) after `npm ci`. Ready means a newer TypeScript
 // major has been released and the latest release of every dependency that declares a TypeScript peer range accepts
-// it. Reads the npm registry directly (no shell); prints `ready=`, `version=` and `blockers=` lines for GitHub
-// Actions on stdout, and one line per tool on stderr.
+// it. Reads the npm registry directly (no shell); prints `ready=`, `version=` and `blockers=` lines on stdout
+// (scripts/typescript-issue.mjs reads them), and one line per tool on stderr.
 import { readFileSync } from "node:fs";
 import semver from "semver";
 

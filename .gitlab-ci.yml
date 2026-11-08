@@ -9,12 +9,19 @@ workflow:
     # A branch with an open merge request already gets the merge request's pipeline.
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
+    # Pushes to main, and the weekly schedule on main (Renovate and the TypeScript watch; see the end of this file).
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_TAG
 
 include:
   # GitLab's secret detection (Gitleaks) on every pipeline.
   - template: Jobs/Secret-Detection.gitlab-ci.yml
+
+secret_detection:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: on_success
 
 stages:
   - test
@@ -33,6 +40,19 @@ variables:
 default:
   # A newer push to a merge request cancels the older pipeline's jobs; main's pipelines all run to the end.
   interruptible: true
+
+# The checks: every merge request and push, never the weekly schedule.
+.check:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: on_success
+
+# The weekly schedule's jobs. The schedule (Build, Pipeline schedules) runs on main and sets SCHEDULE=weekly.
+.weekly:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE == "weekly"
+  interruptible: false
 
 .rust:
   image: rust:1.99.1-bookworm
@@ -54,7 +74,7 @@ default:
       alias: postgres
 
 rust:
-  extends: [.rust, .postgres]
+  extends: [.check, .rust, .postgres]
   stage: test
   script:
     - rustup show active-toolchain
@@ -69,7 +89,7 @@ rust:
     expire_in: 1 day
 
 api types:
-  extends: .node
+  extends: [.check, .node]
   stage: test
   needs: [rust]
   script:
@@ -80,7 +100,7 @@ api types:
       || { echo "web/src/api/schema.d.ts is out of date; run 'npm run api' in web/"; exit 1; }
 
 web:
-  extends: .node
+  extends: [.check, .node]
   stage: test
   needs: []
   script:
@@ -92,7 +112,7 @@ web:
     - npm audit --omit=dev --audit-level=high
 
 browser journeys:
-  extends: [.node, .postgres]
+  extends: [.check, .node, .postgres]
   stage: test
   needs: [rust]
   script:
@@ -106,7 +126,7 @@ browser journeys:
     expire_in: 14 days
 
 rust dependencies:
-  extends: .rust
+  extends: [.check, .rust]
   stage: test
   needs: []
   script:
@@ -116,6 +136,7 @@ rust dependencies:
     - cargo deny check
 
 docker image:
+  extends: .check
   # Needs a runner that allows privileged jobs, for Docker-in-Docker.
   image: docker:29-cli
   services:
@@ -130,3 +151,44 @@ docker image:
   needs: []
   script:
     - docker build --tag mise:ci .
+
+renovate config:
+  # Whenever renovate.json changes, check it the way Renovate will read it.
+  image: renovate/renovate:44.222.4
+  stage: test
+  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - changes: [renovate.json]
+  script:
+    - renovate-config-validator --strict renovate.json
+
+# Weekly, on the schedule: dependency updates (renovate.json says what and how they're grouped). RENOVATE_TOKEN is a
+# masked, protected project variable: a project access token (role Developer, scope api) that Renovate pushes its
+# branches and opens merge requests with. GITHUB_COM_TOKEN (optional, a GitHub token with no scopes) avoids github.com's rate limit when
+# Renovate looks up the mirror's workflow actions and release notes.
+renovate:
+  extends: .weekly
+  image: renovate/renovate:44.222.4
+  stage: test
+  needs: []
+  variables:
+    RENOVATE_PLATFORM: gitlab
+    RENOVATE_ENDPOINT: $CI_API_V4_URL
+    RENOVATE_REPOSITORIES: $CI_PROJECT_PATH
+    RENOVATE_ONBOARDING: "false"
+    RENOVATE_REQUIRE_CONFIG: required
+    LOG_LEVEL: info
+  script:
+    - renovate
+
+# Weekly, on the schedule: once every tool that depends on TypeScript accepts the next major, open one issue to lift
+# the hold in renovate.json.
+typescript watch:
+  extends: [.weekly, .node]
+  stage: test
+  needs: []
+  script:
+    - cd web && npm ci --no-audit --no-fund
+    - npm run -s typescript:ready | node scripts/typescript-issue.mjs
