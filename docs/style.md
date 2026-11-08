@@ -22,7 +22,8 @@ Write like the code around you: match its comment density, naming and idiom. Wha
   and ingest crates do I/O and call it.
 - **Tests.** Names read as the rule they check (`counts_carry_their_size`, `a_household_sees_only_its_own_plan`), and
   assertions compare what a person would see (`"1 lb 14 oz"`). Unit tests sit in a `mod tests` at the end of the file;
-  integration tests in `crates/<crate>/tests/` build their own throwaway database and their own made-up foods.
+  integration tests in `crates/<crate>/tests/` build their own throwaway database and their own made-up foods. API
+  tests start from `TestApp` in `crates/mise-api/tests/common` rather than setting up their own.
 
 ## Migrations
 
@@ -31,8 +32,14 @@ One numbered file per change, opening with a comment on what it adds, and a comm
 
 ## TypeScript and React
 
-- Function components and hooks; no state library. Server data comes from the typed `api` client; endpoints that
-  change things answer with the whole updated object, which replaces local state.
+- Function components and hooks; no state library. Server data loads through TanStack Query (`api/query.ts`)
+  calling the typed `api` client, never by setting state in an effect (ESLint enforces it). Data that is an
+  account's own has the account in its query key. Endpoints that change things answer with the whole updated
+  object, which replaces the cached data (`queryClient.setQueryData`).
+- **Comments.** A `/** … */` comment on every exported function, component, hook, class and type says what it
+  is or does, in plain English, often with an example in quotes: `/** "This week", "Next week", or the dates: "Nov 9 – 15". */`. Internal
+  functions whose job isn't plain from their name get one too: query functions, change handlers, sending and
+  retry logic. Don't restate the types. Inline comments explain *why*, never what the next line plainly does.
 - A ref counter keeps only the latest answer when quick taps race (see `ShoppingPage.tsx`).
 - Pure logic goes in a plain module with a Vitest test next to it (`week.ts`, `offline.ts`, `choose.ts`).
 - Prettier (width 100) formats everything and ESLint (recommended sets plus the React hooks rules) lints it; CI

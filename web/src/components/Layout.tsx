@@ -11,8 +11,11 @@ import {
 } from "react-router";
 import { useSession } from "../session";
 
+/** Pages anyone can open, signed in or not. */
 const OPEN = ["/login", "/setup"];
 
+/** The frame round every page. It waits for the session, sends people to setup or sign-in when they need it, and
+ * shows the top bar and an offline notice around the page. */
 export function Layout() {
   const { session } = useSession();
   const location = useLocation();
@@ -55,6 +58,8 @@ export function Layout() {
   );
 }
 
+/** The top bar: home, the dish search, Plan and Shopping, and the account. Also keeps this week's and next
+ * week's lists on the device while someone is signed in. */
 function TopBar() {
   const { session } = useSession();
   const me = session.status === "in" || session.status === "offline" ? session.me : null;
@@ -68,11 +73,15 @@ function TopBar() {
   const navigate = useNavigate();
   const [q, setQ] = useState(params.get("q") ?? "");
 
-  // Keep the box in step with the URL (back/forward, links).
-  useEffect(() => {
-    if (location.pathname === "/") setQ(params.get("q") ?? "");
-  }, [location.pathname, params]);
+  // Keep the box in step with the search page's URL (back/forward, links): when that changes, it wins.
+  const asked = location.pathname === "/" ? (params.get("q") ?? "") : null;
+  const [seen, setSeen] = useState(asked);
+  if (asked !== seen) {
+    setSeen(asked);
+    if (asked !== null) setQ(asked);
+  }
 
+  /** Searches from any page, opening the results on the home page. */
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const next = new URLSearchParams();

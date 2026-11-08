@@ -1,54 +1,64 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type DishSummary, type Plan, type PlanEntry } from "../api/client";
+import { answer, queryClient, Refused } from "../api/query";
+import { useAccount } from "../session";
 import { addWeeks, mondayOf, weekLabel } from "../week";
 
 const SUGGESTIONS = 6;
 
+/** The household's plan for a week (?week=, this week by default): dishes at their serving counts, and a search
+ * to add more. */
 export function PlanPage() {
   const [params, setParams] = useSearchParams();
   const week = params.get("week") ?? mondayOf();
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [error, setError] = useState("");
+  const key = ["plan", useAccount(), week];
+  const planQuery = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => answer(api.GET("/api/plan", { params: { query: { week } }, signal })),
+  });
+  const plan = planQuery.data ?? null;
+  // A change that didn't go through, shown with the week it was made in.
+  const [failure, setFailure] = useState<{ week: string; text: string } | null>(null);
+  const error =
+    (failure?.week === week && failure.text) ||
+    (planQuery.error
+      ? planQuery.error instanceof Refused
+        ? errorText(planQuery.error.body)
+        : "Can't reach the server. Planning needs it; the shopping list works offline."
+      : "");
 
-  useEffect(() => {
-    const ctrl = new AbortController();
-    setPlan(null);
-    api
-      .GET("/api/plan", { params: { query: { week } }, signal: ctrl.signal })
-      .then(({ data, error: failed }) => {
-        if (ctrl.signal.aborted) return;
-        if (data) setPlan(data);
-        else setError(errorText(failed));
-      })
-      .catch(
-        () =>
-          !ctrl.signal.aborted &&
-          setError("Can't reach the server. Planning needs it; the shopping list works offline."),
-      );
-    return () => ctrl.abort();
-  }, [week]);
-
+  /** Moves to the week `n` weeks away. */
   const go = (n: number) => setParams({ week: addWeeks(week, n) });
-  const run = async (call: Promise<{ data?: Plan; error?: unknown }>) => {
-    setError("");
-    const { data, error: failed } = await call.catch(() => ({
+  /** Every change answers with the whole plan, which replaces the one on screen. */
+  const run = async (call: () => Promise<{ data?: Plan; error?: unknown }>) => {
+    setFailure(null);
+    // A reload still on its way would put back the plan from before this change.
+    await queryClient.cancelQueries({ queryKey: key });
+    const { data, error: failed } = await call().catch(() => ({
       data: undefined,
       error: { error: "can't reach the server, so that wasn't saved" },
     }));
-    if (data) setPlan(data);
-    else setError(errorText(failed));
+    if (data) queryClient.setQueryData(key, data);
+    else {
+      setFailure({ week, text: errorText(failed) });
+      queryClient.invalidateQueries({ queryKey: key });
+    }
   };
+  /** Adds a dish at its usual version: 2 servings if it was published for 2, else its first published size. */
   const add = (d: DishSummary) => {
-    if (d.default_variant)
-      run(api.POST("/api/plan/entries", { body: { week, variant_id: d.default_variant } }));
+    const variant_id = d.default_variant;
+    if (variant_id) run(() => api.POST("/api/plan/entries", { body: { week, variant_id } }));
   };
+  /** Changes how many servings of one dish are planned. */
   const setServings = (e: PlanEntry, servings: number) =>
-    run(
+    run(() =>
       api.PATCH("/api/plan/entries/{id}", { params: { path: { id: e.id } }, body: { servings } }),
     );
+  /** Takes a dish off the plan. */
   const remove = (e: PlanEntry) =>
-    run(api.DELETE("/api/plan/entries/{id}", { params: { path: { id: e.id } } }));
+    run(() => api.DELETE("/api/plan/entries/{id}", { params: { path: { id: e.id } } }));
 
   const count = plan?.entries.length ?? 0;
   return (
@@ -135,27 +145,24 @@ export function PlanPage() {
 /** Find a dish and add it in one tap, at its usual version and 2 servings. */
 function AddDishes({ onAdd }: { onAdd: (d: DishSummary) => void }) {
   const [q, setQ] = useState("");
-  const [items, setItems] = useState<DishSummary[]>([]);
-
+  // What to look for: the box's text once typing pauses.
+  const [asked, setAsked] = useState("");
   useEffect(() => {
-    const ctrl = new AbortController();
-    const wait = setTimeout(
-      () =>
-        api
-          .GET("/api/dishes", {
-            params: { query: { q: q.trim() || undefined, type: "recipe", limit: SUGGESTIONS } },
-            signal: ctrl.signal,
-          })
-          .then(({ data }) => {
-            if (data && !ctrl.signal.aborted) setItems(data.items);
-          }),
-      q ? 200 : 0,
-    );
-    return () => {
-      clearTimeout(wait);
-      ctrl.abort();
-    };
+    const wait = setTimeout(() => setAsked(q.trim()), q ? 200 : 0);
+    return () => clearTimeout(wait);
   }, [q]);
+  const found = useQuery({
+    queryKey: ["suggestions", asked],
+    queryFn: ({ signal }) =>
+      answer(
+        api.GET("/api/dishes", {
+          params: { query: { q: asked || undefined, type: "recipe", limit: SUGGESTIONS } },
+          signal,
+        }),
+      ),
+    placeholderData: keepPreviousData,
+  });
+  const items = found.data?.items ?? [];
 
   return (
     <section className="add-dishes" aria-labelledby="add-h">
