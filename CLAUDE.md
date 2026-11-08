@@ -38,7 +38,9 @@ Read these before changing anything:
 
 ## Everyday commands
 
-What CI runs, so run it before pushing. `./check` runs it all in CI's order and names the step that fails:
+Run these before pushing. `./check` runs CI's build, lint and test steps in CI's order and names the step that fails.
+It isn't the whole CI gate: the browser journeys need `--e2e`, and `cargo deny`, `npm audit` and the Docker image
+build run only in CI.
 
 ```bash
 ./check                                # needs the dev Postgres (port 5433); API tests make throwaway databases

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Runs what CI runs (.github/workflows/ci.yml), in the same order, and stops at the first failure, naming it.
+# Runs CI's build, lint and test steps (.github/workflows/ci.yml) with CI's commands and flags, in CI's order, and
+# stops at the first failure, naming it.
 #
 #   ./check          formatting, lints, tests, the API document check, then the web app's format, lint, tests, build
 #   ./check --e2e    all of that, then the browser journeys
@@ -8,11 +9,11 @@
 # The Rust tests need Postgres (DATABASE_URL, from the environment or .env; see docs/development.md). Locally the API
 # tests skip when it is missing; here, as in CI, that is a failure.
 #
-# Not run here, though CI runs them: `cargo deny check`, `npm audit` and the Docker image build.
+# CI-only, never run here: `cargo deny`, `npm audit` and the Docker image build.
 set -euo pipefail
 
 usage() {
-  sed -n '2,11s/^# \{0,1\}//p' "$0"
+  sed -n '2,12s/^# \{0,1\}//p' "$0"
 }
 
 fast=false
@@ -60,10 +61,21 @@ on_exit() {
 }
 trap on_exit EXIT
 
-# CI installs the web app's packages with `npm ci` each run. Here that happens only when there are none yet, so a
-# local run doesn't throw away node_modules every time.
+# The Rust tests read DATABASE_URL from .env themselves, but the browser journeys (web/e2e/serve.mjs) read only the
+# environment. Taking it from .env here gives both the same database.
+if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then
+  url="$(sed -n 's/^[[:space:]]*DATABASE_URL[[:space:]]*=[[:space:]]*//p' .env | tail -n 1 | tr -d '\r')"
+  url="${url%\"}" url="${url#\"}" url="${url%\'}" url="${url#\'}"
+  if [ -n "$url" ]; then
+    export DATABASE_URL="$url"
+  fi
+fi
+
+# CI installs the web app's packages with `npm ci` each run. Here that happens only when they are missing or older
+# than web/package-lock.json (npm writes node_modules/.package-lock.json on each install), so a local run doesn't
+# throw away node_modules every time but doesn't test against stale packages either.
 web_packages() {
-  if [ ! -d web/node_modules ]; then
+  if [ ! -f web/node_modules/.package-lock.json ] || [ web/package-lock.json -nt web/node_modules/.package-lock.json ]; then
     step "Web packages (npm ci)"
     (cd web && npm ci --no-audit --no-fund)
   fi
@@ -88,22 +100,19 @@ if $fast; then
 fi
 
 step "Rust tests"
-# CI set: the API tests fail, rather than skip, when the database is missing or unreachable.
+# CI set, as in CI, for every test step: the API tests fail, rather than skip, when the database is missing or
+# unreachable, and Vitest and Playwright refuse a focused test (.only) instead of quietly running just that one.
 CI="${CI:-true}" cargo test --workspace --locked
 
 web_packages
 step "API document is valid and the web types match it"
 cargo run -q --locked -p mise-api -- openapi >web/openapi.json
 (cd web && node scripts/check-openapi.mjs)
-# CI regenerates src/api/schema.d.ts and diffs it against the commit. Here the comparison is with the working copy,
-# so uncommitted work is checked as it stands, and the file is left as it was.
-# The fresh copy goes under node_modules (ignored by git), by a relative path that Git Bash passes to node unchanged.
-generated=node_modules/.cache/mise-check/schema.d.ts
-mkdir -p "web/$(dirname "$generated")"
-(cd web && npx --no-install openapi-typescript openapi.json -o "$generated" >/dev/null)
-if ! cmp -s "web/$generated" web/src/api/schema.d.ts; then
-  diff -u web/src/api/schema.d.ts "web/$generated" | head -40 || true
-  echo "web/src/api/schema.d.ts is out of date: run 'npm run api' in web/" >&2
+# As CI does it: regenerate src/api/schema.d.ts in place and fail if it differs from git's copy. On a failure the
+# regenerated file is left in place, ready to commit.
+(cd web && npx --no-install openapi-typescript openapi.json -o src/api/schema.d.ts >/dev/null)
+if ! git diff --exit-code -- web/src/api/schema.d.ts; then
+  echo "web/src/api/schema.d.ts was out of date; it has been regenerated (the diff above) for you to commit" >&2
   exit 1
 fi
 
@@ -114,7 +123,7 @@ step "Web lint"
 (cd web && npm run --silent lint)
 
 step "Web tests"
-(cd web && npm test --silent)
+(cd web && CI="${CI:-true}" npm test --silent)
 
 step "Type check and build"
 (cd web && npm run --silent build)
@@ -123,7 +132,8 @@ if $e2e; then
   step "Build mise and mise-server for the browser journeys"
   cargo build --locked -p mise-cli -p mise-api
   step "Browser journeys"
-  (cd web && npm run --silent e2e)
+  # The list reporter, since under CI the config picks GitHub annotations.
+  (cd web && CI="${CI:-true}" npm run --silent e2e -- --reporter=list)
 fi
 
 current=''

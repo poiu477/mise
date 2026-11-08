@@ -68,7 +68,7 @@ Claude desktop app doesn't run it, so offline start-up has to be tried in a real
 
 ## Tests
 
-`./check` runs what CI runs, in CI's order, and stops at the first failure, naming the step:
+`./check` runs CI's build, lint and test steps in CI's order, and stops at the first failure, naming the step:
 
 ```bash
 ./check            # Rust formatting, clippy, tests, the API document check, then web formatting, lint, tests, build
@@ -76,10 +76,12 @@ Claude desktop app doesn't run it, so offline start-up has to be tried in a real
 ./check --fast     # formatting and lints only
 ```
 
-It needs the dev Postgres: the API tests fail under `./check`, as in CI, when `DATABASE_URL` (from the environment or
-`.env`) is missing or unreachable, rather than skipping. It installs the web packages with `npm ci` only when
-`web/node_modules` is missing, and checks `web/src/api/schema.d.ts` against the working copy, not the last commit.
-CI also runs `cargo deny`, `npm audit` and the Docker image build, which `./check` leaves out.
+It runs the test steps with `CI` set, as CI does. So the API tests fail when `DATABASE_URL` (from the environment or
+`.env`, and passed on to the browser journeys) is missing or unreachable, rather than skipping, and Vitest and
+Playwright refuse a focused `.only` test. As in CI, it regenerates `web/src/api/schema.d.ts` and fails if git shows a
+change, leaving the new file to commit. It runs `npm ci` only when `web/node_modules` is missing or older than
+`web/package-lock.json`. Without `--e2e` it skips the browser journeys. `cargo deny`, `npm audit` and the Docker
+image build stay CI-only: `./check` never runs them.
 
 A pre-commit hook runs `./check --fast` on the working tree before each commit. Turn it on once per clone:
 
