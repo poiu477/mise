@@ -140,13 +140,13 @@ OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-op
 packages), the browser journeys (keeping Playwright's report and traces when they fail), `cargo deny`, and a build of
 the Docker image.
 
-Renovate keeps dependencies current: a weekly pipeline schedule on `main` (with the variable `SCHEDULE=weekly`)
-runs the `renovate` job, which opens one merge request per ecosystem as `renovate.json` groups them (Rust crates,
-web packages, container images, the mirror's GitHub Actions). Rust stays raised by hand (ADR 0007). TypeScript majors
-wait on approval in Renovate's Dependency Dashboard issue until every tool that depends on TypeScript accepts them:
-the same schedule runs `typescript watch` (`npm run typescript:ready` in `web/`), which opens an issue when that
-happens. The `renovate config` job checks `renovate.json` whenever it changes. Mira (`@mira`), the maintainer's
-self-hosted AI reviewer, reviews every merge request.
+Renovate keeps dependencies current: a weekly pipeline schedule on `main` (with the variable `SCHEDULE=weekly`) runs the
+`renovate` job, which opens one merge request per ecosystem as `renovate.json` groups them (Rust crates, web packages,
+container images, the mirror's GitHub Actions). Rust (ADR 0007) and Postgres majors, which need the data upgraded, stay
+raised by hand. TypeScript majors wait on approval in Renovate's Dependency Dashboard issue until every tool that
+depends on TypeScript accepts them: the same schedule runs `typescript watch` (`npm run typescript:ready` in `web/`),
+which opens an issue when that happens. The `renovate config` job checks `renovate.json` whenever it changes. Mira
+(`@mira`), the maintainer's self-hosted AI reviewer, reviews every merge request.
 
 `.git-blame-ignore-revs` lists the formatting-only commits; run `git config blame.ignoreRevsFile .git-blame-ignore-revs`
 once per clone.
