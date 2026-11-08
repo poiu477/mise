@@ -3,6 +3,7 @@
   "description": "Dependency updates, grouped so each ecosystem arrives as one merge request. Renovate runs from the `renovate` job in .gitlab-ci.yml, on the project's weekly pipeline schedule.",
   "extends": ["config:recommended"],
   "labels": ["dependencies"],
+  "prHourlyLimit": 0,
   "packageRules": [
     {
       "description": "Rust crates, as one merge request.",
@@ -29,6 +30,13 @@
       "description": "Rust is raised by hand, in rust-toolchain.toml, the Dockerfile, .gitlab-ci.yml, ci.yml and Cargo.toml together (ADR 0007).",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["rust", "docker.io/library/rust"],
+      "enabled": false
+    },
+    {
+      "description": "A Postgres major can't read the previous major's data directory, so it needs pg_upgrade or a dump and restore: raised by hand, with a plan, in the Compose files and both CI configs together.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["postgres", "docker.io/library/postgres"],
+      "matchUpdateTypes": ["major"],
       "enabled": false
     },
     {
