@@ -44,9 +44,10 @@ What a reviewer can rely on today:
   addition resent after a lost answer lands once), a 375 px layout, an axe scan and sign-out.
 - **Demo data:** `fixtures/demo-bundle`, written for mise, under the MIT licence. The household's own seed is private
   and never committed.
-- **Dependencies:** Renovate weekly from a scheduled pipeline, one merge request per ecosystem (`renovate.json`);
-  TypeScript 7 held back until its tools support it, with a weekly scheduled job (`typescript watch`) that opens an
-  issue when they do.
+- **Dependencies:** Renovate from a daily scheduled pipeline: ordinary updates on Mondays, one merge request per
+  ecosystem (`renovate.json`), and fixes for dependencies with known vulnerabilities (OSV) on the next day's run;
+  TypeScript 7 held back until its tools support it, with a scheduled job (`typescript watch`) that opens an issue when
+  they do.
 - **Contributing:** [AGENTS.md](../AGENTS.md) holds the working rules for people and any coding agent (`CLAUDE.md`
   imports it); [CONTRIBUTING.md](../CONTRIBUTING.md) is the short version, with a merge request template. A draft
   merge request claims a backlog task. Everything but the maintainer-only tasks runs on the demo data.

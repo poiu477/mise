@@ -1,9 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Dependency updates, grouped so each ecosystem arrives as one merge request. Renovate runs from the `renovate` job in .gitlab-ci.yml, on the project's weekly pipeline schedule.",
+  "description": "Dependency updates, grouped so each ecosystem arrives as one merge request, on Mondays (UTC); security fixes at any time. Renovate runs from the `renovate` job in .gitlab-ci.yml on the project's daily pipeline schedule.",
   "extends": ["config:recommended"],
   "labels": ["dependencies"],
   "prHourlyLimit": 0,
+  "schedule": ["on monday"],
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "description": "A dependency with a known vulnerability (OSV database) gets its fix as soon as the scheduled pipeline next runs, not on Mondays only, and labelled so it stands out.",
+    "schedule": ["at any time"],
+    "labels": ["dependencies", "security"]
+  },
   "packageRules": [
     {
       "description": "Rust crates, as one merge request.",

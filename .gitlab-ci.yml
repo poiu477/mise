@@ -14,7 +14,7 @@ workflow:
     # A branch with an open merge request already gets the merge request's pipeline.
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
-    # Pushes to main, and the weekly schedule on main (Renovate and the TypeScript watch; see the end of this file).
+    # Pushes to main, and the daily schedule on main (Renovate and the TypeScript watch; see the end of this file).
     # A newer push never cancels main's pipeline, so every merge gets its full run and its scans become the baseline
     # the next merge request's findings are compared with.
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -48,17 +48,18 @@ default:
   # workflow above).
   interruptible: true
 
-# The checks: every merge request and push, never the weekly schedule.
+# The checks: every merge request and push, never the dependency schedule.
 .check:
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - when: on_success
 
-# The weekly schedule's jobs. The schedule (Build, Pipeline schedules) runs on main and sets SCHEDULE=weekly.
-.weekly:
+# The dependency schedule's jobs. The schedule (Build, Pipeline schedules) runs daily on main and sets
+# SCHEDULE=dependencies; renovate.json keeps ordinary updates to Mondays and lets security fixes through any day.
+.scheduled:
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE == "weekly"
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE == "dependencies"
   interruptible: false
 
 # Two caches, keyed on the Rust version only, so a dependency update reuses everything it didn't change instead of
@@ -231,12 +232,12 @@ renovate config:
   script:
     - renovate-config-validator --strict renovate.json
 
-# Weekly, on the schedule: dependency updates (renovate.json says what and how they're grouped). RENOVATE_TOKEN is a
+# On the schedule: dependency updates (renovate.json says what and how they're grouped). RENOVATE_TOKEN is a
 # masked, protected project variable: a project access token (role Developer, scope api) that Renovate pushes its
 # branches and opens merge requests with. GITHUB_COM_TOKEN (optional, a GitHub token with no scopes) avoids
 # github.com's rate limit when Renovate looks up the mirror's workflow actions and release notes.
 renovate:
-  extends: .weekly
+  extends: .scheduled
   image: renovate/renovate:44.222.4
   stage: test
   needs: []
@@ -250,10 +251,10 @@ renovate:
   script:
     - renovate
 
-# Weekly, on the schedule: once every tool that depends on TypeScript accepts the next major, open one issue to lift
+# On the schedule: once every tool that depends on TypeScript accepts the next major, open one issue to lift
 # the hold in renovate.json.
 typescript watch:
-  extends: [.weekly, .node]
+  extends: [.scheduled, .node]
   stage: test
   needs: []
   script:
