@@ -4,6 +4,8 @@ import {
   addition,
   deviceCopy,
   forgetDevice,
+  isLocal,
+  localId,
   queue,
   rememberedMe,
   rememberMe,
@@ -176,6 +178,18 @@ describe("the device copy", () => {
     const store = memory();
     store.set("mise:me:list:2026-11-02", "{not json");
     expect(deviceCopy("me", store).saved(WEEK)).toBeNull();
+  });
+});
+
+describe("ids made on this device", () => {
+  it("are local, and never repeat", () => {
+    const ids = Array.from({ length: 1000 }, () => localId());
+    expect(ids.every(isLocal)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+    // The random part is 16 bytes from the cryptographic generator, and the whole id fits the server's 100-character
+    // limit on a client key.
+    expect(ids[0]).toMatch(/^local-\d+-[0-9a-f]{32}$/);
+    expect(ids[0].length).toBeLessThanOrEqual(100);
   });
 });
 

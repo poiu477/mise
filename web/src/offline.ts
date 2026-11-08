@@ -65,7 +65,15 @@ function read<T>(store: Store, key: string): T | null {
 }
 
 const SIGN_IN = `${PREFIX}sign-in`;
-const newSignIn = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+/** 16 random bytes from the browser's cryptographic generator, as 32 hex digits. `crypto.getRandomValues` works over
+ * plain HTTP, which phones on the home network use; `crypto.randomUUID` needs HTTPS. */
+const randomHex = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+
+const newSignIn = () => `${Date.now()}-${randomHex()}`;
 
 /** The signed-in account, remembered so the app opens without the server. Each sign-in gets an id of its own,
  * kept while the same account stays signed in (the app checks again every time it opens) and gone on signing
@@ -175,8 +183,9 @@ export const addition = (c: Extract<Change, { kind: "add_extra" }>): NewExtra =>
   client_key: c.id,
 });
 
-/** A fresh id for something added on this device, until the server gives it one. */
-export const localId = () => `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+/** A fresh id for something added on this device, until the server gives it one. It is also the addition's
+ * `client_key`, which the server uses to recognise a resend, so it must never repeat: hence the random part. */
+export const localId = () => `local-${Date.now()}-${randomHex()}`;
 
 /** What sending one change came to: the list it answered with (and a change still to make, when only part of it
  * went through), refused for good (it will never apply), or the server out of reach (try again later). */
