@@ -69,5 +69,6 @@ export type Plan = components["schemas"]["Plan"];
 export type PlanEntry = components["schemas"]["PlanEntry"];
 export type ShoppingList = components["schemas"]["ShoppingList"];
 export type ShoppingItem = components["schemas"]["ShoppingItem"];
+/** Something to add to a week's list by hand, as sent: its name, the week and the device's key for it. */
 export type NewExtra = components["schemas"]["NewExtra"];
 export type Weights = components["schemas"]["Weights"];

@@ -89,7 +89,9 @@ the stored marks, extras, staples and unit choices on top.
 ## The web app (`web/`)
 
 React 19 with React Router, Vite and TypeScript. `api/client.ts` is an `openapi-fetch` client typed from the
-generated `api/schema.d.ts`. `session.tsx` knows who is signed in (or, offline, who last was); `components/Layout.tsx`
+generated `api/schema.d.ts`; pages load through TanStack Query (`api/query.ts`), which caches answers per page,
+reloads them when a page comes back into view and keeps one account's data apart from another's. `session.tsx`
+knows who is signed in (or, offline, who last was); `components/Layout.tsx`
 gates pages on it. Pages: search, dish (options, servings, add to plan), plan, shopping, account, sign-in and first-run
 setup.
 

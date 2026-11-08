@@ -28,15 +28,18 @@ What a reviewer can rely on today:
   against a Postgres service (API tests fail rather than skip when it's missing), the OpenAPI document checked and
   the web types compared with it, web format, lint, tests and build, `npm audit` of shipped packages, `cargo deny`,
   browser journeys, the Docker image built.
-- **Tests:** unit and fuzz tests in `mise-core`; API tests for sign-in, plan and shopping; single sign-on end to end
-  against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on the demo bundle covering
-  first-run setup, scaling, planning to a full list, ticks across reloads, offline use (an addition resent after a
-  lost answer lands once), a 375 px layout, an axe scan and sign-out.
+- **Tests:** unit and fuzz tests in `mise-core`; API tests for sign-in, plan and shopping, sharing one harness
+  (`crates/mise-api/tests/common`) that gives each test its own database and drops it even when the test fails;
+  single sign-on end to end against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on
+  the demo bundle covering first-run setup, scaling, planning to a full list, ticks across reloads, offline use (an
+  addition resent after a lost answer lands once), a 375 px layout, an axe scan and sign-out.
 - **Demo data:** `fixtures/demo-bundle`, written for mise, under the MIT licence. The household's own seed is private
   and never committed.
 - **Dependencies:** Dependabot weekly, grouped; TypeScript 7 held back until its tools support it, with a weekly
   workflow (`typescript-watch.yml`) that opens an issue when they do.
 - **Reviews:** Mira (`@mira`) and CodeRabbit review every pull request.
+- **Web app:** pages load server data through TanStack Query; ESLint's React hooks rules run as errors, including
+  `set-state-in-effect`.
 - **Decisions:** architecture decision records in [`docs/adr/`](adr/README.md), each with the alternatives weighed.
 
 ## Known issues and limits
@@ -47,6 +50,8 @@ What a reviewer can rely on today:
 - The pot pie dish's address still says "beef" (slugs are fixed at first import) until a fresh install.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
+- When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
+  the list reloads a moment later.
 
 ## Open questions
 
@@ -71,4 +76,5 @@ What a reviewer can rely on today:
 | 2026-11-03 | mise is a portfolio project held to production standards; "only for one household" no longer justifies a shortcut |
 | 2026-11-04 | Work moves to self-contained tasks in `docs/backlog.md`, one task per branch and pull request, so agent sessions can run in parallel |
 | 2026-11-04 | The repository goes public with its history as it is; the private seed's details live in the ignored `CLAUDE.local.md` |
+| 2026-11-08 | The web app loads server data with TanStack Query; the shopping list's device copy and queue stay its own |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |

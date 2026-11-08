@@ -1,143 +1,52 @@
-//! The weekly plan and its shopping list end to end through the router, each test on a fresh database created on the
-//! dev server from DATABASE_URL (skipped when it is not set).
+//! The weekly plan and its shopping list end to end through the router, each test on its own throwaway database (see
+//! `common`).
 
-use std::sync::Arc;
+#[macro_use]
+mod common;
 
-use axum::{
-    Router,
-    body::Body,
-    http::{Request, StatusCode, header},
-};
-use http_body_util::BodyExt;
-use mise_api::auth::{Auth, AuthConfig};
+use std::ops::Deref;
+
+use axum::http::StatusCode;
+use common::{As, TestApp};
 use serde_json::{Value, json};
-use sqlx::PgPool;
-use tower::ServiceExt;
 use uuid::Uuid;
 
 const WEEK: &str = "2026-11-02";
 
-struct TestApp {
-    router: Router,
-    pool: PgPool,
-    admin: PgPool,
-    db: String,
+/// The app with its owner signed in, and the dishes and foods each test makes up.
+struct Kitchen {
+    app: TestApp,
     cookie: String,
 }
 
-impl TestApp {
-    async fn new() -> Option<TestApp> {
-        dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.env")).ok();
-        // Skipping is for a laptop without Postgres; in CI a missing or unreachable database must fail, not pass
-        // quietly.
-        let in_ci = std::env::var_os("CI").is_some();
-        let url = match std::env::var("DATABASE_URL") {
-            Ok(url) => url,
-            Err(_) if in_ci => panic!("DATABASE_URL must be set in CI"),
-            Err(_) => return None,
-        };
-        let admin = match mise_db::connect(&url).await {
-            Ok(pool) => pool,
-            Err(e) if in_ci => panic!("can't connect to DATABASE_URL in CI: {e}"),
-            Err(_) => return None,
-        };
-        let db = format!("mise_test_{}", Uuid::now_v7().simple());
-        // The name is ours (a UUID), not input.
-        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {db}")))
-            .execute(&admin)
-            .await
-            .unwrap();
-        let base = url.rsplit_once('/').unwrap().0;
-        let pool = mise_db::connect(&format!("{base}/{db}")).await.unwrap();
-        mise_db::migrate(&pool).await.unwrap();
-        let config = AuthConfig {
-            local: true,
-            oidc: None,
-            public_base_url: None,
-            session_days: 30,
-        };
-        let state = mise_api::AppState {
-            pool: pool.clone(),
-            media_root: "./no-media".into(),
-            auth: Arc::new(Auth::new(config)),
-        };
-        let mut app = TestApp {
-            router: mise_api::router(state, None),
-            pool,
-            admin,
-            db,
-            cookie: String::new(),
-        };
-        let res = app
-            .send(
-                "POST",
-                "/api/auth/setup",
-                Some(json!({"username": "paul", "password": "a long password"})),
-                None,
-            )
-            .await;
-        app.cookie = res
-            .headers()
-            .get_all(header::SET_COOKIE)
-            .iter()
-            .find_map(|h| {
-                h.to_str()
-                    .ok()?
-                    .strip_prefix("mise_session=")
-                    .map(|v| v.split(';').next().unwrap().to_string())
-            })
-            .unwrap();
-        Some(app)
+impl Deref for Kitchen {
+    type Target = TestApp;
+
+    fn deref(&self) -> &TestApp {
+        &self.app
+    }
+}
+
+impl Kitchen {
+    /// A fresh app with its owner set up; None when there is no database (outside CI).
+    async fn new() -> Option<Kitchen> {
+        let app = TestApp::new().await?;
+        let cookie = app.setup_owner().await;
+        Some(Kitchen { app, cookie })
     }
 
-    async fn send(
-        &self,
-        method: &str,
-        path: &str,
-        body: Option<Value>,
-        cookie: Option<&str>,
-    ) -> axum::response::Response {
-        let mut b = Request::builder().method(method).uri(path);
-        if let Some(c) = cookie {
-            b = b.header(header::COOKIE, format!("mise_session={c}"));
-        }
-        let req = match body {
-            Some(v) => b
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(v.to_string()))
-                .unwrap(),
-            None => b.body(Body::empty()).unwrap(),
-        };
-        self.router.clone().oneshot(req).await.unwrap()
-    }
-
-    async fn as_user(
-        &self,
-        cookie: &str,
-        method: &str,
-        path: &str,
-        body: Option<Value>,
-    ) -> (StatusCode, Value) {
-        let res = self.send(method, path, body, Some(cookie)).await;
-        let status = res.status();
-        let bytes = res.into_body().collect().await.unwrap().to_bytes();
-        (
-            status,
-            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
-        )
-    }
-
+    /// Send as the owner and expect 200 OK.
     async fn call(&self, method: &str, path: &str, body: Option<Value>) -> Value {
-        let (status, value) = self.as_user(&self.cookie.clone(), method, path, body).await;
-        assert_eq!(status, StatusCode::OK, "{method} {path}: {value}");
-        value
+        self.json(method, path, &self.cookie, body).await
     }
 
+    /// The owner's shopping list for `WEEK`.
     async fn list(&self) -> Value {
         self.call("GET", &format!("/api/shopping?week={WEEK}"), None)
             .await
     }
 
+    /// A made-up food with these properties (count unit, store section and so on).
     async fn food(&self, name: &str, props: Value) -> Uuid {
         let id = Uuid::now_v7();
         sqlx::query("INSERT INTO foods (id, name, slug, props) VALUES ($1, $2, $3, $4)")
@@ -177,7 +86,7 @@ impl TestApp {
         variant
     }
 
-    /// Signs in someone in a household of their own, next door; answers with their session cookie.
+    /// Someone in a household of their own, next door, signed in. Returns their session cookie.
     async fn neighbour(&self) -> String {
         let household = self
             .call(
@@ -187,47 +96,8 @@ impl TestApp {
             )
             .await;
         self.call("POST", "/api/users", Some(json!({"username": "neighbour", "password": "another long password", "household_id": household["id"]}))).await;
-        let res = self
-            .send(
-                "POST",
-                "/api/auth/login",
-                Some(json!({"username": "neighbour", "password": "another long password"})),
-                None,
-            )
-            .await;
-        res.headers()
-            .get_all(header::SET_COOKIE)
-            .iter()
-            .find_map(|h| {
-                h.to_str()
-                    .ok()?
-                    .strip_prefix("mise_session=")
-                    .map(|v| v.split(';').next().unwrap().to_string())
-            })
-            .unwrap()
+        self.sign_in("neighbour", "another long password").await
     }
-
-    async fn drop(self) {
-        self.pool.close().await;
-        let _ = sqlx::query(sqlx::AssertSqlSafe(format!(
-            "DROP DATABASE IF EXISTS {} WITH (FORCE)",
-            self.db
-        )))
-        .execute(&self.admin)
-        .await;
-    }
-}
-
-macro_rules! app {
-    () => {
-        match TestApp::new().await {
-            Some(a) => a,
-            None => {
-                eprintln!("DATABASE_URL not set; skipping");
-                return;
-            }
-        }
-    };
 }
 
 fn item<'a>(list: &'a Value, name: &str) -> Option<&'a Value> {
@@ -250,7 +120,7 @@ fn section_names(list: &Value) -> Vec<String> {
 
 #[tokio::test]
 async fn a_week_planned_becomes_a_merged_list_by_section() {
-    let app = app!();
+    let app = test_app!(Kitchen::new());
     let paste = app.food("Tomato Paste", json!({"count_unit": "packet", "count_size": "1.5 oz", "store_section": "Canned & Jarred"})).await;
     let onion = app
         .food(
@@ -337,12 +207,11 @@ async fn a_week_planned_becomes_a_merged_list_by_section() {
         item(&app.list().await, "Tomato Paste").unwrap()["amount"],
         "2 packets (3 oz)"
     );
-    app.drop().await;
 }
 
 #[tokio::test]
 async fn ticks_and_changes_survive_the_plan_changing() {
-    let app = app!();
+    let app = test_app!(Kitchen::new());
     let onion = app
         .food(
             "Onion",
@@ -459,12 +328,11 @@ async fn ticks_and_changes_survive_the_plan_changing() {
         .call("DELETE", &format!("/api/shopping/extras/{extra}"), None)
         .await;
     assert_eq!(list["extras"], json!([]));
-    app.drop().await;
 }
 
 #[tokio::test]
 async fn an_addition_sent_twice_with_one_key_is_added_once() {
-    let app = app!();
+    let app = test_app!(Kitchen::new());
     let add = |name: &str, key: Option<&str>| {
         let mut body = json!({"week": WEEK, "name": name});
         if let Some(k) = key {
@@ -502,23 +370,21 @@ async fn an_addition_sent_twice_with_one_key_is_added_once() {
 
     // Keys are the household's own: next door's device can use the same one.
     let other = app.neighbour().await;
-    let (status, theirs) = app
-        .as_user(
-            &other,
+    let theirs = app
+        .json(
             "POST",
             "/api/shopping/extras",
+            &other,
             Some(json!({"week": WEEK, "name": "Bin bags", "client_key": "local-1"})),
         )
         .await;
-    assert_eq!(status, StatusCode::OK);
     assert_eq!(names(&theirs), ["Bin bags"]);
     assert_eq!(names(&app.list().await), ["Foil", "Foil", "Tape", "Tape"]);
-    app.drop().await;
 }
 
 #[tokio::test]
 async fn weights_read_as_the_household_chooses() {
-    let app = app!();
+    let app = test_app!(Kitchen::new());
     let beef = app
         .food("Ground Beef", json!({"store_section": "Meat & Seafood"}))
         .await;
@@ -589,35 +455,33 @@ async fn weights_read_as_the_household_chooses() {
         Value::Null
     );
 
-    let cookie = app.cookie.clone();
     assert!(
-        app.as_user(
-            &cookie,
+        app.send(
             "PUT",
             "/api/shopping/settings",
+            As::Cookie(&app.cookie),
             Some(json!({"weight_unit": "stone"}))
         )
         .await
-        .0
+        .status
         .is_client_error()
     );
     assert_eq!(
-        app.as_user(
-            &cookie,
+        app.send(
             "PUT",
             "/api/shopping/food-weights",
+            As::Cookie(&app.cookie),
             Some(json!({"food_id": Uuid::now_v7(), "weight_unit": "oz"}))
         )
         .await
-        .0,
+        .status,
         StatusCode::NOT_FOUND
     );
-    app.drop().await;
 }
 
 #[tokio::test]
 async fn a_household_sees_only_its_own_plan() {
-    let app = app!();
+    let app = test_app!(Kitchen::new());
     let onion = app.food("Onion", json!({})).await;
     let chili = app.recipe("Chili", &[(onion, 1.0, "unit", true)]).await;
     let plan = app
@@ -637,50 +501,61 @@ async fn a_household_sees_only_its_own_plan() {
 
     let other = app.neighbour().await;
 
-    let (_, plan) = app
-        .as_user(&other, "GET", &format!("/api/plan?week={WEEK}"), None)
-        .await;
+    let plan = app
+        .send(
+            "GET",
+            &format!("/api/plan?week={WEEK}"),
+            As::Cookie(&other),
+            None,
+        )
+        .await
+        .body;
     assert_eq!(plan["entries"], json!([]));
-    let (_, list) = app
-        .as_user(&other, "GET", &format!("/api/shopping?week={WEEK}"), None)
-        .await;
+    let list = app
+        .send(
+            "GET",
+            &format!("/api/shopping?week={WEEK}"),
+            As::Cookie(&other),
+            None,
+        )
+        .await
+        .body;
     assert_eq!(list["meals"], 0);
     assert_eq!(list["extras"], json!([]));
     assert_eq!(
-        app.as_user(
-            &other,
+        app.send(
             "DELETE",
             &format!("/api/plan/entries/{entry}"),
+            As::Cookie(&other),
             None
         )
         .await
-        .0,
+        .status,
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        app.as_user(
-            &other,
+        app.send(
             "PATCH",
             &format!("/api/plan/entries/{entry}"),
+            As::Cookie(&other),
             Some(json!({"servings": 4}))
         )
         .await
-        .0,
+        .status,
         StatusCode::NOT_FOUND
     );
-    app.drop().await;
 }
 
 #[tokio::test]
 async fn bad_input_is_refused() {
-    let app = app!();
+    let app = test_app!(Kitchen::new());
     let onion = app.food("Onion", json!({})).await;
     let chili = app.recipe("Chili", &[(onion, 1.0, "unit", true)]).await;
-    let cookie = app.cookie.clone();
-    let post = |path: &'static str, body: Value| {
-        let cookie = cookie.clone();
-        let app = &app;
-        async move { app.as_user(&cookie, "POST", path, Some(body)).await.0 }
+    let app = &app;
+    let post = move |path: &'static str, body: Value| async move {
+        app.send("POST", path, As::Cookie(&app.cookie), Some(body))
+            .await
+            .status
     };
     assert_eq!(
         post("/api/plan/entries", json!({"variant_id": Uuid::now_v7()})).await,
@@ -726,19 +601,18 @@ async fn bad_input_is_refused() {
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        app.as_user(
-            &cookie,
+        app.send(
             "PUT",
             "/api/shopping/marks",
+            As::Cookie(&app.cookie),
             Some(json!({"key": "", "checked": true}))
         )
         .await
-        .0,
+        .status,
         StatusCode::BAD_REQUEST
     );
     assert_eq!(
-        app.send("GET", "/api/plan", None, None).await.status(),
+        app.send("GET", "/api/plan", As::Nobody, None).await.status,
         StatusCode::UNAUTHORIZED
     );
-    app.drop().await;
 }
