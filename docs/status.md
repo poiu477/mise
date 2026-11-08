@@ -33,9 +33,9 @@ What a reviewer can rely on today:
   pre-commit hook (`.githooks/`, opt-in) runs the formatting and lints.
 - **Tests:** unit and fuzz tests in `mise-core`; API tests for sign-in, plan and shopping, sharing one harness
   (`crates/mise-api/tests/common`) that gives each test its own database and drops it even when the test fails;
-  single sign-on end to end against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on the demo bundle covering
-  first-run setup, scaling, planning to a full list, ticks across reloads, offline use, a 375 px layout, an axe scan
-  and sign-out.
+  single sign-on end to end against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on
+  the demo bundle covering first-run setup, scaling, planning to a full list, ticks across reloads, offline use (an
+  addition resent after a lost answer lands once), a 375 px layout, an axe scan and sign-out.
 - **Demo data:** `fixtures/demo-bundle`, written for mise, under the MIT licence. The household's own seed is private
   and never committed.
 - **Dependencies:** Dependabot weekly, grouped; TypeScript 7 held back until its tools support it, with a weekly
@@ -53,8 +53,6 @@ What a reviewer can rely on today:
 - The pot pie dish's address still says "beef" (slugs are fixed at first import) until a fresh install.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
-- An item added to the list offline can appear twice if the server saves it but its answer is lost: adding has no
-  idempotency key, so the device sends it again.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
   the list reloads a moment later.
 

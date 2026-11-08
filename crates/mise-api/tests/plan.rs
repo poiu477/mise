@@ -85,6 +85,19 @@ impl Kitchen {
         }
         variant
     }
+
+    /// Someone in a household of their own, next door, signed in. Returns their session cookie.
+    async fn neighbour(&self) -> String {
+        let household = self
+            .call(
+                "POST",
+                "/api/households",
+                Some(json!({"name": "Next door"})),
+            )
+            .await;
+        self.call("POST", "/api/users", Some(json!({"username": "neighbour", "password": "another long password", "household_id": household["id"]}))).await;
+        self.sign_in("neighbour", "another long password").await
+    }
 }
 
 fn item<'a>(list: &'a Value, name: &str) -> Option<&'a Value> {
@@ -318,6 +331,58 @@ async fn ticks_and_changes_survive_the_plan_changing() {
 }
 
 #[tokio::test]
+async fn an_addition_sent_twice_with_one_key_is_added_once() {
+    let app = test_app!(Kitchen::new());
+    let add = |name: &str, key: Option<&str>| {
+        let mut body = json!({"week": WEEK, "name": name});
+        if let Some(k) = key {
+            body["client_key"] = json!(k);
+        }
+        app.call("POST", "/api/shopping/extras", Some(body))
+    };
+    let names = |list: &Value| -> Vec<String> {
+        list["extras"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x["name"].as_str().unwrap().to_string())
+            .collect()
+    };
+
+    // The answer to the first was lost, so the device sends it again: one item, the same one.
+    let first = add("Foil", Some("local-1")).await;
+    let again = add("Foil", Some("local-1")).await;
+    assert_eq!(names(&again), ["Foil"]);
+    assert_eq!(again["extras"][0]["id"], first["extras"][0]["id"]);
+    assert_eq!(again["extras"][0]["client_key"], "local-1");
+
+    // A key is the addition, not the name: another key adds another, and a used key adds nothing.
+    let list = add("Foil", Some("local-2")).await;
+    assert_eq!(names(&list), ["Foil", "Foil"]);
+    let list = add("Tape", Some("local-1")).await;
+    assert_eq!(names(&list), ["Foil", "Foil"]);
+
+    // Scripts can leave the key out, and each such call adds.
+    add("Tape", None).await;
+    let list = add("Tape", None).await;
+    assert_eq!(names(&list), ["Foil", "Foil", "Tape", "Tape"]);
+    assert_eq!(list["extras"][2]["client_key"], Value::Null);
+
+    // Keys are the household's own: next door's device can use the same one.
+    let other = app.neighbour().await;
+    let theirs = app
+        .json(
+            "POST",
+            "/api/shopping/extras",
+            &other,
+            Some(json!({"week": WEEK, "name": "Bin bags", "client_key": "local-1"})),
+        )
+        .await;
+    assert_eq!(names(&theirs), ["Bin bags"]);
+    assert_eq!(names(&app.list().await), ["Foil", "Foil", "Tape", "Tape"]);
+}
+
+#[tokio::test]
 async fn weights_read_as_the_household_chooses() {
     let app = test_app!(Kitchen::new());
     let beef = app
@@ -434,15 +499,7 @@ async fn a_household_sees_only_its_own_plan() {
     )
     .await;
 
-    let household = app
-        .call(
-            "POST",
-            "/api/households",
-            Some(json!({"name": "Next door"})),
-        )
-        .await;
-    app.call("POST", "/api/users", Some(json!({"username": "neighbour", "password": "another long password", "household_id": household["id"]}))).await;
-    let other = app.sign_in("neighbour", "another long password").await;
+    let other = app.neighbour().await;
 
     let plan = app
         .send(
@@ -528,6 +585,17 @@ async fn bad_input_is_refused() {
         post("/api/shopping/extras", json!({"name": "a\u{0}b"})).await,
         StatusCode::BAD_REQUEST
     );
+    for key in [String::new(), "k".repeat(101), "a\u{0}b".into()] {
+        assert_eq!(
+            post(
+                "/api/shopping/extras",
+                json!({"name": "Foil", "client_key": key})
+            )
+            .await,
+            StatusCode::BAD_REQUEST,
+            "client_key {key:?}"
+        );
+    }
     assert_eq!(
         post("/api/pantry-staples", json!({"food_id": Uuid::now_v7()})).await,
         StatusCode::NOT_FOUND
