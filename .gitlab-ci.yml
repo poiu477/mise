@@ -29,6 +29,13 @@ stages:
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
   CARGO_TERM_COLOR: always
+  # Incremental builds only help when the same files are rebuilt in place; in CI they just make target/ (and the cache
+  # that carries it) much bigger.
+  CARGO_INCREMENTAL: "0"
+  # Faster cache and artifact archives: target/ is large, and the runner keeps its caches locally.
+  FF_USE_FASTZIP: "true"
+  CACHE_COMPRESSION_LEVEL: fast
+  ARTIFACT_COMPRESSION_LEVEL: fast
   npm_config_cache: $CI_PROJECT_DIR/.npm
   # The postgres service, for the jobs that list it.
   POSTGRES_USER: mise
@@ -54,12 +61,23 @@ default:
     - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE == "weekly"
   interruptible: false
 
+# Two caches, keyed on the Rust version only, so a dependency update reuses everything it didn't change instead of
+# starting cold: the crates cargo downloads, and target/ (written only by the rust job). Raising Rust starts both
+# afresh; to trim target/ in between, clear the runner caches (Build, Pipelines, Clear runner caches).
+.cargo home cache: &cargo-home-cache
+  key:
+    prefix: cargo-home
+    files: [rust-toolchain.toml]
+  paths: [.cargo/registry/index, .cargo/registry/cache, .cargo/git/db]
+
 .rust:
   image: rust:1.99.1-bookworm
   cache:
-    key:
-      files: [Cargo.lock, rust-toolchain.toml]
-    paths: [.cargo/registry/index, .cargo/registry/cache, .cargo/git/db, .cargo/bin, target/]
+    - *cargo-home-cache
+    - key:
+        prefix: target
+        files: [rust-toolchain.toml]
+      paths: [target/]
 
 .node:
   image: node:26-bookworm
@@ -129,14 +147,39 @@ rust dependencies:
   extends: [.check, .rust]
   stage: test
   needs: []
+  # It builds nothing, so it reads the downloaded crates without saving them back, and keeps only its own binary.
+  cache:
+    - <<: *cargo-home-cache
+      policy: pull
+    - key: cargo-deny-0.20.2
+      paths: [.cargo/bin]
   script:
-    # Advisories, licenses, bans and sources (deny.toml). The cache keeps the installed binary between runs.
+    # Advisories, licenses, bans and sources (deny.toml).
     - cargo deny --version 2>/dev/null | grep -q '^cargo-deny 0\.20\.2$'
       || cargo install cargo-deny --version 0.20.2 --locked
     - cargo deny check
 
 docker image:
-  extends: .check
+  # The rust and web jobs already prove the code compiles and the web app builds, and Docker-in-Docker starts with no
+  # cache, so this release build takes minutes. On a merge request it runs only when something the image build itself
+  # depends on changes; on main and on tags it always runs, so nothing gets past it for longer than one merge.
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - Dockerfile
+        - .dockerignore
+        - Cargo.toml
+        - Cargo.lock
+        - crates/*/Cargo.toml
+        - rust-toolchain.toml
+        - web/package.json
+        - web/package-lock.json
+        - .gitlab-ci.yml
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - when: on_success
   # Needs a runner that allows privileged jobs, for Docker-in-Docker.
   image: docker:29-cli
   services:
@@ -166,8 +209,8 @@ renovate config:
 
 # Weekly, on the schedule: dependency updates (renovate.json says what and how they're grouped). RENOVATE_TOKEN is a
 # masked, protected project variable: a project access token (role Developer, scope api) that Renovate pushes its
-# branches and opens merge requests with. GITHUB_COM_TOKEN (optional, a GitHub token with no scopes) avoids github.com's rate limit when
-# Renovate looks up the mirror's workflow actions and release notes.
+# branches and opens merge requests with. GITHUB_COM_TOKEN (optional, a GitHub token with no scopes) avoids
+# github.com's rate limit when Renovate looks up the mirror's workflow actions and release notes.
 renovate:
   extends: .weekly
   image: renovate/renovate:44.222.4
