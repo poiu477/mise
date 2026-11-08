@@ -14,7 +14,7 @@ Write like the code around you: match its comment density, naming and idiom. Wha
 - **Errors.** `anyhow` with `.context(...)` in the CLI and ingest; `ApiError` (`error.rs`) in the API, whose messages
   are shown to people, so they are sentences ("enter between 1 and 200 characters").
 - **SQL.** Today: inline strings with `sqlx::query`, `query_as` and `query_scalar` plus `.bind(...)`, rows as
-  tuples with a `type` alias naming their columns, inside the handlers. The target (on the task list): rows as
+  tuples with a `type` alias naming their columns, inside the handlers. The target (in the backlog): rows as
   `#[derive(sqlx::FromRow)]` structs, compile-time checked `query_as!` with the `.sqlx` offline data committed, and
   SQL in per-domain data modules the handlers call. New code should move that way. Ids are UUID v7 made in Rust
   (`Uuid::now_v7()`).
