@@ -83,3 +83,4 @@ What a reviewer can rely on today:
 | 2026-11-04 | The repository goes public with its history as it is; the private seed's details live in the ignored `CLAUDE.local.md` |
 | 2026-11-08 | The web app loads server data with TanStack Query; the shopping list's device copy and queue stay its own |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |
+| 2026-11-08 | Doc comments are required on public Rust items and exported TypeScript, and lints are to enforce it (`jsdoc/require-jsdoc` in T13, `missing_docs` in T14 to T16; not on yet); they say what a thing means, not its types. CodeRabbit's docstring score is not the gate |
