@@ -11,6 +11,7 @@ import {
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type ShoppingItem, type ShoppingList, type Weights } from "../api/client";
 import {
+  addition,
   currentSignIn,
   deviceCopy,
   isLocal,
@@ -85,7 +86,7 @@ async function send(c: Change): Promise<Sent> {
     case "add_extra": {
       const r = await reach(
         api.POST("/api/shopping/extras", {
-          body: { week: c.week, name: c.name, client_key: c.id },
+          body: addition(c),
           signal: patience(),
         }),
       );

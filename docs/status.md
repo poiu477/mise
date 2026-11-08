@@ -30,8 +30,8 @@ What a reviewer can rely on today:
   browser journeys, the Docker image built.
 - **Tests:** unit and fuzz tests in `mise-core`; API tests for sign-in, plan and shopping; single sign-on end to end
   against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on the demo bundle covering
-  first-run setup, scaling, planning to a full list, ticks across reloads, offline use, a 375 px layout, an axe scan
-  and sign-out.
+  first-run setup, scaling, planning to a full list, ticks across reloads, offline use (an addition resent after a
+  lost answer lands once), a 375 px layout, an axe scan and sign-out.
 - **Demo data:** `fixtures/demo-bundle`, written for mise, under the MIT licence. The household's own seed is private
   and never committed.
 - **Dependencies:** Dependabot weekly, grouped; TypeScript 7 held back until its tools support it, with a weekly

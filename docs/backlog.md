@@ -139,18 +139,6 @@ Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" 
 - **Done when:** unit tests cover both merges, the count that can't convert, and each tick rule above; a browser
   journey shows one onion line for the demo week and keeps its tick across a reload.
 
-### T12 · Adding to the list offline must not add twice
-
-An item added offline can appear twice if the server saves it but its answer is lost: adding has no idempotency
-key, so the device sends it again (status.md, known issues).
-
-- Give each queued addition a client-made id (a UUID made when it is queued, kept with it in the device copy) and
-  have the server treat a repeated id from the same household as the same addition.
-- **Touches:** `web/src/offline.ts`, the add-item route in `crates/mise-api/src/shopping.rs`, a new migration,
-  `web/src/api/schema.d.ts` (regenerated).
-- **Done when:** an API test sends the same addition twice and gets one item; a unit test in `web/` shows a retried
-  queue sends the same id; the known issue is removed from status.md.
-
 ## Needs a decision first
 
 Each of these waits on a question in status.md's "Open questions" or on Paul.

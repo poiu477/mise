@@ -69,4 +69,5 @@ export type Plan = components["schemas"]["Plan"];
 export type PlanEntry = components["schemas"]["PlanEntry"];
 export type ShoppingList = components["schemas"]["ShoppingList"];
 export type ShoppingItem = components["schemas"]["ShoppingItem"];
+export type NewExtra = components["schemas"]["NewExtra"];
 export type Weights = components["schemas"]["Weights"];
