@@ -193,8 +193,10 @@ style.md asks for a `///` comment on every public Rust item, but nothing checks 
 - A CI job that runs `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS="-D warnings"` on every pull request
   (broken intra-doc links and bad doc markup fail it), and on `main` publishes the result to GitHub Pages. Link it
   from the README.
-- **Touches:** `.github/workflows/` (a new job or workflow, actions pinned to SHAs like `ci.yml`), `README.md`.
-- **Needs:** T14 (something worth reading); **Paul** to turn on Pages for the repository (Settings, Pages, source
+- Run the same `cargo doc` check from `./check` (T1), so a local run catches what this job would.
+- **Touches:** `.github/workflows/` (a new job or workflow, actions pinned to SHAs like `ci.yml`), `check`,
+  `README.md`.
+- **Needs:** T1 (`./check`), T14 (something worth reading); **Paul** to turn on Pages for the repository (Settings, Pages, source
   "GitHub Actions").
 - **Done when:** the job passes, fails on a deliberately broken intra-doc link (try it, then revert), and the Pages
   URL serves `mise_core`'s documentation.
