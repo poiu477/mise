@@ -26,6 +26,7 @@ import { useSession } from "../session";
 import { addWeeks, mondayOf, weekLabel, weekOf } from "../week";
 import { WEIGHTS, shortWeight } from "../weights";
 
+/** What a call came to: the data, a refusal with the server's error, or no usable answer. */
 type Reached<T> = { data: T } | { refused: unknown } | "unreachable";
 
 /** A call's outcome. No answer, a server error or an ended session count as out of reach: worth trying again.
@@ -43,7 +44,7 @@ async function reach<T>(
   }
 }
 
-// A weak signal can hang rather than fail; give up and use the device's copy.
+/** A time limit for a call: a weak signal can hang rather than fail, so give up and use the device's copy. */
 const patience = () => AbortSignal.timeout(8000);
 
 /** Save this week's and next week's lists on the device, so they open in a shop with no signal. */
@@ -58,6 +59,8 @@ export async function keepListsOnDevice(user: string) {
   }
 }
 
+/** Sends one waiting change. Adding something that was ticked offline goes as two changes, the add and then
+ * the tick, so a lost answer can't add it twice. */
 async function send(c: Change): Promise<Sent> {
   const sent = (r: Reached<ShoppingList>, then?: Change): Sent =>
     r === "unreachable" ? r : "data" in r ? { list: r.data, then } : "refused";
@@ -104,12 +107,15 @@ async function send(c: Change): Promise<Sent> {
   }
 }
 
+/** When the device's copy was saved, for the offline notice: "Sat 2:15 PM". */
 const when = (t: number) =>
   new Date(t).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
 
 /** The list as last heard: from the server (`reached`), or else the device's copy (`savedAt`, when it was saved). */
 type Seen = { list: ShoppingList | null; savedAt: number | null; reached: boolean };
 
+/** The week's shopping list (?week=), which keeps working with no signal: ticks and added items wait on the
+ * device and are sent once the server is back. */
 export function ShoppingPage() {
   const { session } = useSession();
   const user = session.status === "in" || session.status === "offline" ? session.me?.id : undefined;
@@ -120,6 +126,7 @@ export function ShoppingPage() {
   return <WeekList key={`${user} ${signIn}`} user={user} />;
 }
 
+/** The list as one account and sign-in sees it, with that sign-in's own device copy and waiting changes. */
 function WeekList({ user }: { user: string }) {
   const { session, refresh } = useSession();
   const [copy] = useState(() => deviceCopy(user));
@@ -152,6 +159,7 @@ function WeekList({ user }: { user: string }) {
     copy.save(l);
     if (session.status === "offline") refresh();
   };
+  /** Takes the server's list as the one to show, and keeps it on the device. */
   const accept = (l: ShoppingList) => {
     keep(l);
     queryClient.setQueryData<Seen>(key, { list: l, savedAt: null, reached: true });
@@ -190,6 +198,7 @@ function WeekList({ user }: { user: string }) {
   const list = seen.data?.list ?? null;
   const savedAt = seen.data?.savedAt ?? null;
   const offline = seen.data?.reached === false;
+  /** Fetches the list afresh (every week of it cached for this account). */
   const load = () => queryClient.invalidateQueries({ queryKey: ["shopping", user] });
 
   /** Send what is waiting; once everything is through, fetch the list afresh. */
@@ -222,6 +231,7 @@ function WeekList({ user }: { user: string }) {
     flushRef.current = flush;
   });
 
+  /** Queues a tick or an addition on the device, then tries to send it. */
   const change = (c: Change) => {
     setPending(queue(pendingRef.current, c));
     flush();
@@ -252,6 +262,7 @@ function WeekList({ user }: { user: string }) {
     shown && change({ kind: "tick", week: shown.week, key: item.key, checked });
   const tickExtra = (id: string, checked: boolean) =>
     shown && change({ kind: "tick_extra", week: shown.week, id, checked });
+  /** Deletes a hand-added item: one not sent yet just leaves the queue; one the server has needs the server. */
   const deleteExtra = (id: string) => {
     if (isLocal(id))
       setPending(pendingRef.current.filter((c) => !(c.kind === "add_extra" && c.id === id)));
@@ -269,6 +280,7 @@ function WeekList({ user }: { user: string }) {
         params: { path: { food_id: foodId }, query: { week } },
       }),
     );
+  /** Adds something by hand; it shows at once and waits on the device until sent. */
   const addExtra = (e: FormEvent) => {
     e.preventDefault();
     if (!extra.trim() || !shown) return;

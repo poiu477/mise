@@ -10,6 +10,8 @@ const TYPES = [
   { value: "", label: "Everything" },
 ];
 
+/** The home page: dishes matching the top bar's search (?q=), an ingredient (?ingredient=) and a kind (?type=,
+ * recipes by default), 24 at a time with "Show more". */
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
@@ -38,6 +40,7 @@ export function SearchPage() {
   const total = found.data?.pages.at(-1)?.total ?? 0;
   const ready = found.isSuccess && !found.isPlaceholderData && !found.isFetchingNextPage;
 
+  /** Sets one search parameter, or removes it when empty, keeping the others. */
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);

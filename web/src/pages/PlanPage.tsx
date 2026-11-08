@@ -8,6 +8,8 @@ import { addWeeks, mondayOf, weekLabel } from "../week";
 
 const SUGGESTIONS = 6;
 
+/** The household's plan for a week (?week=, this week by default): dishes at their serving counts, and a search
+ * to add more. */
 export function PlanPage() {
   const [params, setParams] = useSearchParams();
   const week = params.get("week") ?? mondayOf();
@@ -27,6 +29,7 @@ export function PlanPage() {
         : "Can't reach the server. Planning needs it; the shopping list works offline."
       : "");
 
+  /** Moves to the week `n` weeks away. */
   const go = (n: number) => setParams({ week: addWeeks(week, n) });
   /** Every change answers with the whole plan, which replaces the one on screen. */
   const run = async (call: () => Promise<{ data?: Plan; error?: unknown }>) => {
@@ -43,14 +46,17 @@ export function PlanPage() {
       queryClient.invalidateQueries({ queryKey: key });
     }
   };
+  /** Adds a dish at its usual version: 2 servings if it was published for 2, else its first published size. */
   const add = (d: DishSummary) => {
     const variant_id = d.default_variant;
     if (variant_id) run(() => api.POST("/api/plan/entries", { body: { week, variant_id } }));
   };
+  /** Changes how many servings of one dish are planned. */
   const setServings = (e: PlanEntry, servings: number) =>
     run(() =>
       api.PATCH("/api/plan/entries/{id}", { params: { path: { id: e.id } }, body: { servings } }),
     );
+  /** Takes a dish off the plan. */
   const remove = (e: PlanEntry) =>
     run(() => api.DELETE("/api/plan/entries/{id}", { params: { path: { id: e.id } } }));
 

@@ -12,6 +12,8 @@ import { answer, queryClient } from "../api/query";
 import { useAccount, useSession } from "../session";
 import { WEIGHTS } from "../weights";
 
+/** The account page: who is signed in, the household's list units, password, API tokens and, for admins,
+ * people and households. Needs the server. */
 export function AccountPage() {
   const { session, signOut } = useSession();
   if (session.status === "offline")
@@ -53,6 +55,7 @@ function ShoppingUnits() {
   });
   const weights = settings.data?.weight_unit ?? null;
   const [error, setError] = useState("");
+  /** Saves a new unit for the whole household. */
   const change = async (next: Weights) => {
     // Shown at once; the server's answer, or what it still has, replaces it. A reload still on its way would put
     // back the old unit.
@@ -99,9 +102,11 @@ function ShoppingUnits() {
   );
 }
 
+/** Change the password, or set one for someone who signs in with single sign-on. */
 function PasswordForm({ me }: { me: Me }) {
   const [form, setForm] = useState({ current: "", next: "", confirm: "" });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  /** Checks the two new passwords match, then saves; other browsers are signed out. */
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (form.next !== form.confirm)
@@ -162,6 +167,7 @@ function PasswordForm({ me }: { me: Me }) {
   );
 }
 
+/** API tokens for scripts and integrations: list, create (shown once) and revoke. */
 function Tokens() {
   const key = ["tokens", useAccount()];
   const tokens =
@@ -173,7 +179,9 @@ function Tokens() {
   const [scope, setScope] = useState("read");
   const [fresh, setFresh] = useState<string | null>(null);
   const [error, setError] = useState("");
+  /** Shows the tokens afresh after a change. */
   const load = () => queryClient.invalidateQueries({ queryKey: key });
+  /** Makes a token and shows it once, to copy now. */
   const create = async (e: FormEvent) => {
     e.preventDefault();
     const { data, error } = await api.POST("/api/me/tokens", { body: { name, scope } });
@@ -183,6 +191,7 @@ function Tokens() {
     setError("");
     load();
   };
+  /** Revokes a token after asking, since anything using it stops working. */
   const revoke = async (t: TokenInfo) => {
     if (!window.confirm(`Revoke "${t.name}"? Anything using it stops working.`)) return;
     await api.DELETE("/api/me/tokens/{id}", { params: { path: { id: t.id } } });
@@ -256,6 +265,7 @@ function Tokens() {
   );
 }
 
+/** For admins: everyone's accounts and households, adding people and households. */
 function Admin({ me }: { me: Me }) {
   const users =
     useQuery({
@@ -277,11 +287,13 @@ function Admin({ me }: { me: Me }) {
     is_admin: false,
   });
   const [newHousehold, setNewHousehold] = useState("");
+  /** Shows people and households afresh after a change. */
   const load = () => {
     queryClient.invalidateQueries({ queryKey: ["users", me.id] });
     queryClient.invalidateQueries({ queryKey: ["households", me.id] });
   };
 
+  /** Changes one person (admin, signing in, household), then shows everyone afresh. */
   const update = async (
     u: UserInfo,
     change: { is_admin?: boolean; disabled?: boolean; household_id?: string },
@@ -293,6 +305,7 @@ function Admin({ me }: { me: Me }) {
     setError(error ? errorText(error) : "");
     load();
   };
+  /** Adds someone, in an existing household or a new one of their own. */
   const add = async (e: FormEvent) => {
     e.preventDefault();
     const { error } = await api.POST("/api/users", {
@@ -310,6 +323,7 @@ function Admin({ me }: { me: Me }) {
     setForm({ ...form, username: "", display_name: "", email: "", password: "", is_admin: false });
     load();
   };
+  /** Adds an empty household to put people in. */
   const addHousehold = async (e: FormEvent) => {
     e.preventDefault();
     const { error } = await api.POST("/api/households", { body: { name: newHousehold } });
@@ -451,4 +465,5 @@ function Admin({ me }: { me: Me }) {
   );
 }
 
+/** A timestamp as the viewer's local date. */
 const day = (iso: string) => new Date(iso).toLocaleDateString();

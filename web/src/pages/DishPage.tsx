@@ -10,6 +10,8 @@ import { StepText } from "../components/StepText";
 
 const NONE: Selection = {};
 
+/** A dish: its options, any serving count, adding it to the plan, then ingredients and steps for the chosen
+ * version. The URL keeps the version (?v=), servings (?s=) and options, so a reload or a link opens the same. */
 export function DishPage() {
   const { slug = "" } = useParams();
   const [params, setParams] = useSearchParams();
@@ -63,7 +65,8 @@ export function DishPage() {
   const variant = variantQuery.data;
   const loadingVariant = variantQuery.isPlaceholderData;
 
-  // Always from the current URL, so quick taps never act on a stale value.
+  /** Changes URL parameters (null removes one), always from the current URL so quick taps never act on a stale
+   * value. Replaces the history entry rather than adding one. */
   const update = (changes: (prev: URLSearchParams) => Record<string, string | null>) =>
     setParams(
       (prev) => {
@@ -76,6 +79,7 @@ export function DishPage() {
       },
       { replace: true },
     );
+  /** Sets the serving count; the function form builds on the last tap, so quick taps all count. */
   const setServings = (n: number | ((cur: number) => number)) =>
     setTapped((cur) => {
       const was = cur?.slug === slug ? cur.n : (servingsParam ?? defaultServings);
@@ -294,6 +298,7 @@ function startingChoice(dish: Dish, params: URLSearchParams): Selection {
   return pick(dish.variants, wanted) ? wanted : selectionOf(start, dish.options);
 }
 
+/** Minutes in an ISO 8601 duration ("PT1H5M" → 65), or nothing when it has none. */
 function minutes(iso: unknown): number | undefined {
   if (typeof iso !== "string") return undefined;
   const m = /PT(?:(\d+)H)?(?:(\d+)M)?/.exec(iso);
@@ -302,8 +307,11 @@ function minutes(iso: unknown): number | undefined {
   return total > 0 ? total : undefined;
 }
 
+/** The published difficulty, 1 to 3, in words. */
 const difficulty = (d: number) => ["", "Easy", "Medium", "Hard"][d] ?? "";
+/** The year a version was published, or nothing. */
 const year = (iso?: string | null) => (iso ? new Date(iso).getFullYear().toString() : "");
+/** Every allergen in the version's ingredients, once each, sorted. */
 const allergens = (v: Variant) => [...new Set(v.ingredients.flatMap((i) => i.allergens))].sort();
 
 /** Why some amounts on the page are scaled, and which ones. */

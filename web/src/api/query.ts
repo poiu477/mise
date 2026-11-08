@@ -29,6 +29,7 @@ export async function answer<T>(
 // offline. An app opened with no signal starts offline, so coming back into reach reloads what is on screen.
 if (typeof navigator !== "undefined") onlineManager.setOnline(navigator.onLine);
 
+/** The app's one cache of server data, shared by every page. */
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

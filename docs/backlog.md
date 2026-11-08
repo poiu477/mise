@@ -140,6 +140,21 @@ key, so the device sends it again (status.md, known issues).
 - **Done when:** an API test sends the same addition twice and gets one item; a unit test in `web/` shows a retried
   queue sends the same id; the known issue is removed from status.md.
 
+### T13 · Doc comments on the rest of the web app
+
+style.md asks for a `/** … */` comment on every exported function, component, hook, class and type, and on
+internal functions whose job isn't plain from their name. The pages T5 rewrote have them; the rest of `web/src`
+mostly doesn't (`api/client.ts` documents 1 of its 24 exports).
+
+- Add them where missing, in style.md's voice: what it is or does, an example in quotes where it helps, no
+  restated types. Comments only; no behaviour changes.
+- **Touches:** `web/src/api/client.ts`, `offline.ts`, `choose.ts`, `week.ts`, `weights.ts`, `main.tsx`,
+  `pages/LoginPage.tsx`, `pages/SetupPage.tsx`, `pages/NotFound.tsx`, `components/AddToPlan.tsx`,
+  `components/Servings.tsx`, `components/StepText.tsx`.
+- **Needs:** T12 (it changes `api/client.ts` and `offline.ts`).
+- **Done when:** every export in those files has a doc comment; CodeRabbit's docstring check passes on the pull
+  request; lint, tests and build pass.
+
 ## Needs a decision first
 
 Each of these waits on a question in status.md's "Open questions" or on Paul.

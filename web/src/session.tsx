@@ -12,6 +12,7 @@ import {
 import { queryClient } from "./api/query";
 import { forgetDevice, rememberedMe, rememberMe } from "./offline";
 
+/** Where the app stands with the server and who is signed in. */
 export type Session =
   | { status: "loading" }
   /** The server can't be reached; `me` is who last signed in on this device, if anyone. */
@@ -20,15 +21,20 @@ export type Session =
   | { status: "out"; info: AuthInfo }
   | { status: "in"; info: AuthInfo; me: Me };
 
+/** What `useSession` gives: the session, a fresh check, and signing out. */
 type Ctx = { session: Session; refresh: () => Promise<void>; signOut: () => Promise<void> };
 const SessionContext = createContext<Ctx | null>(null);
 
 const SESSION = ["session"];
 const LOADING: Session = { status: "loading" };
 
+/** Knows who is signed in, for everything inside it. Checks once when the app opens, and again after signing in or
+ * out, when another tab signs someone else in, and when the server is back in reach after being offline. */
 export function SessionProvider({ children }: { children: ReactNode }) {
   // Only the latest check counts: an older one finishing late must not put back an account that has changed since.
   const latest = useRef(0);
+  /** Asks the server who is signed in, and sets the account the API client works as (`X-Mise-Account`). With no
+   * answer, the app opens offline as whoever last signed in on this device. */
   const check = useCallback(async (): Promise<Session> => {
     const mine = ++latest.current;
     // A weak signal can hang rather than fail: give up after a few seconds and open from the device.
@@ -64,9 +70,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     refetchOnReconnect: false,
   });
 
-  // A new check cancels one still on its way, so only the newest lands.
+  /** Checks again; a new check cancels one still on its way, so only the newest lands. */
   const refresh = useCallback(() => queryClient.refetchQueries({ queryKey: SESSION }), []);
 
+  /** Signs out and forgets everything of the household's on this device and in memory. */
   const signOut = useCallback(async () => {
     await api.POST("/api/auth/logout").catch(() => null);
     forgetDevice();
@@ -105,6 +112,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** The session and its actions; only inside `SessionProvider`. */
 export function useSession(): Ctx {
   const ctx = useContext(SessionContext);
   if (!ctx) throw new Error("useSession outside SessionProvider");
