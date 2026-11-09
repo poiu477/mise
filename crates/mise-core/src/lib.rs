@@ -1,5 +1,7 @@
 //! Domain types and helpers shared by every mise crate.
 
+#![warn(missing_docs)]
+
 pub mod dish_titles;
 pub mod food_names;
 pub mod media;

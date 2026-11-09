@@ -42,9 +42,13 @@ pub fn fit_within(width: u32, height: u32, max_side: u32) -> (u32, u32) {
 /// An image format mise stores, detected from a file's first bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageKind {
+    /// JPEG, stored as ".jpg".
     Jpeg,
+    /// PNG.
     Png,
+    /// WebP.
     Webp,
+    /// GIF.
     Gif,
 }
 
@@ -74,6 +78,7 @@ impl ImageKind {
         }
     }
 
+    /// The content type it is served with: "image/jpeg".
     pub fn mime(self) -> &'static str {
         match self {
             Self::Jpeg => "image/jpeg",

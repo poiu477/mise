@@ -92,6 +92,16 @@ const PROTEINS: &[(&[&str], &str)] = &[
     (&["sausage"], "Pork"),
 ];
 
+/// The protein a food counts as, for the dish's "Protein" option.
+///
+/// ```
+/// use mise_core::proteins::protein_of;
+///
+/// assert_eq!(protein_of("Boneless Chicken Thighs"), Some("Chicken"));
+/// // Stocks, sauces and seasonings mention a protein without being one.
+/// assert_eq!(protein_of("Chicken Stock"), None);
+/// assert_eq!(protein_of("Onion"), None);
+/// ```
 pub fn protein_of(food_name: &str) -> Option<&'static str> {
     let name = format!(" {} ", normalize_name(food_name));
     if NOT_A_PROTEIN

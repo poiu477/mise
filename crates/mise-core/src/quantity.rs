@@ -9,26 +9,42 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Unit {
+    /// Teaspoon, "tsp"; volume amounts add up in teaspoons.
     Tsp,
+    /// Tablespoon, "TBSP": 3 tsp.
     Tbsp,
+    /// Cup: 16 TBSP, 48 tsp.
     Cup,
+    /// Fluid ounce, "fl oz": 2 TBSP.
     FlOz,
+    /// Milliliter, "ml".
     Ml,
+    /// Liter, "L".
     L,
+    /// Ounce of weight, "oz".
     Oz,
+    /// Pound, "lb": 16 oz.
     Lb,
+    /// Gram, "g"; weights add up in grams.
     G,
+    /// Kilogram, "kg".
     Kg,
+    /// A pinch: a sixteenth of a teaspoon where it has to convert, otherwise a measure of its own.
     Pinch,
     /// A countable item, holding its noun as written ("clove", "wedge"); empty for a bare number.
     Count(String),
 }
 
+/// What a unit measures. Amounts convert only within one family: cups to tablespoons, ounces to grams.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Family {
+    /// Spoons, cups, fluid ounces, milliliters and liters.
     Volume,
+    /// Ounces, pounds, grams and kilograms.
     Weight,
+    /// Items: "2 cloves", "1 can".
     Count,
+    /// Pinches, kept apart so "a pinch of salt" never reads as "0.06 tsp".
     Pinch,
 }
 
@@ -61,6 +77,7 @@ impl Unit {
         })
     }
 
+    /// What the unit measures: TBSP is a volume, oz a weight, "clove" a count.
     pub fn family(&self) -> Family {
         match self {
             Unit::Tsp | Unit::Tbsp | Unit::Cup | Unit::FlOz | Unit::Ml | Unit::L => Family::Volume,
@@ -113,17 +130,23 @@ fn singular(w: &str) -> &str {
     }
 }
 
+/// An amount in a unit: "1½ TBSP", "2 cloves". It shows in kitchen style ("1½ TBSP"); `exact` shows the
+/// amount as it is.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Quantity {
+    /// How many of `unit`: 1.5 in "1½ TBSP".
     pub amount: f64,
+    /// What the amount is counted in.
     pub unit: Unit,
 }
 
 impl Quantity {
+    /// The amount in the unit as given, unrounded.
     pub fn new(amount: f64, unit: Unit) -> Self {
         Quantity { amount, unit }
     }
 
+    /// The amount times `factor`, in the same unit and unrounded: ¾ cup scaled by 2 is 1½ cups.
     pub fn scaled(&self, factor: f64) -> Quantity {
         Quantity {
             amount: self.amount * factor,
@@ -228,6 +251,18 @@ impl Quantity {
     /// The amount as a cook measures it, never less: spoons and cups as one standard measure where that is at
     /// most 5% over, else the fewest that come closest ("1 tsp + 1 pinch"); weights up to the next half ounce
     /// (quarter below one), counts up to the next half (quarter below one).
+    ///
+    /// ```
+    /// use mise_core::quantity::{Quantity, Unit};
+    ///
+    /// // 0.31 cup is 14.88 tsp: ⅓ cup would be 7.5% over, so the two measures that come closest.
+    /// assert_eq!(Quantity::new(0.31, Unit::Cup).measured().to_string(), "¼ cup + 1 TBSP");
+    /// // 1.04 TBSP: one tablespoon would be short, and 1 TBSP + ⅛ tsp is within 5%.
+    /// assert_eq!(Quantity::new(1.04, Unit::Tbsp).measured().to_string(), "1 TBSP + ⅛ tsp");
+    /// // Weights go up to the next half ounce, counts to the next half.
+    /// assert_eq!(Quantity::new(13.2, Unit::Oz).measured().to_string(), "13½ oz");
+    /// assert_eq!(Quantity::new(1.2, Unit::Count("clove".into())).measured().to_string(), "1½ cloves");
+    /// ```
     pub fn measured(&self) -> Measure {
         let a = self.amount;
         if a <= 0.0 {
@@ -418,6 +453,15 @@ pub fn format_amount(a: f64) -> String {
 
 /// The amount as it is: a kitchen fraction only where it is one (within a source's two-decimal rounding, so
 /// 0.33 is ⅓), else up to two decimals.
+///
+/// ```
+/// use mise_core::quantity::format_exact;
+///
+/// assert_eq!(format_exact(0.33), "⅓");
+/// assert_eq!(format_exact(2.25), "2¼");
+/// // Not a kitchen fraction, so not rounded to one: the shopping list adds amounts up exactly.
+/// assert_eq!(format_exact(1.3), "1.3");
+/// ```
 pub fn format_exact(a: f64) -> String {
     let whole = a.floor();
     let frac = a - whole;
