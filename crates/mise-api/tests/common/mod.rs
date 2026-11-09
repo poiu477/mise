@@ -110,11 +110,6 @@ impl TestApp {
         TestApp::start(Some(oidc), None).await
     }
 
-    /// The app with local sign-in and an empty media folder of its own, removed when the test ends.
-    pub async fn with_media() -> Option<TestApp> {
-        TestApp::start(None, Some(MediaDir::create())).await
-    }
-
     /// Make and migrate the database, then build the router with local sign-in, `oidc` if given, and photos read
     /// from `media` (or a folder that doesn't exist).
     async fn start(oidc: Option<OidcConfig>, media: Option<MediaDir>) -> Option<TestApp> {

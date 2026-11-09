@@ -40,8 +40,8 @@ path = "src/main.rs"
 # The fake OpenID Connect provider in tests/oidc.rs signs ID tokens with these, at the versions openidconnect uses.
 ed25519-dalek = "3.0.0"
 http-body-util = "0.1.5"
-# tests/dishes.rs draws a photo for the demo recipes; the version and features mise-ingest already builds.
-image = { version = "0.25.8", default-features = false, features = ["png"] }
+# tests/photos.rs draws a photo for the demo recipes and reads its web copies; as mise-ingest builds it.
+image = { version = "0.25.8", default-features = false, features = ["jpeg", "png"] }
 # tests/common/demo.rs loads the demo recipes through the same stages as the `mise` command.
 mise-ingest = { version = "0.1.0", path = "../mise-ingest" }
 p256 = { version = "0.14.0", features = ["ecdsa"] }

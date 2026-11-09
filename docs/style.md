@@ -22,8 +22,9 @@ Write like the code around you: match its comment density, naming and idiom. Wha
   and ingest crates do I/O and call it.
 - **Tests.** Names read as the rule they check (`counts_carry_their_size`, `a_household_sees_only_its_own_plan`), and
   assertions compare what a person would see (`"1 lb 14 oz"`). Unit tests sit in a `mod tests` at the end of the file;
-  integration tests in `crates/<crate>/tests/` build their own throwaway database and their own made-up foods. API
-  tests start from `TestApp` in `crates/mise-api/tests/common` rather than setting up their own.
+  integration tests in `crates/<crate>/tests/` build their own throwaway database and their own made-up foods, or
+  load the demo recipes. API tests start from `TestApp` in `crates/mise-api/tests/common` rather than setting up
+  their own (`TestApp::with_demo()` for the demo recipes).
 
 ## Migrations
 

@@ -37,8 +37,10 @@ What a reviewer can rely on today:
 - **Local checks:** `./check` runs CI's build, lint and test steps with CI's commands, in CI's order, and names the
   step that fails; `--e2e` adds the browser journeys. `cargo deny`, `npm audit` and the image build stay CI-only. A
   pre-commit hook (`.githooks/`, opt-in) runs the formatting and lints.
-- **Tests:** unit and fuzz tests in `mise-core`; API tests for sign-in, plan and shopping, sharing one harness
-  (`crates/mise-api/tests/common`) that gives each test its own database and drops it even when the test fails;
+- **Tests:** unit and fuzz tests in `mise-core`; API tests for sign-in, plan and shopping, and for search, dish
+  pages, options, versions at published and scaled serving counts, photos and signed-out requests on the demo bundle
+  (loaded through `mise-ingest`), sharing one harness (`crates/mise-api/tests/common`) that gives each test its own
+  database and media folder and drops them even when the test fails;
   single sign-on end to end against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on
   the demo bundle covering first-run setup, scaling, planning to a full list, ticks across reloads, offline use (an
   addition resent after a lost answer lands once), a 375 px layout, an axe scan and sign-out.
@@ -64,6 +66,8 @@ What a reviewer can rely on today:
 - Some step text from the source lost a space in a mixed number ("10-12 11⁄2-inch meatballs").
 - The pot pie dish's address still says "beef" (slugs are fixed at first import) until a fresh install.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
+- A dish option's choices that as many versions offer (each of the Black Bean Tacos' two versions) come in no set
+  order: `derive-options` ranks them by count alone, so a re-run can swap them.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
   the list reloads a moment later.
