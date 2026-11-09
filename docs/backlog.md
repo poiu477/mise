@@ -17,17 +17,6 @@ status.md if it changed either.
 ## Ready
 
 
-### T3 · API tests for dishes, versions and photos
-
-Only sign-in, plan and shopping have HTTP-level tests.
-
-- Load `fixtures/demo-bundle` into the test database (through `mise-ingest`, as `web/e2e/serve.mjs` does with
-  the CLI) and test: search, a dish page, a version at a published and a scaled serving count, option toggles,
-  photo and missing-photo responses, and that signed-out requests get 401.
-- **Touches:** `crates/mise-api/tests/` (new files).
-- **Needs:** T2.
-- **Done when:** the new tests pass locally and in CI.
-
 ### T4 · Pipeline snapshot test
 
 A change to grouping, matching, step parsing or rounding should show up as a reviewable diff.
