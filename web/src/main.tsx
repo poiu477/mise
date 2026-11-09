@@ -1,3 +1,5 @@
+// The web app's entry point: its pages and their paths, the providers every page needs, and the service worker
+// that keeps the app opening without a signal.
 import { QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -15,6 +17,7 @@ import { queryClient } from "./api/query";
 import { SessionProvider } from "./session";
 import "./styles.css";
 
+/** Every page and its path, inside the shared layout; anything else is "Nothing here". */
 const router = createBrowserRouter([
   {
     element: <Layout />,

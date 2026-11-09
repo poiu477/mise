@@ -23,6 +23,7 @@ export function AddToPlan({ variantId, servings }: { variantId: string; servings
   // Only the latest submission's answer counts: an earlier one finishing late must not undo a newer one's state.
   const latest = useRef(0);
 
+  /** Adds the choice to the plan; an earlier tap's answer arriving late is ignored. */
   const add = async () => {
     const mine = ++latest.current;
     setDone({ target, state: "saving" });

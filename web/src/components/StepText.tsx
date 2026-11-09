@@ -3,6 +3,7 @@
  * joined paragraphs ("…tender.Drain") get it back.
  */
 export function StepText({ text }: { text: string }) {
+  /** One run of text with its spacing evened out and lost sentence spaces put back. */
   const tidy = (s: string) =>
     s
       .replace(/\s+/g, " ")

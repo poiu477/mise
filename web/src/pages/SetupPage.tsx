@@ -14,9 +14,11 @@ export function SetupPage() {
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  /** The change handler for one field. */
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [k]: e.target.value });
 
+  /** Checks the two passwords match, then creates the account and household and signs in as it. */
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (form.password !== form.confirm) return setError("The passwords don't match.");
