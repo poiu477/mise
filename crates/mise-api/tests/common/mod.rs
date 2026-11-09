@@ -4,12 +4,15 @@
 //!
 //! Without a database a test skips on a laptop but fails in CI, so a missing or unreachable database never passes
 //! quietly there. Start a test with `let app = test_app!();`, or `test_app!(SomeApp::new())` for a wrapper that
-//! returns `Option` the same way.
+//! returns `Option` the same way. `TestApp::with_demo()` starts one with the demo recipes loaded and a media folder
+//! of its own (see `demo`).
 
 // Each test file is its own crate and uses only some of these helpers.
 #![allow(dead_code)]
 
-use std::sync::Arc;
+pub mod demo;
+
+use std::{path::PathBuf, sync::Arc};
 
 use axum::{
     Router,
@@ -88,6 +91,10 @@ pub struct TestApp {
     pub router: Router,
     /// The test database, for arranging data and checking what was stored.
     pub pool: PgPool,
+    /// MEDIA_ROOT: where the server reads photos from.
+    pub media_root: PathBuf,
+    /// The folder at `media_root` when this test made one, removed with it.
+    _media: Option<MediaDir>,
     // Last, so the pool is gone before the database is dropped.
     _db: Database,
 }
@@ -95,16 +102,17 @@ pub struct TestApp {
 impl TestApp {
     /// The app with local sign-in only.
     pub async fn new() -> Option<TestApp> {
-        TestApp::start(None).await
+        TestApp::start(None, None).await
     }
 
     /// The app with local sign-in and this single sign-on provider.
     pub async fn with_oidc(oidc: OidcConfig) -> Option<TestApp> {
-        TestApp::start(Some(oidc)).await
+        TestApp::start(Some(oidc), None).await
     }
 
-    /// Make and migrate the database, then build the router with local sign-in and `oidc` if given.
-    async fn start(oidc: Option<OidcConfig>) -> Option<TestApp> {
+    /// Make and migrate the database, then build the router with local sign-in, `oidc` if given, and photos read
+    /// from `media` (or a folder that doesn't exist).
+    async fn start(oidc: Option<OidcConfig>, media: Option<MediaDir>) -> Option<TestApp> {
         let db = Database::create().await?;
         let pool = mise_db::connect(&db.url()).await.unwrap();
         mise_db::migrate(&pool).await.unwrap();
@@ -114,14 +122,19 @@ impl TestApp {
             public_base_url: None,
             session_days: 30,
         };
+        let media_root = media
+            .as_ref()
+            .map_or_else(|| PathBuf::from("./no-media"), |m| m.path.clone());
         let state = mise_api::AppState {
             pool: pool.clone(),
-            media_root: "./no-media".into(),
+            media_root: media_root.clone(),
             auth: Arc::new(Auth::new(config)),
         };
         Some(TestApp {
             router: mise_api::router(state, None),
             pool,
+            media_root,
+            _media: media,
             _db: db,
         })
     }
@@ -206,6 +219,33 @@ impl TestApp {
             reply.body
         );
         reply.session().expect("signing in sets a session")
+    }
+}
+
+/// A media folder made for one test under the system's temporary folder, and removed with it, even when the test
+/// fails.
+struct MediaDir {
+    path: PathBuf,
+}
+
+impl MediaDir {
+    fn create() -> MediaDir {
+        let path =
+            std::env::temp_dir().join(format!("mise-test-media-{}", uuid::Uuid::now_v7().simple()));
+        std::fs::create_dir_all(&path).unwrap();
+        MediaDir { path }
+    }
+}
+
+impl Drop for MediaDir {
+    /// Reported, not raised, as for the database: panicking while a failed test unwinds would abort the run.
+    fn drop(&mut self) {
+        if let Err(e) = std::fs::remove_dir_all(&self.path) {
+            eprintln!(
+                "couldn't remove test media folder {}: {e}",
+                self.path.display()
+            );
+        }
     }
 }
 
