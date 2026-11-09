@@ -1,7 +1,9 @@
+/** Fewest servings the stepper goes down to. */
 const MIN = 1;
 /** The API derives up to 24 servings; a dish published for more (a 40-serving roast) goes up to that. */
 const MAX = 24;
 
+/** A new count, or how to get one from the current count (a tap on − or +). */
 type Change = number | ((current: number) => number);
 
 /** Serving count: a stepper, with the published sizes one tap away. */

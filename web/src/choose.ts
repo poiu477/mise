@@ -1,8 +1,10 @@
 // Choosing a version from a dish's option toggles. Only combinations some version actually has are offered.
 import type { DishOption, VariantSummary } from "./api/client";
 
+/** The chosen value of each of a dish's options, by option key: `{ portion: "double" }`. */
 export type Selection = Record<string, string>;
 
+/** Whether a version has every chosen value, ignoring the option `except`. */
 const matches = (v: VariantSummary, sel: Selection, except?: string) =>
   Object.entries(sel).every(([k, val]) => k === except || v.attributes[k] === val);
 

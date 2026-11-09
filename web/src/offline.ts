@@ -10,6 +10,7 @@ export type Change =
    * the item's `client_key`, so sending the change again never adds the item twice. */
   | { kind: "add_extra"; week: string; id: string; name: string; checked: boolean };
 
+/** A week's list as last saved on this device, and when (milliseconds since 1970). */
 export type Saved = { list: ShoppingList; savedAt: number };
 
 /** Where the copy lives: localStorage in the browser, a map in tests. */
@@ -22,7 +23,8 @@ export interface Store {
 
 const PREFIX = "mise:";
 
-// Storage can be missing or refuse (private windows, full disks): the list then simply isn't kept.
+/** The browser's localStorage as a `Store`. Storage can be missing or refuse (private windows, full disks): the
+ * list then simply isn't kept. */
 export const browserStore: Store = {
   get: (k) => {
     try {
@@ -54,6 +56,7 @@ export const browserStore: Store = {
   },
 };
 
+/** The JSON stored under `key`, or `null` when there is none or it doesn't parse. */
 function read<T>(store: Store, key: string): T | null {
   const raw = store.get(key);
   if (!raw) return null;
@@ -73,6 +76,7 @@ const randomHex = () =>
     b.toString(16).padStart(2, "0"),
   ).join("");
 
+/** A new sign-in id: the time, then a random part, "1762000000000-3f9a…". */
 const newSignIn = () => `${Date.now()}-${randomHex()}`;
 
 /** The signed-in account, remembered so the app opens without the server. Each sign-in gets an id of its own,
@@ -82,6 +86,7 @@ export function rememberMe(me: Me, store: Store = browserStore) {
   if (rememberedMe(store)?.id !== me.id || !store.get(SIGN_IN)) store.set(SIGN_IN, newSignIn());
   store.set(`${PREFIX}me`, JSON.stringify(me));
 }
+/** The account remembered on this device, or `null` when none is (signed out, or never signed in here). */
 export const rememberedMe = (store: Store = browserStore) => read<Me>(store, `${PREFIX}me`);
 
 /** A sign-in on the sign-in page starts a new one, even for the account already remembered here (its session
@@ -173,6 +178,7 @@ export function withChanges(list: ShoppingList, changes: Change[]): ShoppingList
   };
 }
 
+/** Whether an id is this device's own ("local-…"), for something added here and not yet saved on the server. */
 export const isLocal = (id: string) => id.startsWith("local-");
 
 /** What sending an addition asks the server for. Its key is the device's id for it, the same every time it is
