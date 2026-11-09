@@ -118,39 +118,25 @@ mostly doesn't (`api/client.ts` documents 1 of its 24 exports).
 - **Done when:** `npm run lint` passes on the branch, and fails on an undocumented export (add one, see it fail,
   then revert); tests and build pass.
 
-### T14 · Rust doc comments: the lint, and `mise-core`
-
-style.md asks for a `///` comment on every public Rust item, but nothing checks it: with the `missing_docs` lint on,
-363 public items have none (`mise-api` 213, `mise-ingest` 91, `mise-core` 57, `mise-db` 2).
-
-- Add `#![warn(missing_docs)]` at the top of `crates/mise-core/src/lib.rs` (clippy's `-D warnings` makes it an error
-  in CI) and document every public item it reports, in style.md's voice: what it is or does, an example in quotes
-  where it helps, never a restated signature. No `# Arguments` or `# Returns` sections.
-- Give the rules people ask about a doc example that runs as a test: `Quantity::measured()` (rounding up into
-  standard measures), `format_exact`, `WeightUnit`, step-amount `render`. Each example shows one real input and the
-  output the code returns for it, so the example fails if the rule changes.
-- **Touches:** `crates/mise-core/src/` (comments and doc examples only; no behaviour changes).
-- **Done when:** clippy passes with the lint on; `cargo test -p mise-core --doc` runs the new examples; removing one
-  doc comment makes clippy fail (try it, then revert).
-
 ### T15 · Rust doc comments: `mise-db` and `mise-ingest`
 
-- As T14, for `crates/mise-db` and `crates/mise-ingest`: `#![warn(missing_docs)]` in each `lib.rs`, then a comment
-  on every public item it reports (93 between them). Doc examples only where a function is pure enough to run
-  without a database.
+- As `mise-core` already does: `#![warn(missing_docs)]` at the top of each `lib.rs` (clippy's `-D warnings` makes it
+  an error in CI), then a comment on every public item it reports (93 between them), in style.md's voice: what it is
+  or does, an example in quotes where it helps, never a restated signature, no `# Arguments` or `# Returns` sections.
+  Doc examples only where a function is pure enough to run without a database.
 - **Touches:** `crates/mise-db/src/`, `crates/mise-ingest/src/` (comments only).
 - **Done when:** clippy passes with the lint on in both crates; removing one doc comment makes it fail.
 
 ### T16 · Rust doc comments: `mise-api`, then the lint for the whole workspace
 
-- As T14, for `crates/mise-api` (213 items). In this crate `///` on a handler or a request or response type also
+- As T15, for `crates/mise-api` (213 items). In this crate `///` on a handler or a request or response type also
   becomes its description in the OpenAPI document, so regenerate `web/src/api/schema.d.ts` and keep
   `check-openapi.mjs` passing; write those comments for an API reader.
 - Then move the lint to the workspace: `[workspace.lints.rust] missing_docs = "warn"` in `Cargo.toml` and
   `[lints] workspace = true` in every crate's `Cargo.toml`, removing the per-crate attributes. `mise-cli` is a binary
   and has no public items, so it's covered without work.
 - **Touches:** `crates/mise-api/src/` (comments only), `web/src/api/schema.d.ts` (regenerated), every `Cargo.toml`.
-- **Needs:** T7 (it rewrites the same annotations), T14, T15. Not while the database-code rework is in flight: it
+- **Needs:** T7 (it rewrites the same annotations), T15. Not while the database-code rework is in flight: it
   moves most of this crate.
 - **Done when:** clippy passes workspace-wide with the lint in `Cargo.toml`; a missing doc comment in any crate fails
   it.
@@ -163,7 +149,7 @@ style.md asks for a `///` comment on every public Rust item, but nothing checks 
 - Run the same `cargo doc` check from `./check` (T1), so a local run catches what this job would.
 - **Touches:** `.gitlab-ci.yml`, `.github/workflows/ci.yml` (the same check on the mirror, without publishing),
   `check`, `README.md`.
-- **Needs:** T14 (something worth reading); **Paul** to make sure GitLab Pages is enabled on the server and the
+- **Needs:** **Paul** to make sure GitLab Pages is enabled on the server and the
   project.
 - **Done when:** the job passes, fails on a deliberately broken intra-doc link (try it, then revert), and the Pages
   URL serves `mise_core`'s documentation.
