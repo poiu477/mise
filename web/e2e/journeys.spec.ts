@@ -150,14 +150,20 @@ test("ticks survive a reload, and the list keeps working offline", async () => {
 test("an addition whose answer is lost is sent again and added once", async () => {
   // The server saves the first send, but the answer never reaches the phone, so the addition stays waiting.
   let sends = 0;
+  let firstSaved = () => {};
+  const savedOnce = new Promise<void>((resolve) => (firstSaved = resolve));
   await page.route("**/api/shopping/extras", async (r) => {
     sends++;
     if (sends > 1) return r.continue();
     await r.fetch();
+    firstSaved();
     await r.abort();
   });
   await page.getByRole("textbox", { name: "Add something else" }).fill("Tape");
   await page.getByRole("button", { name: "Add", exact: true }).click();
+  // "not sent yet" shows from the moment the addition is queued, so it can't tell us the server has it: wait for
+  // the first send to have been saved before reading the server's list.
+  await savedOnce;
   await expect(page.getByText("not sent yet")).toBeVisible();
   const saved = await (await page.request.get("/api/shopping")).json();
   expect(saved.extras.map((x: { name: string }) => x.name)).toEqual(["Foil", "Tape"]);
