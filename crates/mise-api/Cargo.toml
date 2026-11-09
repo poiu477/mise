@@ -45,5 +45,5 @@ image = { version = "0.25.8", default-features = false, features = ["jpeg", "png
 # tests/common/demo.rs loads the demo recipes through the same stages as the `mise` command.
 mise-ingest = { version = "0.1.0", path = "../mise-ingest" }
 p256 = { version = "0.14.0", features = ["ecdsa"] }
-rsa = { version = "0.9.10", features = ["sha2", "getrandom"] }
+rsa = { version = "0.10.0", features = ["sha2", "getrandom"] }
 tower = { version = "0.5.3", features = ["util"] }
