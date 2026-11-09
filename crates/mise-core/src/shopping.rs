@@ -16,6 +16,7 @@ pub const SECTIONS: &[&str] = &[
     "Baking",
     "Snacks & Nuts",
 ];
+/// The section for foods that have none.
 pub const OTHER: &str = "Other";
 /// Pantry lines the recipes expect you to have: last, to check rather than buy.
 pub const CHECK: &str = "Check you have";
@@ -32,19 +33,33 @@ pub fn section_order(name: &str) -> usize {
     }
 }
 
-/// How a household reads weights on its shopping list.
+/// How a household reads weights on its shopping list, for all its foods or for one.
+///
+/// ```
+/// use mise_core::quantity::{Quantity, Unit};
+/// use mise_core::shopping::WeightUnit;
+///
+/// let grams = Quantity::new(30.0, Unit::Oz).in_unit(&Unit::G).unwrap();
+/// assert_eq!(WeightUnit::LbOz.show(grams), "1 lb 14 oz");
+/// assert_eq!(WeightUnit::Oz.show(grams), "30 oz");
+/// assert_eq!(WeightUnit::Lb.show(grams), "1⅞ lb");
+/// assert_eq!(WeightUnit::Metric.show(grams), "850 g");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WeightUnit {
     /// "1 lb 14 oz", and ounces under a pound.
     #[default]
     LbOz,
+    /// Ounces only: "30 oz".
     Oz,
+    /// Pounds only, in fractions where they fit: "1⅞ lb".
     Lb,
     /// Grams, and kilograms from one.
     Metric,
 }
 
 impl WeightUnit {
+    /// Every choice, so a stored name can be looked up.
     pub const ALL: [WeightUnit; 4] = [
         WeightUnit::LbOz,
         WeightUnit::Oz,
@@ -52,6 +67,7 @@ impl WeightUnit {
         WeightUnit::Metric,
     ];
 
+    /// The name it is stored under: "lb_oz", "oz", "lb", "metric".
     pub fn as_str(self) -> &'static str {
         match self {
             WeightUnit::LbOz => "lb_oz",
@@ -61,6 +77,7 @@ impl WeightUnit {
         }
     }
 
+    /// The choice a stored name stands for ("lb_oz" is `LbOz`); `None` for a name it doesn't know.
     pub fn parse(s: &str) -> Option<WeightUnit> {
         WeightUnit::ALL.into_iter().find(|w| w.as_str() == s)
     }

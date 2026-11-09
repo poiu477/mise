@@ -8,6 +8,7 @@ use crate::quantity::{Measure, PINCH_TSP, Quantity, Unit, format_amount, parse_n
 /// What a food's bare counts mean: sources often publish only "1 unit", which reads here as "1 packet (1½ oz)".
 #[derive(Debug, Clone, PartialEq)]
 pub struct CountUnit {
+    /// What one is called on the page: "packet".
     pub noun: String,
     /// How much one is, where the source publishes the same food both ways.
     pub size: Option<Quantity>,

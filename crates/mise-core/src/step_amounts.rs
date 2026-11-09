@@ -12,18 +12,24 @@ use serde::{Deserialize, Serialize};
 use crate::quantity::{Measure, Quantity, Unit, parse_number};
 use crate::text::normalize_name;
 
+/// One piece of a parsed step: text that never changes, or something that changes with the yield.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Part {
+    /// Text that reads the same at every yield.
     Text {
+        /// The text as written.
         text: String,
     },
     /// An amount: as written for the base yield, as written for other published yields, and the ingredient
     /// line it measures out, when the text names one.
     Amount {
+        /// The amount for the base yield: 1 TBSP in "1 TBSP butter (2 TBSP for 4 servings)".
         base: Quantity,
+        /// Amounts published for other yields, by servings: 2 TBSP for 4.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         alts: Vec<(f64, Quantity)>,
+        /// The key of the ingredient line the amount measures out ("butter"), when the words after it name one.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         line: Option<String>,
         /// Cooking water in a pan sauce: the share of it an open pan boils off at the base yield, which stays
@@ -33,18 +39,24 @@ pub enum Part {
     },
     /// Words that change with the yield: "half the lime zest" → "all the lime zest".
     Words {
+        /// The words for the base yield: "half".
         base: String,
+        /// Words published for other yields, by servings: "all" for 4.
         alts: Vec<(f64, String)>,
     },
     /// A remark for larger yields, kept verbatim (with its leading space): shown above the base yield.
     Note {
+        /// The yield the remark names: 4 in "(For 4 servings, use two baking sheets.)".
         from: f64,
+        /// The remark as written.
         text: String,
     },
 }
 
+/// A step parsed once into parts, to render at any yield.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Template {
+    /// The step in order, split where it changes with the yield.
     pub parts: Vec<Part>,
     /// A yield-dependent parenthetical the parser could not place; the published text is kept for it.
     #[serde(default)]
@@ -61,6 +73,7 @@ impl Template {
         }
     }
 
+    /// The amount parts, in the order the step names them.
     pub fn amounts(&self) -> impl Iterator<Item = &Part> {
         self.parts
             .iter()
@@ -181,6 +194,8 @@ fn quantities(text: &str, offset: usize) -> Vec<Found> {
 }
 
 /// Ingredient lines as (line key, name) for linking amounts to what they measure.
+/// The recipe's ingredient lines as (key, name), for linking an amount to the line it measures out:
+/// `("butter", "Butter")`.
 pub type Lines<'a> = &'a [(String, String)];
 
 /// The word naming what an amount measures: "¼ cup water, …" → "water", "2 tsp of sugar" → "sugar".
@@ -218,6 +233,10 @@ fn link(after: &str, lines: Lines) -> Option<String> {
         .map(|(_, k)| k)
 }
 
+/// Split a step's published text into parts: plain text, amounts with the alternatives its parentheticals give
+/// ("(2 TBSP for 4 servings)"), yield-dependent words and remarks for larger yields. The parentheticals are
+/// taken out, keeping any remark after the yield ("add more to taste"); one it can't place stays in the text
+/// and counts in `unparsed`.
 pub fn parse(text: &str, lines: Lines) -> Template {
     // Replacements as (start, end, part); gaps between them become text.
     let mut reps: Vec<(usize, usize, Part)> = Vec::new();
@@ -556,8 +575,10 @@ pub struct Context<'a> {
     pub line_amount: &'a dyn Fn(&str, f64) -> Option<f64>,
 }
 
+/// A step as it reads at one yield, with what the cook should know about how it got there.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Rendered {
+    /// The step text at that yield.
     pub text: String,
     /// Some amount was derived rather than published.
     pub scaled: bool,
@@ -570,12 +591,17 @@ pub struct Rendered {
 /// How a derived amount was reached, for the test report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
+    /// The amount the step publishes for this yield.
     Published,
+    /// Scaled with the ingredient line's official amounts, which move with the yield the way the step does.
     FromLine,
+    /// Between the published amounts for the yields on either side.
     Interpolated,
+    /// In proportion to the nearest published yield, or to the base yield when nothing else is published.
     Proportional,
     /// Cooking water: part boiled off by the pan whatever the batch, part per serving.
     BoilOff,
+    /// The base amount, which the step keeps at every yield.
     Unchanged,
 }
 
@@ -825,6 +851,25 @@ fn derive(part: &Part, target: f64, ctx: &Context, use_alts: bool) -> Option<(Qu
     Some((base.clone(), Method::Unchanged))
 }
 
+/// The step at `target` servings: published amounts as published, others derived and measured up, words from
+/// the nearest published yield, remarks for larger yields, and a note to use more pans where one is too small.
+///
+/// ```
+/// use mise_core::step_amounts::{Context, parse, render};
+///
+/// let lines = [("stock".to_string(), "Vegetable Stock".to_string())];
+/// let step = parse("Pour in ⅓ cup stock (⅔ cup for 4 servings) and stir.", &lines);
+/// let ctx = Context { base: 2.0, scale_plain: false, line_amount: &|_, _| None };
+///
+/// // A published yield reads as published.
+/// assert_eq!(render(&step, 4.0, &ctx).text, "Pour in ⅔ cup stock and stir.");
+/// // 3 servings lies between them: ½ cup, marked as derived.
+/// let three = render(&step, 3.0, &ctx);
+/// assert_eq!(three.text, "Pour in ½ cup stock and stir.");
+/// assert!(three.scaled);
+/// // 5 servings is ⅚ cup in proportion to 4, measured up: 1 cup would be 20% over.
+/// assert_eq!(render(&step, 5.0, &ctx).text, "Pour in ¾ cup + 1½ TBSP stock and stir.");
+/// ```
 pub fn render(t: &Template, target: f64, ctx: &Context) -> Rendered {
     let at_base = (target - ctx.base).abs() < 1e-9;
     let mut out = Rendered {
