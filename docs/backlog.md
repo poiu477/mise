@@ -101,23 +101,6 @@ Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" 
 - **Done when:** unit tests cover both merges, the count that can't convert, and each tick rule above; a browser
   journey shows one onion line for the demo week and keeps its tick across a reload.
 
-### T13 · Doc comments on the rest of the web app
-
-style.md asks for a `/** … */` comment on every exported function, component, hook, class and type, and on
-internal functions whose job isn't plain from their name. The pages T5 rewrote have them; the rest of `web/src`
-mostly doesn't (`api/client.ts` documents 1 of its 24 exports).
-
-- Add them where missing, in style.md's voice: what it is or does, an example in quotes where it helps, no
-  restated types. Comments only; no behaviour changes.
-- Then make lint enforce it: add `eslint-plugin-jsdoc` and turn on `jsdoc/require-jsdoc` as an error for
-  `web/src`, with `publicOnly: true`. Cover exported function declarations, classes, type aliases and interfaces,
-  and exported `const` arrow functions, so React components and hooks written either way count.
-- **Touches:** `web/src/api/client.ts`, `offline.ts`, `choose.ts`, `week.ts`, `weights.ts`, `main.tsx`,
-  `pages/LoginPage.tsx`, `pages/SetupPage.tsx`, `pages/NotFound.tsx`, `components/AddToPlan.tsx`,
-  `components/Servings.tsx`, `components/StepText.tsx`, `web/eslint.config.js`, `web/package.json`.
-- **Done when:** `npm run lint` passes on the branch, and fails on an undocumented export (add one, see it fail,
-  then revert); tests and build pass.
-
 ### T14 · Rust doc comments: the lint, and `mise-core`
 
 style.md asks for a `///` comment on every public Rust item, but nothing checks it: with the `missing_docs` lint on,

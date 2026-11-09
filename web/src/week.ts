@@ -1,12 +1,15 @@
 // Weeks run Monday to Sunday and are named by their Monday, as the API stores them. Dates are the viewer's local days.
 
+/** A local day as "2026-11-02". */
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** A "2026-11-02" date as local midnight that day. */
 const parse = (week: string) => {
   const [y, m, d] = week.split("-").map(Number);
   return new Date(y, m - 1, d);
 };
 
+/** The Monday of the week holding `day`, today by default, as "2026-11-02". */
 export function mondayOf(day: Date = new Date()): string {
   const d = new Date(day.getFullYear(), day.getMonth(), day.getDate());
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
@@ -16,6 +19,7 @@ export function mondayOf(day: Date = new Date()): string {
 /** The Monday of the week holding `day` ("2026-11-05" → "2026-11-02"). */
 export const weekOf = (day: string) => mondayOf(parse(day));
 
+/** The week `n` weeks after `week`, or before it when `n` is negative: ("2026-11-02", 1) → "2026-11-09". */
 export function addWeeks(week: string, n: number): string {
   const d = parse(week);
   d.setDate(d.getDate() + n * 7);

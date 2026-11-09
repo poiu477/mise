@@ -4,6 +4,8 @@ import { api, errorText } from "../api/client";
 import { startSignIn } from "../offline";
 import { useSession } from "../session";
 
+/** Sign in with a username and password, single sign-on, or both, as the server allows; then back to
+ * `return_to`. Shows an error the single-sign-on round trip sent back. */
 export function LoginPage() {
   const { session, refresh } = useSession();
   const [params] = useSearchParams();
@@ -14,6 +16,7 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const info = session.status === "out" ? session.info : null;
 
+  /** Signs in, then starts a new sign-in on this device so nothing from before it can write here. */
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);

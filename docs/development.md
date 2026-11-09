@@ -116,7 +116,7 @@ git config core.hooksPath .githooks
 | Rust lints | `cargo clippy --workspace --all-targets -- -D warnings` | Zero warnings |
 | Rust unit, property and integration tests | `cargo test --workspace` | API tests need `DATABASE_URL` and make a throwaway database each; skipped when it isn't set |
 | Rust dependencies | `cargo deny check` | Advisories, licenses, bans and sources (`deny.toml`); CI runs it |
-| Web formatting and lints | `cd web && npm run format` and `npm run lint` | Prettier at width 100; ESLint with the React hooks rules |
+| Web formatting and lints | `cd web && npm run format` and `npm run lint` | Prettier at width 100; ESLint with the React hooks rules and a doc comment on every export |
 | Web unit tests | `cd web && npm test` | Vitest; pure modules (`choose.ts`, `offline.ts`, `week.ts`) |
 | Types and build | `cd web && npm run build` | Runs the TypeScript check first |
 | Browser journeys | `cd web && npm run e2e` | Playwright in Chromium against `mise-server` on a fresh `mise_e2e` database built from the demo recipes (`fixtures/demo-bundle`). Build first: `cargo build -p mise-cli -p mise-api` and `npm run build`; once, `npx playwright install chromium`. Covers first-run setup, scaling, planning (the Phase 3 gate: under 20 interactions), shopping offline including opening with no connection, phone width, an axe accessibility scan and sign-out |
