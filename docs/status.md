@@ -76,8 +76,6 @@ What a reviewer can rely on today:
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
 - A recipe card fits one page up to about 17 ingredients and 2,400 characters of steps (nine in ten of the
   household's recipes); longer ones may run onto a second page.
-- On the dish page, the warm "Amounts scaled" and "Check amounts" step notes (`.step-flag`) are under axe's 4.5:1
-  contrast (about 3.5:1). The accessibility scan opens dish pages only at published serving counts, so it misses them.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
   the list reloads a moment later.

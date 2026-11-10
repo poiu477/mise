@@ -64,13 +64,22 @@ export function startingChoice(dish: Dish, params: URLSearchParams): Selection {
   return pick(dish.variants, wanted) ? wanted : selectionOf(start, dish.options);
 }
 
-/** The version a dish address opens on: the pinned one (?v=), else the one its options pick, else the default. */
-export function versionFor(dish: Dish, params: URLSearchParams): VariantSummary | undefined {
+/** The version to show: the pinned one, else the one the options pick, else the default. */
+export function versionOf(
+  dish: Dish,
+  sel: Selection,
+  pinned: string | null,
+): VariantSummary | undefined {
   return (
-    dish.variants.find((v) => v.id === params.get("v")) ??
-    pick(dish.variants, startingChoice(dish, params)) ??
+    dish.variants.find((v) => v.id === pinned) ??
+    pick(dish.variants, sel) ??
     dish.variants.find((v) => v.id === dish.default_variant)
   );
+}
+
+/** The version a dish address opens on: the pinned one (?v=), else the one its options pick, else the default. */
+export function versionFor(dish: Dish, params: URLSearchParams): VariantSummary | undefined {
+  return versionOf(dish, startingChoice(dish, params), params.get("v"));
 }
 
 /** The serving count a version opens at when the address names none: 2 when published, else its first size. */

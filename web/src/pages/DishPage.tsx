@@ -1,12 +1,21 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
-import { api, type Dish, type Variant } from "../api/client";
-import { answer, Refused } from "../api/query";
-import { available, cardParams, choose, pick, selectionOf, type Selection } from "../choose";
+import { api, type Variant } from "../api/client";
+import { answer, Refused, refusedRequest } from "../api/query";
+import {
+  available,
+  cardParams,
+  choose,
+  startingChoice,
+  startingServings,
+  versionOf,
+  type Selection,
+} from "../choose";
 import { AddToPlan } from "../components/AddToPlan";
 import { Servings } from "../components/Servings";
 import { StepText } from "../components/StepText";
+import { allergens, difficulty, minutes } from "../recipe";
 
 const NONE: Selection = {};
 
@@ -41,16 +50,10 @@ export function DishPage() {
   if (dish && picked?.slug !== slug) setPicked({ slug, sel: startingChoice(dish, params) });
   const sel = picked?.slug === slug ? picked.sel : NONE;
 
-  const chosen = useMemo(() => {
-    if (!dish) return undefined;
-    return (
-      dish.variants.find((v) => v.id === pinned) ??
-      pick(dish.variants, sel) ??
-      dish.variants.find((v) => v.id === dish.default_variant)
-    );
-  }, [dish, sel, pinned]);
+  // The version follows the options as tapped here; the address only says where they start.
+  const chosen = useMemo(() => dish && versionOf(dish, sel, pinned), [dish, sel, pinned]);
 
-  const defaultServings = (chosen?.yields.includes(2) ? 2 : chosen?.yields[0]) ?? 2;
+  const defaultServings = chosen ? startingServings(chosen) : 2;
   // Servings follow the URL until changed here; then they live in state (so quick taps queue up), mirrored to ?s=
   // for reloads and links.
   const [tapped, setTapped] = useState<{ slug: string; n: number } | null>(null);
@@ -143,11 +146,7 @@ export function DishPage() {
         )}
         {chosen.title !== dish.title && <p className="meta">This version: {chosen.title}</p>}
         <p className="meta">
-          {[
-            prep && `${prep} min`,
-            typeof v?.meta.difficulty === "number" && difficulty(v.meta.difficulty as number),
-            year(chosen.published_at),
-          ]
+          {[prep && `${prep} min`, difficulty(v?.meta.difficulty), year(chosen.published_at)]
             .filter(Boolean)
             .join(" · ")}
         </p>
@@ -227,6 +226,9 @@ export function DishPage() {
                 </li>
               ))}
             </ul>
+          ) : refusedRequest(variantQuery.error) ? (
+            // The server answered but won't give this (a serving count out of range): say why, as it put it.
+            <p className="empty">{variantQuery.error.message}</p>
           ) : variantQuery.isError ? (
             <p className="empty">
               Can't reach the server, so this version didn't load.{" "}
@@ -305,33 +307,8 @@ export function DishPage() {
   );
 }
 
-/** Where a dish starts: choices in the URL (?protein=Pork) win, the rest come from the pinned or default version. */
-function startingChoice(dish: Dish, params: URLSearchParams): Selection {
-  const start =
-    dish.variants.find((v) => v.id === params.get("v")) ??
-    dish.variants.find((v) => v.id === dish.default_variant);
-  const fromUrl = Object.fromEntries(
-    dish.options.flatMap((o) => (params.get(o.key) ? [[o.key, params.get(o.key)!]] : [])),
-  );
-  const wanted = { ...selectionOf(start, dish.options), ...fromUrl };
-  return pick(dish.variants, wanted) ? wanted : selectionOf(start, dish.options);
-}
-
-/** Minutes in an ISO 8601 duration ("PT1H5M" → 65), or nothing when it has none. */
-function minutes(iso: unknown): number | undefined {
-  if (typeof iso !== "string") return undefined;
-  const m = /PT(?:(\d+)H)?(?:(\d+)M)?/.exec(iso);
-  if (!m) return undefined;
-  const total = Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0);
-  return total > 0 ? total : undefined;
-}
-
-/** The published difficulty, 1 to 3, in words. */
-const difficulty = (d: number) => ["", "Easy", "Medium", "Hard"][d] ?? "";
 /** The year a version was published, or nothing. */
 const year = (iso?: string | null) => (iso ? new Date(iso).getFullYear().toString() : "");
-/** Every allergen in the version's ingredients, once each, sorted. */
-const allergens = (v: Variant) => [...new Set(v.ingredients.flatMap((i) => i.allergens))].sort();
 
 /** Why some amounts on the page are scaled, and which ones. */
 function ScaledNotice({ v, servings }: { v: Variant; servings: number }) {

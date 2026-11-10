@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { api } from "../api/client";
-import { answer, Refused } from "../api/query";
+import { answer, Refused, refusedRequest } from "../api/query";
 import { startingServings, versionFor } from "../choose";
 import { StepText } from "../components/StepText";
 import { allergens, difficulty, minutes, servingsText } from "../recipe";
@@ -57,6 +57,18 @@ export function CardPage() {
     return (
       <p className="empty">
         No such dish. <Link to="/">Back to all dishes</Link>
+      </p>
+    );
+  }
+  if (refusedRequest(variantQuery.error)) {
+    // The server answered but won't give this (a serving count out of range): say why, as it put it, and link
+    // back to the dish as the address had it, less the serving count it refused.
+    const back = new URLSearchParams(params);
+    back.delete("s");
+    return (
+      <p className="empty">
+        {variantQuery.error.message}{" "}
+        <Link to={{ pathname: `/dishes/${slug}`, search: back.toString() }}>Back to the dish</Link>
       </p>
     );
   }

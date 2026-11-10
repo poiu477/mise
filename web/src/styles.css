@@ -462,9 +462,17 @@ h2 {
   margin: 0 0 6px;
 }
 .step-flag {
-  color: var(--warm);
   font-size: 13px;
   margin-top: 6px !important;
+}
+/* On the dish page a step's note sits on a warm band, as the scaled notice does: the warm colour itself is too
+   faint for small text, so the text keeps the page's own. */
+.steps .step-flag {
+  background: var(--warm-soft);
+  border-left: 3px solid var(--warm);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 4px 10px;
 }
 
 .history {
@@ -596,7 +604,7 @@ h2 {
   grid-column: 2;
   margin: 0;
 }
-/* The dish page's warm flag colour is too faint on the card's white. */
+/* On the card, where ink counts, a step's note is quiet. */
 .card-steps .step-flag {
   color: var(--muted);
   font-style: italic;
