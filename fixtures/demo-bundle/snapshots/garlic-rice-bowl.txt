@@ -1,0 +1,97 @@
+# Garlic Rice Bowl
+with Scallions and Soy
+
+slug garlic-rice-bowl · recipe · opens on version 1
+
+## Options
+
+none
+
+## Versions, newest first
+
+1. Garlic Rice Bowl, with Scallions and Soy · published 2026-11-01 · yields 2 · steps · attributes {"portion":"regular","protein":"none","version":"standard"}
+
+## Version 1: Garlic Rice Bowl
+with Scallions and Soy
+
+yields 2
+Fragrant garlic rice topped with scallions and a drizzle of soy, for one or two.
+meta {"content_type":"recipe","difficulty":1,"prep_time":"PT25M","tags":["vegetarian","quick"]}
+
+### Version 1 at 1 serving (derived)
+
+- ⅓ cup + 2 tsp Jasmine Rice [scaled]
+- 1 clove Garlic [scaled]
+- 1 stalk Scallions [scaled]
+- 1½ tsp Soy Sauce [scaled]
+- ½ tsp Sesame Oil [scaled]
+- to taste Salt [pantry]
+
+0. Mince the garlic. Thinly slice the scallions, keeping the whites and greens apart.
+1. Heat the sesame oil in a small pot over medium heat. Add the garlic and scallion whites; cook 1 minute. Stir in the rice, ¾ cup water and a pinch of salt. Bring to a boil, cover and simmer until tender, 15-18 minutes. [scaled]
+2. Fluff the rice and divide between bowls. Drizzle with the soy sauce and top with the scallion greens.
+
+### Version 1 at 2 servings (as published)
+
+- ¾ cup Jasmine Rice
+- 2 cloves Garlic
+- 2 stalks Scallions
+- 1 TBSP Soy Sauce
+- 1 tsp Sesame Oil
+- to taste Salt [pantry]
+
+0. Mince the garlic. Thinly slice the scallions, keeping the whites and greens apart.
+1. Heat the sesame oil in a small pot over medium heat. Add the garlic and scallion whites; cook 1 minute. Stir in the rice, 1½ cups water and a pinch of salt. Bring to a boil, cover and simmer until tender, 15-18 minutes.
+2. Fluff the rice and divide between bowls. Drizzle with the soy sauce and top with the scallion greens.
+
+### Version 1 at 3 servings (derived)
+
+- 1 cup + 2 TBSP Jasmine Rice [scaled]
+- 3 cloves Garlic [scaled]
+- 3 stalks Scallions [scaled]
+- 1½ TBSP Soy Sauce [scaled]
+- 1½ tsp Sesame Oil [scaled]
+- to taste Salt [pantry]
+
+0. Mince the garlic. Thinly slice the scallions, keeping the whites and greens apart.
+1. Heat the sesame oil in a small pot over medium heat. Add the garlic and scallion whites; cook 1 minute. Stir in the rice, 2¼ cups water and a pinch of salt. Bring to a boil, cover and simmer until tender, 15-18 minutes. [scaled]
+2. Fluff the rice and divide between bowls. Drizzle with the soy sauce and top with the scallion greens.
+
+### Version 1 at 4 servings (derived)
+
+- 1½ cups Jasmine Rice [scaled]
+- 4 cloves Garlic [scaled]
+- 4 stalks Scallions [scaled]
+- 2 TBSP Soy Sauce [scaled]
+- 2 tsp Sesame Oil [scaled]
+- to taste Salt [pantry]
+
+0. Mince the garlic. Thinly slice the scallions, keeping the whites and greens apart.
+1. Heat the sesame oil in a small pot over medium heat. Add the garlic and scallion whites; cook 1 minute. Stir in the rice, 3 cups water and a pinch of salt. Bring to a boil, cover and simmer until tender, 15-18 minutes. [scaled]
+2. Fluff the rice and divide between bowls. Drizzle with the soy sauce and top with the scallion greens.
+
+### Version 1 at 5 servings (derived)
+
+- 1¾ cups + 2 TBSP Jasmine Rice [scaled]
+- 5 cloves Garlic [scaled]
+- 5 stalks Scallions [scaled]
+- 2½ TBSP Soy Sauce [scaled]
+- 2½ tsp Sesame Oil [scaled]
+- to taste Salt [pantry]
+
+0. Mince the garlic. Thinly slice the scallions, keeping the whites and greens apart.
+1. Heat the sesame oil in a small pot over medium heat. Add the garlic and scallion whites; cook 1 minute. Stir in the rice, 3¾ cups water and a pinch of salt. Bring to a boil, cover and simmer until tender, 15-18 minutes. [scaled]
+2. Fluff the rice and divide between bowls. Drizzle with the soy sauce and top with the scallion greens.
+
+### Version 1 at 6 servings (derived)
+
+- 2¼ cups Jasmine Rice [scaled]
+- 6 cloves Garlic [scaled]
+- 6 stalks Scallions [scaled]
+- 3 TBSP Soy Sauce [scaled]
+- 1 TBSP Sesame Oil [scaled]
+- to taste Salt [pantry]
+
+0. Mince the garlic. Thinly slice the scallions, keeping the whites and greens apart.
+1. Heat the sesame oil in a small pot over medium heat. Add the garlic and scallion whites; cook 1 minute. Stir in the rice, 4½ cups water and a pinch of salt. Bring to a boil, cover and simmer until tender, 15-18 minutes. [scaled]
+2. Fluff the rice and divide between bowls. Drizzle with the soy sauce and top with the scallion greens.
