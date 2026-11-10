@@ -1,7 +1,7 @@
 # Running mise on a home server
 
 mise runs as one Docker Compose stack: Postgres, the app (API, web app and the `mise` admin command in one
-image), and a nightly database backup. These steps use a Proxmox LXC; any Linux host with Docker works the same.
+image), a nightly database backup and, for HTTPS, an optional Caddy. These steps use a Proxmox LXC; any Linux host with Docker works the same.
 
 ## 1. The container
 
@@ -23,6 +23,7 @@ docker compose up -d --build
 ```
 
 Open `http://<container address>:8080`. The first visit creates the admin account (see [sign-in.md](sign-in.md)).
+Phones need HTTPS to keep the shopping list offline; section 7 sets it up.
 The app applies database migrations whenever it starts.
 
 ## 3. Photos
@@ -95,12 +96,113 @@ docker compose exec -T db pg_restore -U mise -d mise --clean --if-exists --no-ow
 docker compose start app
 ```
 
-## 7. Reaching it from outside
+## 7. HTTPS
 
-By default mise answers on the home network only. To publish it through an existing reverse proxy (Caddy,
-nginx, Traefik, Nginx Proxy Manager), proxy to port 8080, set `PUBLIC_BASE_URL=https://mise.example.com`, and,
-when the proxy runs on the same host, `MISE_LISTEN=127.0.0.1`. With an https `PUBLIC_BASE_URL`, session cookies
-are marked Secure. Every page needs a signed-in account; only `/api/health` is open.
+A phone opens the shopping list offline only from an HTTPS address: the service worker that keeps it needs a secure
+origin. Kitchen mode's screen wake lock and an Alexa endpoint need HTTPS too. There are two ways to get it:
+
+| Way | When |
+| --- | --- |
+| [Behind a reverse proxy you already run](#behind-an-existing-reverse-proxy) | Caddy, nginx, Traefik or Nginx Proxy Manager already answers on ports 80 and 443 |
+| [The stack's own Caddy](#the-stacks-own-caddy) | Nothing else does: the `https` profile adds a Caddy in front of mise |
+
+Either way, set `PUBLIC_BASE_URL` to the `https` address, which marks session cookies Secure, and check the result
+([below](#check-it)). Every page needs a signed-in account; only `/api/health` is open.
+
+### Behind an existing reverse proxy
+
+In `.env` on the mise host, then `docker compose up -d` to apply it:
+
+```bash
+PUBLIC_BASE_URL=https://mise.example.com
+# Only when the proxy runs on this host: then nothing else can reach port 8080.
+MISE_LISTEN=127.0.0.1
+```
+
+A Caddy site block. Caddy gets the certificate and redirects plain HTTP itself:
+
+```caddyfile
+mise.example.com {
+	reverse_proxy 127.0.0.1:8080
+}
+```
+
+With Caddy on another machine, proxy to `<mise host>:8080` instead and leave `MISE_LISTEN` at its default; a firewall
+rule that lets only the proxy reach port 8080 does what `127.0.0.1` would.
+
+- **nginx:** a `server` block for `mise.example.com` with your certificate and `location / { proxy_pass
+  http://127.0.0.1:8080; proxy_set_header Host $host; proxy_set_header X-Forwarded-Proto $scheme; }`, plus a port
+  80 server that answers `return 301 https://$host$request_uri;`.
+- **Traefik:** a router with ``rule: Host(`mise.example.com`)``, your certificate resolver and the `websecure`
+  entry point, whose service points at `http://<mise host>:8080`, with the `web` entry point redirecting to
+  `websecure`.
+- **Nginx Proxy Manager:** a proxy host for `mise.example.com` forwarding to `http://<mise host>:8080`, with an SSL
+  certificate and **Force SSL** on.
+
+mise sends no HSTS header. Once HTTPS works for good, the proxy can add one, for example Caddy's
+`header Strict-Transport-Security "max-age=31536000"`. Browsers then refuse plain HTTP to that name for a year, so
+add it last.
+
+### The stack's own Caddy
+
+The `caddy` service in `compose.yaml` runs only with the `https` profile. It takes ports 80 and 443 on the host,
+gets a certificate, redirects plain HTTP to HTTPS and proxies to the app. In `.env`:
+
+```bash
+COMPOSE_PROFILES=https        # so every docker compose command includes Caddy
+MISE_HOST=mise.example.com    # the name phones open
+MISE_TLS=internal             # or a contact email, see below
+PUBLIC_BASE_URL=https://mise.example.com
+MISE_LISTEN=127.0.0.1         # the app is reached through Caddy only
+```
+
+Then `docker compose up -d`. `MISE_HOST` must resolve to the server for every device that opens it: on a home
+network, add it to the router's DNS (or Pi-hole, AdGuard Home), for example as `mise.home.arpa`.
+
+`MISE_TLS` chooses the certificate:
+
+| `MISE_TLS` | Certificate | Needs |
+| --- | --- | --- |
+| `internal` | From Caddy's own certificate authority, renewed by Caddy | Nothing from the internet; each phone and computer trusts Caddy's root once (below) |
+| A contact email, `you@example.com` | A public one from Let's Encrypt (ZeroSSL as a fallback), which every device trusts | `MISE_HOST` in public DNS pointing at this host, and ports 80 and 443 forwarded to it from the internet |
+
+#### Trusting Caddy's root certificate
+
+With `MISE_TLS=internal`, a phone won't trust the certificate until it trusts Caddy's root, and until then it won't
+keep the list offline. Copy the root out of the container:
+
+```bash
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt mise-root.crt
+```
+
+Send `mise-root.crt` to each device (AirDrop, email or a cable), then:
+
+- **iPhone and iPad:** open the file and allow the profile. In Settings, **General → VPN & Device Management**,
+  install it, then in **General → About → Certificate Trust Settings** turn on full trust for "Caddy Local
+  Authority".
+- **Android:** **Settings → Security and privacy → More security settings → Encryption and credentials → Install a
+  certificate → CA certificate** (the path varies by maker). Chrome and Samsung Internet use it; Firefox only with
+  its "Use third party CA certificates" setting on.
+- **Computers:** add it to the system's trusted roots (macOS: Keychain Access, System, "Always Trust"; Windows:
+  `certlm.msc`, Trusted Root Certification Authorities). Firefox keeps its own list: Settings, Certificates, Import.
+
+The root lives in the `caddy_data` volume and lasts ten years. Keep that volume: a new one makes a new root, and
+every device has to trust it again.
+
+### Check it
+
+With `mise.example.com` standing for your address (add `--cacert mise-root.crt` to `curl` with `MISE_TLS=internal`):
+
+1. `curl -sI http://mise.example.com/` answers with a redirect (301 or 308) to `https://mise.example.com/`.
+2. `curl -s https://mise.example.com/api/health` answers `{"status":"ok",...}` without a certificate error.
+3. Sign in from a computer's browser and open the developer tools (Application, Cookies): `mise_session` is
+   **Secure** and **HttpOnly**. If it isn't Secure, `PUBLIC_BASE_URL` doesn't start with `https://`, or the app wasn't
+   restarted since it changed (`docker compose up -d`).
+4. In the same tools, **Application → Service workers** shows `/sw.js` activated. On the phone, open the shopping
+   list once, then turn on airplane mode and open it again: it's still there.
+
+CI runs the first three against the stack's own Caddy with `MISE_TLS=internal` whenever `compose.yaml` or the
+`Caddyfile` changes (the `docker image` job in `.gitlab-ci.yml`).
 
 ## Commands
 
