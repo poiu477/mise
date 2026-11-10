@@ -179,6 +179,11 @@ export function DishPage() {
 
       <Servings value={servings} published={chosen.yields} onChange={setServings} />
       <AddToPlan variantId={chosen.id} servings={servings} />
+      <p className="card-link">
+        <Link to={`/dishes/${dish.slug}/card?v=${chosen.id}&s=${servings}`}>
+          Print a recipe card
+        </Link>
+      </p>
       {v && !v.official && <ScaledNotice v={v} servings={servings} />}
 
       <div className={`cook ${loadingVariant ? "stale" : ""}`}>

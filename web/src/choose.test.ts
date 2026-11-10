@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { DishOption, VariantSummary } from "./api/client";
-import { available, choose, pick, selectionOf, type Selection } from "./choose";
+import type { Dish, DishOption, VariantSummary } from "./api/client";
+import {
+  available,
+  choose,
+  pick,
+  selectionOf,
+  startingServings,
+  versionFor,
+  type Selection,
+} from "./choose";
 
 const v = (id: string, attributes: Record<string, string>, has_steps = true): VariantSummary => ({
   id,
@@ -66,6 +74,40 @@ describe("choose", () => {
     expect(selectionOf(v("x", { protein: "Pork", portion: "double" }), [options[0]])).toEqual({
       protein: "Pork",
     });
+  });
+});
+
+describe("versionFor", () => {
+  const dish: Dish = {
+    id: "dish",
+    slug: "dish",
+    title: "Dish",
+    content_type: "recipe",
+    default_variant: "pork-std",
+    options,
+    variants,
+  };
+  const at = (query: string) => versionFor(dish, new URLSearchParams(query))?.id;
+  it("opens on the default version when the address names nothing", () => {
+    expect(at("")).toBe("pork-std");
+  });
+  it("opens on a pinned version, whatever the options say", () => {
+    expect(at("v=chicken-std-nosteps&protein=Beef")).toBe("chicken-std-nosteps");
+  });
+  it("lets options in the address override the default version's", () => {
+    expect(at("version=lime")).toBe("pork-lime");
+    expect(at("protein=Chicken")).toBe("chicken-std");
+  });
+  it("ignores a combination no version has", () => {
+    expect(at("protein=Beef&version=lime")).toBe("pork-std");
+  });
+});
+
+describe("startingServings", () => {
+  it("prefers 2, else the first published size", () => {
+    expect(startingServings(v("a", {}))).toBe(2);
+    expect(startingServings({ ...v("b", {}), yields: [4, 6] })).toBe(4);
+    expect(startingServings({ ...v("c", {}), yields: [] })).toBe(2);
   });
 });
 

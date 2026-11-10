@@ -1,5 +1,5 @@
 // Choosing a version from a dish's option toggles. Only combinations some version actually has are offered.
-import type { DishOption, VariantSummary } from "./api/client";
+import type { Dish, DishOption, VariantSummary } from "./api/client";
 
 /** The chosen value of each of a dish's options, by option key: `{ portion: "double" }`. */
 export type Selection = Record<string, string>;
@@ -49,4 +49,31 @@ export function choose(
   if (pick(variants, next)) return next;
   const withIt = variants.filter((v) => v.attributes[key] === value);
   return selectionOf(withIt.find((v) => v.has_steps) ?? withIt[0], options);
+}
+
+/** Where a dish address starts: choices in the URL (?protein=Pork) win, the rest come from the pinned (?v=) or
+ * default version. */
+export function startingChoice(dish: Dish, params: URLSearchParams): Selection {
+  const start =
+    dish.variants.find((v) => v.id === params.get("v")) ??
+    dish.variants.find((v) => v.id === dish.default_variant);
+  const fromUrl = Object.fromEntries(
+    dish.options.flatMap((o) => (params.get(o.key) ? [[o.key, params.get(o.key)!]] : [])),
+  );
+  const wanted = { ...selectionOf(start, dish.options), ...fromUrl };
+  return pick(dish.variants, wanted) ? wanted : selectionOf(start, dish.options);
+}
+
+/** The version a dish address opens on: the pinned one (?v=), else the one its options pick, else the default. */
+export function versionFor(dish: Dish, params: URLSearchParams): VariantSummary | undefined {
+  return (
+    dish.variants.find((v) => v.id === params.get("v")) ??
+    pick(dish.variants, startingChoice(dish, params)) ??
+    dish.variants.find((v) => v.id === dish.default_variant)
+  );
+}
+
+/** The serving count a version opens at when the address names none: 2 when published, else its first size. */
+export function startingServings(v: VariantSummary): number {
+  return (v.yields.includes(2) ? 2 : v.yields[0]) ?? 2;
 }

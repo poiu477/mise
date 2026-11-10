@@ -1,6 +1,7 @@
 // The household's journeys through mise in a real browser, on the demo recipes (fixtures/demo-bundle), from an
-// empty install: first-run setup, cooking at any serving count, planning a week, shopping (offline too), phone
-// layout, accessibility and signing out. They run in order and share one browser session, as a person would.
+// empty install: first-run setup, cooking at any serving count, printing a recipe card, planning a week, shopping
+// (offline too), phone layout, accessibility and signing out. They run in order and share one browser session, as
+// a person would.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
@@ -25,6 +26,22 @@ const amountOf = (name: string) =>
     .getByRole("listitem")
     .filter({ hasText: name })
     .locator(".amount");
+
+/** Every ingredient in a list with its amount, as a person reads them: `{ "Spaghetti": "6 oz", … }`. */
+const amountsIn = (list: Locator) =>
+  list
+    .getByRole("listitem")
+    .evaluateAll((items) =>
+      Object.fromEntries(
+        items.map((i) => [
+          i.querySelector(".name")?.firstChild?.textContent,
+          i.querySelector(".amount")?.textContent,
+        ]),
+      ),
+    );
+
+/** How many pages a PDF has, counted from its page objects (Chromium writes them uncompressed). */
+const pagesIn = (pdf: Buffer) => pdf.toString("latin1").match(/\/Type\s*\/Page(?!s)/g)?.length ?? 0;
 
 /** A row on the shopping list, found by the food's name. */
 const shoppingItem = (name: string): Locator =>
@@ -70,6 +87,98 @@ test("a dish reads as published, and scales to any serving count", async () => {
   await page.getByRole("button", { name: "Add to plan" }).click();
   await expect(page.getByRole("button", { name: "Added" })).toBeDisabled();
 });
+
+test("a dish prints as a card with the amounts the dish page shows", async () => {
+  for (const servings of [2, 6]) {
+    await page.goto(`/dishes/weeknight-tomato-pasta?s=${servings}`);
+    const dishList = page.getByRole("region", { name: "Ingredients" });
+    await expect(dishList.locator(".amount").first()).not.toBeEmpty();
+    const shown = await amountsIn(dishList);
+    expect(Object.keys(shown)).toContain("Spaghetti");
+
+    await page.getByRole("link", { name: "Print a recipe card" }).click();
+    await expect(page).toHaveURL(/\/dishes\/weeknight-tomato-pasta\/card\?/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weeknight Tomato Pasta");
+    await expect(page.locator(".card-facts")).toContainText(`${servings} servings`);
+    const cardList = page.getByRole("region", { name: "Ingredients" });
+    await expect(cardList.locator(".amount").first()).not.toBeEmpty();
+    expect(await amountsIn(cardList), `at ${servings} servings`).toEqual(shown);
+  }
+  // 6 isn't published: the card marks what it scaled, as the dish page does.
+  await expect(page.getByText("6 servings isn't a published size")).toBeVisible();
+  await expect(amountOf("Spaghetti")).toHaveText("≈18 oz");
+
+  await page.getByRole("link", { name: "Back to the dish" }).click();
+  await expect(page.getByRole("link", { name: "Print a recipe card" })).toBeVisible();
+});
+
+test("every demo recipe's card prints on one page", async () => {
+  const listed = await (await page.request.get("/api/dishes")).json();
+  const cards: string[] = [];
+  for (const { slug } of listed.items as { slug: string }[]) {
+    const dish = await (await page.request.get(`/api/dishes/${slug}`)).json();
+    for (const { id } of dish.variants as { id: string }[])
+      cards.push(`/dishes/${slug}/card?v=${id}`);
+  }
+  expect(cards).toHaveLength(5);
+  /** How many pages a card prints on, on Letter and A4, as the browser's print dialog would make them. */
+  const printed = async (card: string) => {
+    await page.goto(card);
+    await expect(page.getByRole("heading", { name: "Steps" })).toBeVisible();
+    const letter = pagesIn(await page.pdf({ format: "Letter", preferCSSPageSize: true }));
+    const a4 = pagesIn(await page.pdf({ format: "A4", preferCSSPageSize: true }));
+    return Math.max(letter, a4);
+  };
+  for (const card of cards) expect(await printed(card), card).toBe(1);
+
+  // The demo recipes are short and have no photos. A recipe as long as nine in ten of the household's (17
+  // ingredients, six steps, about 2,400 characters of steps), with a photo, still fits. The service worker fetches
+  // recipe data itself, so the browser context, not the page, sees the request.
+  let repeat = 1;
+  await context.route("**/api/variants/*", async (r) => {
+    const v = await (await r.fetch()).json();
+    const ingredients = [...v.ingredients, ...EXTRA_INGREDIENTS].slice(0, 17);
+    const steps = Array.from({ length: repeat }, () => LONG_STEPS)
+      .flat()
+      .map((text, i) => ({ ...v.steps[0], position: i + 1, text }));
+    const image = { id: v.id, large: "/icon.svg", small: "/icon.svg", original: "/icon.svg" };
+    await r.fulfill({ json: { ...v, ingredients, steps, image } });
+  });
+  expect(await printed(cards[0])).toBe(1);
+  const ingredients = page.getByRole("region", { name: "Ingredients" }).getByRole("listitem");
+  await expect(ingredients).toHaveCount(17);
+  // And one three times as long doesn't, so the count above can fail.
+  repeat = 3;
+  expect(await printed(cards[0])).toBeGreaterThan(1);
+  await expect(page.locator(".card-steps li")).toHaveCount(18);
+  await context.unroute("**/api/variants/*");
+});
+
+/** Lines to lengthen a demo recipe's ingredients to a long recipe's. */
+const EXTRA_INGREDIENTS = [
+  "Fresh Basil",
+  "Green Beans",
+  "Lemon",
+  "Butter",
+  "Panko Breadcrumbs",
+  "Chicken Stock Concentrate",
+  "Sour Cream",
+  "Scallions",
+  "Black Pepper",
+  "Honey",
+  "Soy Sauce",
+  "Rice Vinegar",
+].map((name) => ({ name, amount: "1½ TBSP", allergens: [], scaled: false, shipped: true }));
+
+/** Six steps as long as a long recipe's, written for this test. */
+const LONG_STEPS = [
+  "Bring a large pot of salted water to a boil. Peel and finely chop the onion. Peel and mince the garlic. Trim the green beans and cut them into bite-size pieces. Zest the lemon, then cut it into wedges. Pick the basil leaves from their stems and tear any large ones. Thinly slice the scallions, keeping the white and green parts apart. Grate the cheese into a small bowl and set it aside for the end.",
+  "In a small bowl, stir together the honey, soy sauce, rice vinegar and a splash of water until the honey dissolves. In another bowl, mix the breadcrumbs with half the lemon zest, a pinch of salt and a drizzle of oil. Heat a large pan over medium-high heat and toast the crumbs, stirring often, until golden, 3 to 4 minutes. Move them to a plate to cool, so they stay crisp, and wipe out the pan with a paper towel.",
+  "Once the water boils, add the pasta and cook until just tender, 9 to 11 minutes. Add the green beans for the last 3 minutes so they cook through but keep some bite. Before draining, scoop out a cup of the cooking water and keep it nearby. Drain the pasta and beans together in a colander, give them a shake, and return them to the empty pot off the heat. Toss with a little oil so the pasta doesn't stick while you finish the sauce.",
+  "While the pasta cooks, heat a drizzle of oil in the same pan over medium heat. Add the onion and the white parts of the scallions, season with salt and pepper, and cook, stirring now and then, until soft and lightly browned, 5 to 6 minutes. Add the garlic and cook until fragrant, about 30 seconds more, taking care that it doesn't burn or turn bitter. Turn the heat down if the onion starts to catch on the bottom.",
+  "Stir the crushed tomatoes, stock concentrate and the honey mixture into the pan. Bring to a simmer, then lower the heat and cook, stirring occasionally, until the sauce thickens slightly, 4 to 5 minutes. Stir in the butter until melted. Taste and season with salt and pepper. If the sauce gets too thick before the pasta is ready, loosen it with a splash of the reserved cooking water.",
+  "Add the sauce to the pot with the pasta and beans and toss over low heat until everything is coated, adding more cooking water a little at a time until glossy. Stir in the sour cream, the remaining lemon zest and half the cheese. Divide between bowls and top with the toasted crumbs, the rest of the cheese, the basil and the green scallions. Serve with the lemon wedges on the side.",
+];
 
 test("two more dishes and the week's list take under 20 interactions", async () => {
   // The Phase 3 gate: from a plan with one dish to the full list, counting every click and keystroke burst.
@@ -239,7 +348,14 @@ test("work queued as one person never lands on whoever signs in after them", asy
   await other.close();
 });
 
-const pages = ["/", "/dishes/weeknight-tomato-pasta", "/plan", "/shopping", "/account"];
+const pages = [
+  "/",
+  "/dishes/weeknight-tomato-pasta",
+  "/dishes/weeknight-tomato-pasta/card?s=6",
+  "/plan",
+  "/shopping",
+  "/account",
+];
 
 test("every page fits a phone without sideways scrolling", async () => {
   await page.setViewportSize({ width: 375, height: 812 });
