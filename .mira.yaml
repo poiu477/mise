@@ -1,0 +1,41 @@
+# Mira, the project's AI reviewer (https://docs.miracode.ai/configuration/mira-yml). Only settings that differ
+# from the deployment's defaults are here, each with its reason. What Mira should look for isn't set in this file:
+# it lives in Mira's per-repository rules, kept in .gitlab/mira-rules.md and pasted into Mira's dashboard.
+
+llm:
+  # Code review is the work where a deeper pass pays: more real bugs, fewer false alarms. Claude Opus 5.5 runs at
+  # medium unless told otherwise.
+  review_reasoning_effort: high
+
+filter:
+  # Formatting, lints and style are CI's job (rustfmt, clippy -D warnings, ESLint, Prettier), so nitpicks only
+  # repeat it. Suggestions and up still post.
+  min_severity: suggestion
+  # Task merge requests are often a dozen files across Rust, the web app and the docs; five comments cut real
+  # findings off.
+  max_comments: 10
+  # Never reviewed: generated, locked or binary files. This list replaces Mira's defaults, so it repeats them.
+  # web/src/api/schema.d.ts is generated from the API document, and CI fails if it's stale.
+  exclude_patterns:
+    - "*.lock"
+    - "package-lock.json"
+    - "web/src/api/schema.d.ts"
+    - "*.min.js"
+    - "*.min.css"
+    - "*.svg"
+    - "*.png"
+    - "*.jpg"
+    - "*.jpeg"
+    - "*.webp"
+    - "*.gif"
+    - "*.ico"
+    - "*.woff"
+    - "*.woff2"
+    - "*.ttf"
+    - "*.zip"
+    - "*.gz"
+
+review:
+  # Findings Mira couldn't confirm stay out of inline comments but show, collapsed, under the walkthrough, rather
+  # than vanishing into its confidence score.
+  show_unverified_findings: true
