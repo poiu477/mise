@@ -2,16 +2,20 @@
 // Keys start with what the data is, then the account it belongs to when it is an account's own (plan, list,
 // settings), so one person's data never shows for whoever signs in next.
 import { onlineManager, QueryClient } from "@tanstack/react-query";
-import { errorText } from "./client";
+import { errorCode, errorText, type ErrorCode } from "./client";
 
-/** An answer from the server that isn't the data asked for, with its status (a 404 reads differently). */
+/** An answer from the server that isn't the data asked for, with its status and the API's error `code` (a
+ * `not_found` reads differently). */
 export class Refused extends Error {
   readonly status: number;
   readonly body: unknown;
+  /** The API's name for the error; null when something other than mise answered, such as a proxy. */
+  readonly code: ErrorCode | null;
   constructor(status: number, body: unknown) {
     super(errorText(body));
     this.status = status;
     this.body = body;
+    this.code = errorCode(body);
   }
 }
 

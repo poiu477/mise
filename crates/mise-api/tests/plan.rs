@@ -42,7 +42,7 @@ impl Kitchen {
 
     /// The owner's shopping list for `WEEK`.
     async fn list(&self) -> Value {
-        self.call("GET", &format!("/api/shopping?week={WEEK}"), None)
+        self.call("GET", &format!("/api/v1/shopping?week={WEEK}"), None)
             .await
     }
 
@@ -91,11 +91,11 @@ impl Kitchen {
         let household = self
             .call(
                 "POST",
-                "/api/households",
+                "/api/v1/households",
                 Some(json!({"name": "Next door"})),
             )
             .await;
-        self.call("POST", "/api/users", Some(json!({"username": "neighbour", "password": "another long password", "household_id": household["id"]}))).await;
+        self.call("POST", "/api/v1/users", Some(json!({"username": "neighbour", "password": "another long password", "household_id": household["id"]}))).await;
         self.sign_in("neighbour", "another long password").await
     }
 }
@@ -149,7 +149,7 @@ async fn a_week_planned_becomes_a_merged_list_by_section() {
     let plan = app
         .call(
             "POST",
-            "/api/plan/entries",
+            "/api/v1/plan/entries",
             Some(json!({"week": WEEK, "variant_id": chili})),
         )
         .await;
@@ -161,7 +161,7 @@ async fn a_week_planned_becomes_a_merged_list_by_section() {
     // Any day of the week lands on its Monday.
     app.call(
         "POST",
-        "/api/plan/entries",
+        "/api/v1/plan/entries",
         Some(json!({"week": "2026-11-05", "variant_id": ragu, "servings": 4})),
     )
     .await;
@@ -191,7 +191,7 @@ async fn a_week_planned_becomes_a_merged_list_by_section() {
     let entry = plan["entries"][0]["id"].as_str().unwrap();
     app.call(
         "PATCH",
-        &format!("/api/plan/entries/{entry}"),
+        &format!("/api/v1/plan/entries/{entry}"),
         Some(json!({"servings": 4})),
     )
     .await;
@@ -200,7 +200,7 @@ async fn a_week_planned_becomes_a_merged_list_by_section() {
         "4 packets (6 oz)"
     );
     let plan = app
-        .call("DELETE", &format!("/api/plan/entries/{entry}"), None)
+        .call("DELETE", &format!("/api/v1/plan/entries/{entry}"), None)
         .await;
     assert_eq!(plan["entries"].as_array().unwrap().len(), 1);
     assert_eq!(
@@ -234,7 +234,7 @@ async fn ticks_and_changes_survive_the_plan_changing() {
         .await;
     app.call(
         "POST",
-        "/api/plan/entries",
+        "/api/v1/plan/entries",
         Some(json!({"week": WEEK, "variant_id": chili})),
     )
     .await;
@@ -250,14 +250,14 @@ async fn ticks_and_changes_survive_the_plan_changing() {
 
     app.call(
         "PUT",
-        "/api/shopping/marks",
+        "/api/v1/shopping/marks",
         Some(json!({"week": WEEK, "key": onion_key, "checked": true})),
     )
     .await;
     let list = app
         .call(
             "PUT",
-            "/api/shopping/marks",
+            "/api/v1/shopping/marks",
             Some(json!({"week": WEEK, "key": butter_key, "hidden": true})),
         )
         .await;
@@ -266,7 +266,7 @@ async fn ticks_and_changes_survive_the_plan_changing() {
     let list = app
         .call(
             "POST",
-            "/api/pantry-staples",
+            "/api/v1/pantry-staples",
             Some(json!({"week": WEEK, "food_id": salt})),
         )
         .await;
@@ -275,7 +275,7 @@ async fn ticks_and_changes_survive_the_plan_changing() {
     let list = app
         .call(
             "POST",
-            "/api/shopping/extras",
+            "/api/v1/shopping/extras",
             Some(json!({"week": WEEK, "name": "  Paper towels "})),
         )
         .await;
@@ -284,7 +284,7 @@ async fn ticks_and_changes_survive_the_plan_changing() {
     // More of the same food keeps the tick, and everything else stands.
     app.call(
         "POST",
-        "/api/plan/entries",
+        "/api/v1/plan/entries",
         Some(json!({"week": WEEK, "variant_id": chili})),
     )
     .await;
@@ -297,7 +297,7 @@ async fn ticks_and_changes_survive_the_plan_changing() {
     let list = app
         .call(
             "PUT",
-            "/api/shopping/marks",
+            "/api/v1/shopping/marks",
             Some(json!({"week": WEEK, "key": butter_key, "hidden": false})),
         )
         .await;
@@ -310,7 +310,7 @@ async fn ticks_and_changes_survive_the_plan_changing() {
     let list = app
         .call(
             "DELETE",
-            &format!("/api/pantry-staples/{salt}?week={WEEK}"),
+            &format!("/api/v1/pantry-staples/{salt}?week={WEEK}"),
             None,
         )
         .await;
@@ -319,13 +319,13 @@ async fn ticks_and_changes_survive_the_plan_changing() {
     let list = app
         .call(
             "PATCH",
-            &format!("/api/shopping/extras/{extra}"),
+            &format!("/api/v1/shopping/extras/{extra}"),
             Some(json!({"checked": true})),
         )
         .await;
     assert_eq!(list["extras"][0]["checked"], true);
     let list = app
-        .call("DELETE", &format!("/api/shopping/extras/{extra}"), None)
+        .call("DELETE", &format!("/api/v1/shopping/extras/{extra}"), None)
         .await;
     assert_eq!(list["extras"], json!([]));
 }
@@ -338,7 +338,7 @@ async fn an_addition_sent_twice_with_one_key_is_added_once() {
         if let Some(k) = key {
             body["client_key"] = json!(k);
         }
-        app.call("POST", "/api/shopping/extras", Some(body))
+        app.call("POST", "/api/v1/shopping/extras", Some(body))
     };
     let names = |list: &Value| -> Vec<String> {
         list["extras"]
@@ -373,7 +373,7 @@ async fn an_addition_sent_twice_with_one_key_is_added_once() {
     let theirs = app
         .json(
             "POST",
-            "/api/shopping/extras",
+            "/api/v1/shopping/extras",
             &other,
             Some(json!({"week": WEEK, "name": "Bin bags", "client_key": "local-1"})),
         )
@@ -398,13 +398,13 @@ async fn weights_read_as_the_household_chooses() {
     let burgers = app.recipe("Burgers", &[(beef, 10.0, "ounce", true)]).await;
     app.call(
         "POST",
-        "/api/plan/entries",
+        "/api/v1/plan/entries",
         Some(json!({"week": WEEK, "variant_id": tacos, "servings": 4})),
     )
     .await;
     app.call(
         "POST",
-        "/api/plan/entries",
+        "/api/v1/plan/entries",
         Some(json!({"week": WEEK, "variant_id": burgers})),
     )
     .await;
@@ -418,13 +418,13 @@ async fn weights_read_as_the_household_chooses() {
     let settings = app
         .call(
             "PUT",
-            "/api/shopping/settings",
+            "/api/v1/shopping/settings",
             Some(json!({"weight_unit": "metric"})),
         )
         .await;
     assert_eq!(settings["weight_unit"], "metric");
     assert_eq!(
-        app.call("GET", "/api/shopping/settings", None).await["weight_unit"],
+        app.call("GET", "/api/v1/shopping/settings", None).await["weight_unit"],
         "metric"
     );
     assert_eq!(
@@ -436,7 +436,7 @@ async fn weights_read_as_the_household_chooses() {
     let list = app
         .call(
             "PUT",
-            "/api/shopping/food-weights",
+            "/api/v1/shopping/food-weights",
             Some(json!({"week": WEEK, "food_id": beef, "weight_unit": "lb"})),
         )
         .await;
@@ -445,7 +445,7 @@ async fn weights_read_as_the_household_chooses() {
     let list = app
         .call(
             "PUT",
-            "/api/shopping/food-weights",
+            "/api/v1/shopping/food-weights",
             Some(json!({"week": WEEK, "food_id": beef, "weight_unit": null})),
         )
         .await;
@@ -458,7 +458,7 @@ async fn weights_read_as_the_household_chooses() {
     assert!(
         app.send(
             "PUT",
-            "/api/shopping/settings",
+            "/api/v1/shopping/settings",
             As::Cookie(&app.cookie),
             Some(json!({"weight_unit": "stone"}))
         )
@@ -469,7 +469,7 @@ async fn weights_read_as_the_household_chooses() {
     assert_eq!(
         app.send(
             "PUT",
-            "/api/shopping/food-weights",
+            "/api/v1/shopping/food-weights",
             As::Cookie(&app.cookie),
             Some(json!({"food_id": Uuid::now_v7(), "weight_unit": "oz"}))
         )
@@ -487,14 +487,14 @@ async fn a_household_sees_only_its_own_plan() {
     let plan = app
         .call(
             "POST",
-            "/api/plan/entries",
+            "/api/v1/plan/entries",
             Some(json!({"week": WEEK, "variant_id": chili})),
         )
         .await;
     let entry = plan["entries"][0]["id"].as_str().unwrap().to_string();
     app.call(
         "POST",
-        "/api/shopping/extras",
+        "/api/v1/shopping/extras",
         Some(json!({"week": WEEK, "name": "Mine"})),
     )
     .await;
@@ -504,7 +504,7 @@ async fn a_household_sees_only_its_own_plan() {
     let plan = app
         .send(
             "GET",
-            &format!("/api/plan?week={WEEK}"),
+            &format!("/api/v1/plan?week={WEEK}"),
             As::Cookie(&other),
             None,
         )
@@ -514,7 +514,7 @@ async fn a_household_sees_only_its_own_plan() {
     let list = app
         .send(
             "GET",
-            &format!("/api/shopping?week={WEEK}"),
+            &format!("/api/v1/shopping?week={WEEK}"),
             As::Cookie(&other),
             None,
         )
@@ -525,7 +525,7 @@ async fn a_household_sees_only_its_own_plan() {
     assert_eq!(
         app.send(
             "DELETE",
-            &format!("/api/plan/entries/{entry}"),
+            &format!("/api/v1/plan/entries/{entry}"),
             As::Cookie(&other),
             None
         )
@@ -536,7 +536,7 @@ async fn a_household_sees_only_its_own_plan() {
     assert_eq!(
         app.send(
             "PATCH",
-            &format!("/api/plan/entries/{entry}"),
+            &format!("/api/v1/plan/entries/{entry}"),
             As::Cookie(&other),
             Some(json!({"servings": 4}))
         )
@@ -558,12 +558,16 @@ async fn bad_input_is_refused() {
             .status
     };
     assert_eq!(
-        post("/api/plan/entries", json!({"variant_id": Uuid::now_v7()})).await,
+        post(
+            "/api/v1/plan/entries",
+            json!({"variant_id": Uuid::now_v7()})
+        )
+        .await,
         StatusCode::NOT_FOUND
     );
     assert_eq!(
         post(
-            "/api/plan/entries",
+            "/api/v1/plan/entries",
             json!({"variant_id": chili, "servings": 0})
         )
         .await,
@@ -571,24 +575,24 @@ async fn bad_input_is_refused() {
     );
     assert_eq!(
         post(
-            "/api/plan/entries",
+            "/api/v1/plan/entries",
             json!({"variant_id": chili, "servings": 1000})
         )
         .await,
         StatusCode::BAD_REQUEST
     );
     assert_eq!(
-        post("/api/shopping/extras", json!({"name": "   "})).await,
+        post("/api/v1/shopping/extras", json!({"name": "   "})).await,
         StatusCode::BAD_REQUEST
     );
     assert_eq!(
-        post("/api/shopping/extras", json!({"name": "a\u{0}b"})).await,
+        post("/api/v1/shopping/extras", json!({"name": "a\u{0}b"})).await,
         StatusCode::BAD_REQUEST
     );
     for key in [String::new(), "k".repeat(101), "a\u{0}b".into()] {
         assert_eq!(
             post(
-                "/api/shopping/extras",
+                "/api/v1/shopping/extras",
                 json!({"name": "Foil", "client_key": key})
             )
             .await,
@@ -597,13 +601,13 @@ async fn bad_input_is_refused() {
         );
     }
     assert_eq!(
-        post("/api/pantry-staples", json!({"food_id": Uuid::now_v7()})).await,
+        post("/api/v1/pantry-staples", json!({"food_id": Uuid::now_v7()})).await,
         StatusCode::NOT_FOUND
     );
     assert_eq!(
         app.send(
             "PUT",
-            "/api/shopping/marks",
+            "/api/v1/shopping/marks",
             As::Cookie(&app.cookie),
             Some(json!({"key": "", "checked": true}))
         )
@@ -612,7 +616,9 @@ async fn bad_input_is_refused() {
         StatusCode::BAD_REQUEST
     );
     assert_eq!(
-        app.send("GET", "/api/plan", As::Nobody, None).await.status,
+        app.send("GET", "/api/v1/plan", As::Nobody, None)
+            .await
+            .status,
         StatusCode::UNAUTHORIZED
     );
 }

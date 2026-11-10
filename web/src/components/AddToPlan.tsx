@@ -28,7 +28,7 @@ export function AddToPlan({ variantId, servings }: { variantId: string; servings
     const mine = ++latest.current;
     setDone({ target, state: "saving" });
     setFailure(null);
-    const { error: failed } = await api.POST("/api/plan/entries", {
+    const { error: failed } = await api.POST("/api/v1/plan/entries", {
       body: { week, variant_id: variantId, servings },
     });
     if (mine !== latest.current) return;

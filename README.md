@@ -39,7 +39,7 @@ cargo build --release -p mise-cli -p mise-api
 ./target/release/mise group-dishes
 ./target/release/mise derive-options
 ./target/release/mise parse-steps
-./target/release/mise-server           # API on :8080; OpenAPI at /api/openapi.json
+./target/release/mise-server           # API on :8080; OpenAPI at /api/v1/openapi.json
 ```
 
 The web app lives in `web/` (React, Vite, TypeScript). `npm run dev` serves it on :5173 with `/api` forwarded to the

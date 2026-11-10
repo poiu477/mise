@@ -39,7 +39,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const mine = ++latest.current;
     // A weak signal can hang rather than fail: give up after a few seconds and open from the device.
     const cfg = await api
-      .GET("/api/auth/config", { signal: AbortSignal.timeout(6000) })
+      .GET("/api/v1/auth/config", { signal: AbortSignal.timeout(6000) })
       .catch(() => null);
     // A newer check replaced this one, and its answer is the one kept.
     if (mine !== latest.current) return LOADING;
@@ -53,7 +53,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       actAs(null);
       return { status: "setup", info };
     }
-    const me = await api.GET("/api/me").catch(() => null);
+    const me = await api.GET("/api/v1/me").catch(() => null);
     if (mine !== latest.current) return LOADING;
     if (me?.data) rememberMe(me.data);
     actAs(me?.data?.id ?? null);
@@ -75,7 +75,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   /** Signs out and forgets everything of the household's on this device and in memory. */
   const signOut = useCallback(async () => {
-    await api.POST("/api/auth/logout").catch(() => null);
+    await api.POST("/api/v1/auth/logout").catch(() => null);
     forgetDevice();
     actAs(null);
     await refresh();

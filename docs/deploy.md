@@ -85,6 +85,22 @@ names in the commands above.
 git pull && docker compose up -d --build
 ```
 
+### The API's old addresses
+
+The API is served under `/api/v1` (`/api/v1/dishes`, `/api/v1/openapi.json`). Its old addresses under `/api` still
+answer as before for one more release, so a phone still running the web app it cached, or holding shopping-list
+changes made offline, keeps working through the update. Each such answer carries `Deprecation` and a `Link` to its
+`/api/v1` address. Point scripts and integrations at `/api/v1` now.
+
+| Address | Until |
+| --- | --- |
+| `/api/...` (all but the three below) | Removed in the release after the one that added `/api/v1` |
+| `/api/health` | Stays: proxies and monitors check it |
+| `/api/auth/oidc/start`, `/api/auth/oidc/callback` | Stay: single sign-on's redirect address, which providers have on record |
+
+Opening the app once after an update loads the new version, which uses `/api/v1`; a phone that does so before the
+old addresses go needs nothing else.
+
 ## 6. Backups
 
 The `backup` service writes `BACKUP_DIR/mise-<date>.dump` every night at `BACKUP_HOUR` (default 03:00 in the
@@ -108,7 +124,7 @@ origin. Kitchen mode's screen wake lock and an Alexa endpoint need HTTPS too. Th
 | [The stack's own Caddy](#the-stacks-own-caddy) | Nothing else does: the `https` profile adds a Caddy in front of mise |
 
 Either way, set `PUBLIC_BASE_URL` to the `https` address, which marks session cookies Secure, and check the result
-([below](#check-it)). Every page needs a signed-in account; only `/api/health` is open. Make the first account before
+([below](#check-it)). Every page needs a signed-in account; only the health check (`/api/v1/health`, or `/api/health`) is open. Make the first account before
 the address can be reached from the internet: until then, whoever opens it first becomes the admin.
 
 ### Behind an existing reverse proxy

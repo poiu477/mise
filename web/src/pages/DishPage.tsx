@@ -36,14 +36,14 @@ export function DishPage() {
      * moving to the current address below shows it at once. */
     queryFn: async ({ signal }) => {
       const dish = await answer(
-        api.GET("/api/dishes/{slug}", { params: { path: { slug } }, signal }),
+        api.GET("/api/v1/dishes/{slug}", { params: { path: { slug } }, signal }),
       );
       if (dish.slug !== slug) queryClient.setQueryData(["dish", dish.slug], dish);
       return dish;
     },
   });
   const dish = dishQuery.data;
-  const missing = dishQuery.error instanceof Refused && dishQuery.error.status === 404;
+  const missing = dishQuery.error instanceof Refused && dishQuery.error.code === "not_found";
 
   // The options chosen: where the dish starts when it first shows, then whatever is tapped.
   const [picked, setPicked] = useState<{ slug: string; sel: Selection } | null>(null);
@@ -64,7 +64,7 @@ export function DishPage() {
     queryKey: ["variant", chosen?.id, servings],
     queryFn: ({ signal }) =>
       answer(
-        api.GET("/api/variants/{id}", {
+        api.GET("/api/v1/variants/{id}", {
           params: { path: { id: chosen!.id }, query: { servings } },
           signal,
         }),

@@ -70,7 +70,7 @@ const tick = (key: string, checked: boolean, week = WEEK): Change => ({
   checked,
 });
 
-/** Signed in on this device as `id`, as the session does after `/api/me` answers. */
+/** Signed in on this device as `id`, as the session does after `/api/v1/me` answers. */
 const signedIn = (store: Store, id = "me") =>
   rememberMe(
     {

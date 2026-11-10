@@ -157,6 +157,17 @@ impl TestApp {
         self.router.clone().oneshot(req).await.unwrap()
     }
 
+    /// Run one request through the router and read the reply.
+    pub async fn read(&self, req: Request<Body>) -> Reply {
+        let (parts, body) = self.oneshot(req).await.into_parts();
+        let bytes = body.collect().await.unwrap().to_bytes();
+        Reply {
+            status: parts.status,
+            headers: parts.headers,
+            body: serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        }
+    }
+
     /// Send a request, with a JSON body if there is one, and read the reply.
     pub async fn send(&self, method: &str, path: &str, from: As<'_>, body: Option<Value>) -> Reply {
         let b = TestApp::request(method, path, from);
@@ -166,14 +177,7 @@ impl TestApp {
                 .body(Body::from(v.to_string())),
             None => b.body(Body::empty()),
         };
-        let res = self.oneshot(req.unwrap()).await;
-        let (parts, body) = res.into_parts();
-        let bytes = body.collect().await.unwrap().to_bytes();
-        Reply {
-            status: parts.status,
-            headers: parts.headers,
-            body: serde_json::from_slice(&bytes).unwrap_or(Value::Null),
-        }
+        self.read(req.unwrap()).await
     }
 
     /// Send as this browser and expect 200 OK; returns the JSON body.
@@ -193,7 +197,7 @@ impl TestApp {
         let reply = self
             .send(
                 "POST",
-                "/api/auth/setup",
+                "/api/v1/auth/setup",
                 As::Nobody,
                 Some(json!({"username": OWNER, "password": OWNER_PASSWORD})),
             )
@@ -207,7 +211,7 @@ impl TestApp {
         let reply = self
             .send(
                 "POST",
-                "/api/auth/login",
+                "/api/v1/auth/login",
                 As::Nobody,
                 Some(json!({"username": username, "password": password})),
             )

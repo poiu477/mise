@@ -361,7 +361,7 @@ async fn a_new_person_signs_in_and_comes_back_to_the_same_account() {
             .await,
         "/plan",
     );
-    let me = app.json("GET", "/api/me", &first, None).await;
+    let me = app.json("GET", "/api/v1/me", &first, None).await;
     assert_eq!(me["username"], "alice");
     assert_eq!(me["display_name"], "Alice Example");
     assert_eq!(
@@ -377,7 +377,7 @@ async fn a_new_person_signs_in_and_comes_back_to_the_same_account() {
 
     // The same identity again finds the same account, and admin follows the groups at every sign-in.
     let again = signed_in(&app.sign_in(Alg::Rs256, alice(&["cooks"])).await, "/plan");
-    let me2 = app.json("GET", "/api/me", &again, None).await;
+    let me2 = app.json("GET", "/api/v1/me", &again, None).await;
     assert_eq!(me2["id"], me["id"]);
     assert_eq!(me2["is_admin"], false);
     assert_eq!(app.users().await, 1);
@@ -389,7 +389,7 @@ async fn tokens_signed_with_each_accepted_algorithm_verify() {
     for (alg, sub) in [(Alg::Rs256, "rs"), (Alg::Es256, "es"), (Alg::EdDsa, "ed")] {
         let person = json!({"sub": sub, "preferred_username": sub});
         let cookie = signed_in(&app.sign_in(alg, person).await, "/plan");
-        let me = app.json("GET", "/api/me", &cookie, None).await;
+        let me = app.json("GET", "/api/v1/me", &cookie, None).await;
         assert_eq!(me["username"], sub, "{alg:?}");
     }
     assert_eq!(app.users().await, 3);
@@ -403,7 +403,7 @@ async fn only_a_verified_email_links_to_an_existing_account() {
     let bea = app
         .json(
             "POST",
-            "/api/users",
+            "/api/v1/users",
             &admin,
             Some(json!({"username": "bea", "password": "bea's long password", "email": "bea@example.test"})),
         )
@@ -412,7 +412,7 @@ async fn only_a_verified_email_links_to_an_existing_account() {
     // An unverified email proves nothing: a new account, without the email.
     let unverified = json!({"sub": "bea-x", "email": "bea@example.test", "email_verified": false, "preferred_username": "bea"});
     let cookie = signed_in(&app.sign_in(Alg::Es256, unverified).await, "/plan");
-    let me = app.json("GET", "/api/me", &cookie, None).await;
+    let me = app.json("GET", "/api/v1/me", &cookie, None).await;
     assert_ne!(me["id"], bea["id"]);
     assert_eq!(me["username"], "bea2", "a taken username gets a number");
     assert_eq!(me["email"], Value::Null);
@@ -420,7 +420,7 @@ async fn only_a_verified_email_links_to_an_existing_account() {
     // A verified one links to Bea's own account.
     let verified = json!({"sub": "bea-1", "email": "BEA@example.test", "email_verified": true});
     let cookie = signed_in(&app.sign_in(Alg::Es256, verified).await, "/plan");
-    let me = app.json("GET", "/api/me", &cookie, None).await;
+    let me = app.json("GET", "/api/v1/me", &cookie, None).await;
     assert_eq!(me["id"], bea["id"]);
     assert_eq!(me["has_password"], true, "linking keeps the local password");
 }

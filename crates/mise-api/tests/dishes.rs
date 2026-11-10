@@ -44,15 +44,15 @@ impl Demo {
 
     /// The titles a search returns, in order.
     async fn search(&self, query: &str) -> Vec<String> {
-        let page = self.get(&format!("/api/dishes?{query}")).await;
+        let page = self.get(&format!("/api/v1/dishes?{query}")).await;
         titles(&page["items"])
     }
 
     /// A version as the dish page sends it there, at a serving count.
     async fn version(&self, slug: &str, servings: &str) -> Value {
-        let dish = self.get(&format!("/api/dishes/{slug}")).await;
+        let dish = self.get(&format!("/api/v1/dishes/{slug}")).await;
         let id = dish["default_variant"].as_str().expect("a default version");
-        self.get(&format!("/api/variants/{id}?servings={servings}"))
+        self.get(&format!("/api/v1/variants/{id}?servings={servings}"))
             .await
     }
 }
@@ -102,7 +102,7 @@ fn step(version: &Value, position: usize) -> &Value {
 #[tokio::test]
 async fn search_lists_every_dish_with_the_most_versions_first() {
     let demo = test_app!(Demo::new());
-    let page = demo.get("/api/dishes").await;
+    let page = demo.get("/api/v1/dishes").await;
     assert_eq!(page["total"], 4);
     assert_eq!(
         titles(&page["items"]),
@@ -161,11 +161,11 @@ async fn search_by_ingredient_looks_at_the_version_a_dish_opens_on() {
 async fn search_filters_by_type_and_pages() {
     let demo = test_app!(Demo::new());
     assert_eq!(demo.search("type=recipe").await.len(), 4);
-    let none = demo.get("/api/dishes?type=ready_meal").await;
+    let none = demo.get("/api/v1/dishes?type=ready_meal").await;
     assert_eq!(none["total"], 0);
     assert_eq!(none["items"], Value::Array(vec![]));
 
-    let page = demo.get("/api/dishes?limit=2&offset=1").await;
+    let page = demo.get("/api/v1/dishes?limit=2&offset=1").await;
     assert_eq!(
         page["total"], 4,
         "the total counts every match, not the page"
@@ -178,14 +178,14 @@ async fn search_filters_by_type_and_pages() {
     assert_eq!(demo.search("limit=0").await, ["Black Bean Tacos"]);
     assert_eq!(demo.search("limit=1000&offset=-5").await.len(), 4);
 
-    let bad = demo.get_reply("/api/dishes?limit=lots").await;
+    let bad = demo.get_reply("/api/v1/dishes?limit=lots").await;
     assert_eq!(bad.status, StatusCode::BAD_REQUEST, "{}", bad.body);
 }
 
 #[tokio::test]
 async fn a_dish_page_lists_its_versions_newest_first() {
     let demo = test_app!(Demo::new());
-    let dish = demo.get("/api/dishes/black-bean-tacos").await;
+    let dish = demo.get("/api/v1/dishes/black-bean-tacos").await;
     assert_eq!(dish["title"], "Black Bean Tacos");
     assert_eq!(dish["subtitle"], "with Lime Crema");
     let versions = dish["variants"].as_array().expect("versions");
@@ -202,7 +202,7 @@ async fn a_dish_page_lists_its_versions_newest_first() {
         assert_eq!(v["image"], Value::Null);
     }
 
-    let rice = demo.get("/api/dishes/garlic-rice-bowl").await;
+    let rice = demo.get("/api/v1/dishes/garlic-rice-bowl").await;
     assert_eq!(rice["variants"].as_array().expect("versions").len(), 1);
     assert_eq!(rice["variants"][0]["yields"], serde_json::json!([2.0]));
 }
@@ -210,23 +210,23 @@ async fn a_dish_page_lists_its_versions_newest_first() {
 #[tokio::test]
 async fn an_unknown_dish_or_version_is_not_found() {
     let demo = test_app!(Demo::new());
-    let dish = demo.get_reply("/api/dishes/no-such-dish").await;
+    let dish = demo.get_reply("/api/v1/dishes/no-such-dish").await;
     assert_eq!(dish.status, StatusCode::NOT_FOUND);
     assert!(dish.body["error"].is_string(), "{}", dish.body);
 
     let version = demo
-        .get_reply(&format!("/api/variants/{}", uuid::Uuid::now_v7()))
+        .get_reply(&format!("/api/v1/variants/{}", uuid::Uuid::now_v7()))
         .await;
     assert_eq!(version.status, StatusCode::NOT_FOUND);
 
-    let bad = demo.get_reply("/api/variants/not-a-uuid").await;
+    let bad = demo.get_reply("/api/v1/variants/not-a-uuid").await;
     assert_eq!(bad.status, StatusCode::BAD_REQUEST, "{}", bad.body);
 }
 
 #[tokio::test]
 async fn options_offer_each_version_and_each_choice_picks_one() {
     let demo = test_app!(Demo::new());
-    let dish = demo.get("/api/dishes/black-bean-tacos").await;
+    let dish = demo.get("/api/v1/dishes/black-bean-tacos").await;
     let options = dish["options"].as_array().expect("options");
     assert_eq!(options.len(), 1);
     let version = &options[0];
@@ -255,7 +255,7 @@ async fn options_offer_each_version_and_each_choice_picks_one() {
                 "the default choice is the version the dish opens on"
             );
         }
-        let rendered = demo.get(&format!("/api/variants/{id}")).await;
+        let rendered = demo.get(&format!("/api/v1/variants/{id}")).await;
         let cheese = ingredients(&rendered)
             .into_iter()
             .find(|i| i.contains("Cheese"))
@@ -283,7 +283,7 @@ async fn a_dish_with_one_version_offers_no_options() {
         "lemon-herb-chicken",
         "weeknight-tomato-pasta",
     ] {
-        let dish = demo.get(&format!("/api/dishes/{slug}")).await;
+        let dish = demo.get(&format!("/api/v1/dishes/{slug}")).await;
         assert_eq!(dish["options"], Value::Array(vec![]), "{slug}");
     }
 }
@@ -291,9 +291,9 @@ async fn a_dish_with_one_version_offers_no_options() {
 #[tokio::test]
 async fn a_version_opens_at_its_smallest_published_yield() {
     let demo = test_app!(Demo::new());
-    let dish = demo.get("/api/dishes/weeknight-tomato-pasta").await;
+    let dish = demo.get("/api/v1/dishes/weeknight-tomato-pasta").await;
     let id = dish["default_variant"].as_str().expect("a version");
-    let pasta = demo.get(&format!("/api/variants/{id}")).await;
+    let pasta = demo.get(&format!("/api/v1/variants/{id}")).await;
     assert_eq!(pasta["servings"], 2.0);
     assert_eq!(pasta["yields"], serde_json::json!([2.0, 4.0]));
     assert_eq!(pasta["dish_slug"], "weeknight-tomato-pasta");
@@ -444,11 +444,11 @@ async fn a_version_beyond_its_published_yields_scales_from_the_nearest() {
 #[tokio::test]
 async fn a_serving_count_out_of_range_is_refused() {
     let demo = test_app!(Demo::new());
-    let dish = demo.get("/api/dishes/weeknight-tomato-pasta").await;
+    let dish = demo.get("/api/v1/dishes/weeknight-tomato-pasta").await;
     let id = dish["default_variant"].as_str().expect("a version");
     for servings in ["0", "-2", "24.5", "100"] {
         let reply = demo
-            .get_reply(&format!("/api/variants/{id}?servings={servings}"))
+            .get_reply(&format!("/api/v1/variants/{id}?servings={servings}"))
             .await;
         assert_eq!(reply.status, StatusCode::BAD_REQUEST, "{servings}");
         assert_eq!(
@@ -457,26 +457,28 @@ async fn a_serving_count_out_of_range_is_refused() {
         );
     }
     let bad = demo
-        .get_reply(&format!("/api/variants/{id}?servings=two"))
+        .get_reply(&format!("/api/v1/variants/{id}?servings=two"))
         .await;
     assert_eq!(bad.status, StatusCode::BAD_REQUEST, "{}", bad.body);
     // The largest derived yield is allowed.
-    let most = demo.get(&format!("/api/variants/{id}?servings=24")).await;
+    let most = demo
+        .get(&format!("/api/v1/variants/{id}?servings=24"))
+        .await;
     assert_eq!(most["servings"], 24.0);
 }
 
 #[tokio::test]
 async fn signed_out_requests_get_401() {
     let demo = test_app!(Demo::new());
-    let dish = demo.get("/api/dishes/black-bean-tacos").await;
+    let dish = demo.get("/api/v1/dishes/black-bean-tacos").await;
     let id = dish["default_variant"].as_str().expect("a version");
     let paths = [
-        "/api/dishes".to_string(),
-        "/api/dishes?q=tacos".to_string(),
-        "/api/dishes/black-bean-tacos".to_string(),
-        format!("/api/variants/{id}"),
-        format!("/api/variants/{id}?servings=3"),
-        format!("/api/media/{}/400", uuid::Uuid::now_v7()),
+        "/api/v1/dishes".to_string(),
+        "/api/v1/dishes?q=tacos".to_string(),
+        "/api/v1/dishes/black-bean-tacos".to_string(),
+        format!("/api/v1/variants/{id}"),
+        format!("/api/v1/variants/{id}?servings=3"),
+        format!("/api/v1/media/{}/400", uuid::Uuid::now_v7()),
     ];
     for path in &paths {
         for from in [
@@ -498,11 +500,16 @@ async fn signed_out_requests_get_401() {
 #[tokio::test]
 async fn a_signed_out_session_can_no_longer_read_recipes() {
     let demo = test_app!(Demo::new());
-    demo.get("/api/dishes").await;
+    demo.get("/api/v1/dishes").await;
     let out = demo
-        .send("POST", "/api/auth/logout", As::Cookie(&demo.cookie), None)
+        .send(
+            "POST",
+            "/api/v1/auth/logout",
+            As::Cookie(&demo.cookie),
+            None,
+        )
         .await;
     assert!(out.status.is_success(), "sign out: {}", out.body);
-    let reply = demo.get_reply("/api/dishes").await;
+    let reply = demo.get_reply("/api/v1/dishes").await;
     assert_eq!(reply.status, StatusCode::UNAUTHORIZED);
 }

@@ -4,57 +4,6 @@
  */
 
 export interface paths {
-    "/api/auth/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** How this install signs people in. */
-        get: operations["auth_config"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sign in with a username and password. Sets the session cookie. */
-        post: operations["login"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sign out of this browser. */
-        post: operations["logout"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/auth/oidc/callback": {
         parameters: {
             query?: never;
@@ -89,7 +38,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auth/setup": {
+    "/api/v1/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How this install signs people in. */
+        get: operations["auth_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign in with a username and password. Sets the session cookie. */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out of this browser. */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/setup": {
         parameters: {
             query?: never;
             header?: never;
@@ -106,7 +106,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/dishes": {
+    "/api/v1/dishes": {
         parameters: {
             query?: never;
             header?: never;
@@ -123,7 +123,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/dishes/{slug}": {
+    "/api/v1/dishes/{slug}": {
         parameters: {
             query?: never;
             header?: never;
@@ -140,14 +140,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/health": {
+    "/api/v1/health": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Liveness and version. */
+        /** Liveness and version. `/api/health` answers too, for good: proxies and monitors check it. */
         get: operations["health"];
         put?: never;
         post?: never;
@@ -157,7 +157,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/households": {
+    "/api/v1/households": {
         parameters: {
             query?: never;
             header?: never;
@@ -175,7 +175,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/me": {
+    "/api/v1/me": {
         parameters: {
             query?: never;
             header?: never;
@@ -192,7 +192,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/me/password": {
+    "/api/v1/me/password": {
         parameters: {
             query?: never;
             header?: never;
@@ -209,7 +209,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/me/tokens": {
+    "/api/v1/me/tokens": {
         parameters: {
             query?: never;
             header?: never;
@@ -227,7 +227,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/me/tokens/{id}": {
+    "/api/v1/me/tokens/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -244,7 +244,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/media/{id}/{size}": {
+    "/api/v1/media/{id}/{size}": {
         parameters: {
             query?: never;
             header?: never;
@@ -261,7 +261,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/pantry-staples": {
+    "/api/v1/pantry-staples": {
         parameters: {
             query?: never;
             header?: never;
@@ -278,7 +278,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/pantry-staples/{food_id}": {
+    "/api/v1/pantry-staples/{food_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -295,7 +295,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/plan": {
+    "/api/v1/plan": {
         parameters: {
             query?: never;
             header?: never;
@@ -312,7 +312,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/plan/entries": {
+    "/api/v1/plan/entries": {
         parameters: {
             query?: never;
             header?: never;
@@ -329,7 +329,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/plan/entries/{id}": {
+    "/api/v1/plan/entries/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -347,7 +347,7 @@ export interface paths {
         patch: operations["update_plan_entry"];
         trace?: never;
     };
-    "/api/shopping": {
+    "/api/v1/shopping": {
         parameters: {
             query?: never;
             header?: never;
@@ -364,7 +364,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/shopping/extras": {
+    "/api/v1/shopping/extras": {
         parameters: {
             query?: never;
             header?: never;
@@ -384,7 +384,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/shopping/extras/{id}": {
+    "/api/v1/shopping/extras/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -402,7 +402,7 @@ export interface paths {
         patch: operations["update_shopping_extra"];
         trace?: never;
     };
-    "/api/shopping/food-weights": {
+    "/api/v1/shopping/food-weights": {
         parameters: {
             query?: never;
             header?: never;
@@ -419,7 +419,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/shopping/marks": {
+    "/api/v1/shopping/marks": {
         parameters: {
             query?: never;
             header?: never;
@@ -436,7 +436,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/shopping/settings": {
+    "/api/v1/shopping/settings": {
         parameters: {
             query?: never;
             header?: never;
@@ -454,7 +454,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/users": {
+    "/api/v1/users": {
         parameters: {
             query?: never;
             header?: never;
@@ -472,7 +472,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/users/{id}": {
+    "/api/v1/users/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -489,7 +489,7 @@ export interface paths {
         patch: operations["update_user"];
         trace?: never;
     };
-    "/api/variants/{id}": {
+    "/api/v1/variants/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -578,9 +578,18 @@ export interface components {
             /** Format: double */
             servings: number;
         };
+        /** @description The body of every error the API answers with. */
         ErrorBody: {
+            /** @description What kind of error it is, for programs to act on. */
+            code: components["schemas"]["ErrorCode"];
+            /** @description What went wrong, as a sentence to show people: "servings must be more than 0 and at most 24". */
             error: string;
         };
+        /**
+         * @description What kind of error a response is, named for programs: stable across releases, whatever the message says.
+         * @enum {string}
+         */
+        ErrorCode: "not_found" | "bad_request" | "unauthorized" | "bad_credentials" | "forbidden" | "method_not_allowed" | "conflict" | "account_changed" | "payload_too_large" | "too_many_requests" | "internal";
         ExtraChange: {
             checked: boolean;
         };
@@ -909,6 +918,44 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    oidc_callback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed in, back to the app */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oidc_start: {
+        parameters: {
+            query?: {
+                return_to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description To the provider */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     auth_config: {
         parameters: {
             query?: never;
@@ -982,44 +1029,6 @@ export interface operations {
         responses: {
             /** @description Signed out */
             204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    oidc_callback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Signed in, back to the app */
-            303: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    oidc_start: {
-        parameters: {
-            query?: {
-                return_to?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description To the provider */
-            303: {
                 headers: {
                     [name: string]: unknown;
                 };
