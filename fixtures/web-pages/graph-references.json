@@ -1,0 +1,55 @@
+[
+  {
+    "description": null,
+    "external_id": "https://fieldnotes.example/roasted-carrot-soup",
+    "hero_image": "https://fieldnotes.example/img/carrot-soup.webp",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 1/2 lb carrots"
+      },
+      {
+        "key": "2",
+        "name": "1 onion"
+      },
+      {
+        "key": "3",
+        "name": "3 cups vegetable stock"
+      },
+      {
+        "key": "4",
+        "name": "1 tsp ground cumin"
+      },
+      {
+        "key": "5",
+        "name": "2 tbsp olive oil"
+      }
+    ],
+    "meta": {
+      "author": "Jo Lindqvist",
+      "cook_time": "PT40M",
+      "images": [
+        "https://fieldnotes.example/img/carrot-soup.webp"
+      ],
+      "prep_time": "PT10M",
+      "yield_text": "4 servings"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Roast the carrots and onion with the oil at 400°F for 30 minutes."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Simmer with the stock and cumin for 10 minutes, then blend until smooth."
+      }
+    ],
+    "title": "Roasted Carrot Soup",
+    "url": "https://fieldnotes.example/roasted-carrot-soup",
+    "yields": [
+      4.0
+    ]
+  }
+]

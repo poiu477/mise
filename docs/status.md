@@ -11,7 +11,7 @@ both in the same merge request as the work.
 | 1 Data core | Done; its gate (500 full-archive dishes checked by hand) was waived when the hand-trimmed launch seed took the full archive's place (see Decisions) | Seed bundle format and importer; food matching, tree and curation files; dish grouping with drift splitting, protein twins and recorded decisions; options; content-addressed media with web-size copies; grouping gate report |
 | 2 Browse and cook | Done (gate passed on 60 seed recipes, 2026-11-01) | REST API with OpenAPI; web app (PWA) with search, dish pages, option toggles, any serving count; step text rewritten for the chosen servings; local accounts, households, OIDC single sign-on, sessions, API tokens; Docker Compose stack with nightly backups, and HTTPS behind an existing proxy or through the stack's own Caddy (the `https` profile) |
 | 3 Plan and shop | Core done (gate passed in use, 2026-11-03) | Weekly household plan; shopping list worked out from it, exact totals by store section, household and per-food weight units, pantry staples, hand-added items, ticks, printing, works offline on a phone |
-| 4 Kitchen and imports | Not started; broken into tasks T22 to T33 in the backlog | |
+| 4 Kitchen and imports | Under way, as tasks T22 to T33 in the backlog; gate half two (20 sample pages read to their records, T25) passes | Reading schema.org Recipe data (JSON-LD, microdata as a fallback) from a page or JSON file into bundle-shaped records, for import from a link (T26) and from files (T27) |
 | 5 Optional extras | Not started | |
 
 The live data is the launch seed: 237 dishes and 308 versions from meals received between October 2023 and October
@@ -113,4 +113,5 @@ What a reviewer can rely on today:
 | 2026-11-10 | A dish's address follows its title, and old addresses keep working (T21), instead of slugs fixed at first import |
 | 2026-11-10 | GitHub keeps its copy of CI after a review suggested dropping it: it costs nothing to run, and it caught a race in a browser journey that GitLab's run had missed |
 | 2026-11-10 | Phase 4 is broken into Ready tasks (T22 to T33). Process work stops growing: no new workflow rules or CI unless a task needs them |
+| 2026-11-10 | Web pages are parsed with html5ever into a small DOM of mise's own (`mise_ingest::schema_org`), not `scraper` (its CSS crates are MPL-2.0) or html5ever's test-only `rcdom`. A page nesting elements past 512, where browsers stop nesting, is refused: html5ever's work grows with the square of the depth |
 | 2026-11-10 | A dish option lists the choices most versions offer first; on a tie, the dish's default, then the option's reading order (Regular before Double protein; Standard, v2, v3; proteins alphabetically, then No meat). Versions are numbered by how many versions share them, then by label, so a re-run of `derive-options` changes nothing |

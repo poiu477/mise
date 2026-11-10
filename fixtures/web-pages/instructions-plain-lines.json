@@ -1,0 +1,55 @@
+[
+  {
+    "description": null,
+    "external_id": "https://jarandlid.example/quick-pickled-onions",
+    "hero_image": "https://jarandlid.example/pickled-onions.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 red onion, thinly sliced"
+      },
+      {
+        "key": "2",
+        "name": "1/2 cup cider vinegar"
+      },
+      {
+        "key": "3",
+        "name": "1/2 cup water"
+      },
+      {
+        "key": "4",
+        "name": "1 tbsp sugar"
+      },
+      {
+        "key": "5",
+        "name": "1 tsp salt"
+      }
+    ],
+    "meta": {
+      "images": [
+        "https://jarandlid.example/pickled-onions.jpg"
+      ],
+      "yield_text": "1 jar"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Pack the onion into a clean jar."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Heat the vinegar, water, sugar and salt until dissolved."
+      },
+      {
+        "images": [],
+        "index": 3,
+        "text": "Pour over the onion and leave for 30 minutes before eating."
+      }
+    ],
+    "title": "Quick Pickled Onions",
+    "url": "https://jarandlid.example/quick-pickled-onions",
+    "yields": []
+  }
+]

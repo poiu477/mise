@@ -1,0 +1,56 @@
+[
+  {
+    "description": null,
+    "external_id": "https://trayfulls.example/recipes/sheet-pan-gnocchi/",
+    "hero_image": "https://trayfulls.example/media/gnocchi.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 lb shelf-stable gnocchi"
+      },
+      {
+        "key": "2",
+        "name": "1 pint cherry tomatoes"
+      },
+      {
+        "key": "3",
+        "name": "1 red onion, cut in wedges"
+      },
+      {
+        "key": "4",
+        "name": "2 tbsp olive oil"
+      },
+      {
+        "key": "5",
+        "name": "4 oz mozzarella"
+      }
+    ],
+    "meta": {
+      "cook_time": "PT25M",
+      "images": [
+        "https://trayfulls.example/media/gnocchi.jpg",
+        "https://cdn.trayfulls.example/gnocchi-wide.jpg"
+      ],
+      "yield_text": "2 to 3 servings"
+    },
+    "steps": [
+      {
+        "images": [
+          "https://trayfulls.example/recipes/steps/gnocchi-1.jpg"
+        ],
+        "index": 1,
+        "text": "Toss the gnocchi, tomatoes and onion with the oil on a sheet pan."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Roast at 450°F for 20 minutes, top with the mozzarella and roast 5 minutes more."
+      }
+    ],
+    "title": "Sheet Pan Gnocchi",
+    "url": "https://trayfulls.example/recipes/sheet-pan-gnocchi/",
+    "yields": [
+      2.0
+    ]
+  }
+]

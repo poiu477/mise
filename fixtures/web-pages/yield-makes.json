@@ -1,0 +1,48 @@
+[
+  {
+    "description": null,
+    "external_id": "https://cookiejar.example/peanut-butter-oat-cookies",
+    "hero_image": "https://cookiejar.example/img/pb-oat-cookies.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 cup peanut butter"
+      },
+      {
+        "key": "2",
+        "name": "1/2 cup brown sugar"
+      },
+      {
+        "key": "3",
+        "name": "1 egg"
+      },
+      {
+        "key": "4",
+        "name": "1 cup rolled oats"
+      }
+    ],
+    "meta": {
+      "cook_time": "PT12M",
+      "images": [
+        "https://cookiejar.example/img/pb-oat-cookies.jpg"
+      ],
+      "prep_time": "PT15M",
+      "yield_text": "Makes 24 cookies"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Mix the peanut butter, sugar and egg, then stir in the oats."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Roll into 24 balls, flatten with a fork and bake at 350°F for 10 to 12 minutes."
+      }
+    ],
+    "title": "Peanut Butter Oat Cookies",
+    "url": "https://cookiejar.example/peanut-butter-oat-cookies",
+    "yields": []
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "description": null,
+    "external_id": "https://fixtures.example/no-image.html",
+    "hero_image": null,
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 can chickpeas, drained"
+      },
+      {
+        "key": "2",
+        "name": "3 tbsp tahini"
+      },
+      {
+        "key": "3",
+        "name": "1 lemon, juiced"
+      },
+      {
+        "key": "4",
+        "name": "1 garlic clove"
+      },
+      {
+        "key": "5",
+        "name": "3 tbsp water"
+      }
+    ],
+    "meta": {},
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Blend everything until very smooth, adding more water if it's thick."
+      }
+    ],
+    "title": "Five-Minute Hummus",
+    "url": "https://fixtures.example/no-image.html",
+    "yields": [
+      4.0
+    ]
+  }
+]

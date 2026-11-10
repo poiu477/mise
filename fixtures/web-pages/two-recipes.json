@@ -1,0 +1,82 @@
+[
+  {
+    "description": null,
+    "external_id": "https://porchglass.example/two-summer-drinks",
+    "hero_image": "https://porchglass.example/mint-tea.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "4 black tea bags"
+      },
+      {
+        "key": "2",
+        "name": "1 handful mint leaves"
+      },
+      {
+        "key": "3",
+        "name": "4 cups boiling water"
+      },
+      {
+        "key": "4",
+        "name": "2 tbsp honey"
+      }
+    ],
+    "meta": {
+      "images": [
+        "https://porchglass.example/mint-tea.jpg"
+      ]
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Steep the tea and mint for 5 minutes, stir in the honey and chill."
+      }
+    ],
+    "title": "Iced Mint Tea",
+    "url": "https://porchglass.example/two-summer-drinks",
+    "yields": [
+      4.0
+    ]
+  },
+  {
+    "description": null,
+    "external_id": "https://porchglass.example/two-summer-drinks#2",
+    "hero_image": "https://porchglass.example/ginger-lemonade.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 thumb of ginger, sliced"
+      },
+      {
+        "key": "2",
+        "name": "1/2 cup sugar"
+      },
+      {
+        "key": "3",
+        "name": "1 cup lemon juice"
+      },
+      {
+        "key": "4",
+        "name": "4 cups cold water"
+      }
+    ],
+    "meta": {
+      "images": [
+        "https://porchglass.example/ginger-lemonade.jpg"
+      ]
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Simmer the ginger and sugar in 1 cup of the water, cool, then mix with the lemon juice and the rest of the water."
+      }
+    ],
+    "title": "Ginger Lemonade",
+    "url": "https://porchglass.example/two-summer-drinks",
+    "yields": [
+      4.0
+    ]
+  }
+]

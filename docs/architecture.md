@@ -14,7 +14,7 @@ web/ (React PWA) ──HTTP──> mise-api (axum) ──> mise-core (pure logic
 | --- | --- | --- |
 | `mise-core` | Pure logic, no I/O: quantities and units, scaling, rounding into standard measures, step-text templates, shopping totals, dish titles, food names | serde, regex |
 | `mise-db` | The connection pool and the embedded migrations | sqlx |
-| `mise-ingest` | Getting data in: seed bundles, food matching, curation files, dish grouping and decisions, options, media, step parsing, pruning | core, db |
+| `mise-ingest` | Getting data in: seed bundles, schema.org Recipe data from web pages and files, food matching, curation files, dish grouping and decisions, options, media, step parsing, pruning | core, db |
 | `mise-api` | The REST API and `mise-server` binary: auth, dishes, versions, media, plan, shopping; OpenAPI via utoipa | core, db |
 | `mise-cli` | The `mise` binary: wraps ingest, plus food/dish/user commands and the gate and scaling reports | core, db, ingest |
 
@@ -50,6 +50,10 @@ A seed bundle (see [seed-bundle.md](seed-bundle.md)) is built offline from a pri
 `mise import-bundle`. Then, in order: `match-foods` (one food per ingredient name, a proposed tree, review items),
 `food apply` (curation file), `dish apply` and `dish prefer` (decisions and preferred versions), `group-dishes`,
 `derive-options`, `parse-steps`, `ingest-media`. Every stage is re-runnable and leaves what a person decided alone.
+
+Web pages and other apps' files will come in through the same stages. `schema_org::read_page` and `read_json` turn
+schema.org Recipe data (JSON-LD, or microdata when a page has none) into records shaped like a bundle's variant
+lines, without fetching anything; the sample pages in `fixtures/web-pages/` show what each kind of markup gives.
 
 **Grouping** joins variants into dishes: records the source marks as cloned from each other first, then similar
 titles; chains of small changes that drift into a different dish are split; protein swaps of one dish are joined.
