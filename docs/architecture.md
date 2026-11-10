@@ -27,7 +27,8 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
 - **Dishes and variants.** A `dish` is what people choose; its `variants` are the published or forked versions.
   `variant_yields` are the serving counts a version was published for. `dish_options` (protein, portion, version) are
   derived from the differences between a dish's variants. `dish_decisions` (merge, keep apart) and
-  `preferred_versions` (how often each version was had) steer grouping and the default version.
+  `preferred_versions` (how often each version was had) steer grouping and the default version. `retired_slugs` keep
+  the addresses a dish used to have, so a renamed dish still opens from an old link.
 - **Ingredients.** Each `ingredient_line` belongs to a variant and points at one `food`; `line_amounts` hold its
   amount at each published yield. `shipped = false` marks pantry lines (salt, oil) the household is expected to have.
 - **Foods.** A single-parent tree (`foods.parent_id`) with `food_aliases`, `food_relations` and `food_facts`. Free-form
@@ -52,7 +53,9 @@ A seed bundle (see [seed-bundle.md](seed-bundle.md)) is built offline from a pri
 
 **Grouping** joins variants into dishes: records the source marks as cloned from each other first, then similar
 titles; chains of small changes that drift into a different dish are split; protein swaps of one dish are joined.
-Doubtful merges go to review, and recorded decisions always win.
+Doubtful merges go to review, and recorded decisions always win. A dish keeps its id from run to run, and its slug
+follows its name: when the name changes, the old slug is retired and still finds the dish, as does the slug of a dish
+whose versions all joined another. A live dish's slug always wins over a retired one.
 
 ## Scaling and measuring (`mise-core`)
 

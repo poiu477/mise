@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { api } from "../api/client";
 import { answer, Refused } from "../api/query";
 import { startingServings, versionFor } from "../choose";
@@ -48,6 +48,11 @@ export function CardPage() {
     };
   }, [title]);
 
+  // The dish was renamed since this address was made: move to the current one, as the dish page does.
+  if (dish && dish.slug !== slug)
+    return (
+      <Navigate to={{ pathname: `/dishes/${dish.slug}/card`, search: params.toString() }} replace />
+    );
   if (missing) {
     return (
       <p className="empty">

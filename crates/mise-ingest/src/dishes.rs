@@ -9,6 +9,7 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use mise_core::dish_titles::{clean_title, core_similarity, protein_core, title_key};
 use mise_core::proteins::protein_of;
 use mise_core::text::{normalize_name, slugify};
@@ -103,14 +104,14 @@ impl UnionFind {
 }
 
 /// Regroups every version the job owns into dishes, in one transaction: joins them, sets each dish's default
-/// version, name and slug, and queues doubtful copies for review. Running it again on the same data gives the
-/// same dishes, ids and slugs.
+/// version, name and slug, retires the slugs dishes no longer use, and queues doubtful copies for review. Running
+/// it again on the same data gives the same dishes, ids and slugs.
 pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let mut stats = GroupStats::default();
     let mut tx = pool.begin().await?;
 
-    // Dishes keep their id and slug across runs (links, and later plans and favourites, point at them): remember
-    // which dish each version was in before starting over.
+    // Dishes keep their id across runs, and their slug while it still fits their name (links, plans and bookmarks
+    // point at them): remember which dish each version was in before starting over.
     let mut old_dish: HashMap<Uuid, Uuid> = HashMap::new();
     let mut old_slug: HashMap<Uuid, String> = HashMap::new();
     for (v, d, slug) in sqlx::query_as::<_, (Uuid, Uuid, String)>(
@@ -122,6 +123,13 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         old_dish.insert(v, d);
         old_slug.insert(d, slug);
     }
+    // Deleting a dish below drops its retired slugs (they cascade), so they are written back at the end.
+    let old_retired: Vec<(String, Uuid, DateTime<Utc>)> = sqlx::query_as(
+        "SELECT r.slug, r.dish_id, r.retired_at FROM retired_slugs r JOIN dishes d ON d.id = r.dish_id WHERE d.origin = 'grouped'",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .context("loading retired slugs")?;
 
     // Start over for everything the job owns.
     sqlx::query("UPDATE variants v SET dish_id = NULL FROM dishes d WHERE d.id = v.dish_id AND d.origin = 'grouped' AND NOT v.dish_pinned")
@@ -369,8 +377,9 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     }
 
     // 4. One dish per component; its default is the most complete, newest version. Each component takes over
-    //    the previous dish it shares the most versions with (greedily, largest overlap first), keeping its id
-    //    and slug. Larger dishes choose slugs first, so a big family gets the plain slug ahead of a stray.
+    //    the previous dish it shares the most versions with (greedily, largest overlap first), keeping its id,
+    //    and its slug while that still fits the name. Larger dishes choose slugs first, so a big family gets the
+    //    plain slug ahead of a stray.
     let mut votes: Vec<(usize, usize, Uuid)> = Vec::new(); // (shared versions, component, previous dish)
     for (c, members) in components.iter().enumerate() {
         let mut shared: HashMap<Uuid, usize> = HashMap::new();
@@ -384,10 +393,20 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     votes.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
     let mut previous: Vec<Option<Uuid>> = vec![None; components.len()];
     let mut taken_over = HashSet::new();
-    for (_, c, d) in votes {
+    for &(_, c, d) in &votes {
         if previous[c].is_none() && taken_over.insert(d) {
             previous[c] = Some(d);
         }
+    }
+    // Where each previous dish's addresses lead now: the component that took it over, or for one whose versions
+    // all joined other dishes, the component that took the most of them.
+    let mut heir: HashMap<Uuid, usize> = previous
+        .iter()
+        .enumerate()
+        .filter_map(|(c, d)| d.map(|d| (d, c)))
+        .collect();
+    for &(_, c, d) in &votes {
+        heir.entry(d).or_insert(c);
     }
     // Versions the household has had count for more when choosing a dish's default and name.
     let times: HashMap<Uuid, usize> = sqlx::query_as::<_, (Uuid, i32)>(
@@ -419,6 +438,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let (mut d_id, mut d_title, mut d_sub, mut d_slug, mut d_type, mut d_default) =
         (vec![], vec![], vec![], vec![], vec![], vec![]);
     let (mut a_variant, mut a_dish) = (vec![], vec![]);
+    let mut made: Vec<(Uuid, String)> = vec![(Uuid::nil(), String::new()); components.len()]; // (id, slug)
     for &c in &order {
         let members = &components[c];
         let best = *members
@@ -441,12 +461,11 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
             .unwrap_or_default();
         let base = slugify(&title);
         let kept = previous[c].and_then(|d| old_slug.get(&d)).cloned();
-        // The previous slug, or the plain one when the previous was a numbered copy of it and it is now free.
+        // The previous slug while it fits the name: as it was, or the plain one when the previous was a numbered
+        // copy of it and that is now free. A renamed dish takes its new name's slug; the old one is retired below.
         let mut slug = match &kept {
             Some(k) if strip_number(k) == base && slugs.contains(&base) => k.clone(),
-            Some(k) if strip_number(k) == base => base.clone(),
-            Some(k) => k.clone(),
-            None => base.clone(),
+            _ => base.clone(),
         };
         let mut n = 2;
         while !slugs.insert(slug.clone()) {
@@ -458,6 +477,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         }
         let id = previous[c].unwrap_or_else(Uuid::now_v7);
         stats.dishes_kept += previous[c].is_some() as usize;
+        made[c] = (id, slug.clone());
         d_id.push(id);
         d_title.push(title.clone());
         // Subtitle: the most common one among versions that carry the chosen title, so the two read together.
@@ -512,6 +532,44 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         .execute(&mut *tx)
         .await
         .context("assigning variants")?;
+
+    // 5. Retired slugs: those from before, following their dish to its heir, then the previous slug of every dish
+    //    that changed its slug or joined another dish (a newer retirement replaces an older one). A slug a live
+    //    dish holds is never kept retired, so the live dish always answers to it.
+    let mut retired: HashMap<String, (Uuid, Option<DateTime<Utc>>)> = HashMap::new();
+    for (slug, d, at) in old_retired {
+        if let Some(&c) = heir.get(&d) {
+            retired.insert(slug, (made[c].0, Some(at)));
+        }
+    }
+    for (d, slug) in &old_slug {
+        if let Some(&c) = heir.get(d)
+            && made[c].1 != *slug
+        {
+            retired.insert(slug.clone(), (made[c].0, None));
+        }
+    }
+    let (mut r_slug, mut r_dish, mut r_at) = (vec![], vec![], vec![]);
+    for (slug, (dish, at)) in retired {
+        r_slug.push(slug);
+        r_dish.push(dish);
+        r_at.push(at);
+    }
+    sqlx::query(
+        "INSERT INTO retired_slugs (slug, dish_id, retired_at)
+         SELECT s, d, coalesce(at, now()) FROM UNNEST($1::text[], $2::uuid[], $3::timestamptz[]) AS x(s, d, at)
+         ON CONFLICT (slug) DO UPDATE SET dish_id = EXCLUDED.dish_id, retired_at = EXCLUDED.retired_at",
+    )
+    .bind(&r_slug)
+    .bind(&r_dish)
+    .bind(&r_at)
+    .execute(&mut *tx)
+    .await
+    .context("retiring slugs")?;
+    sqlx::query("DELETE FROM retired_slugs r USING dishes d WHERE d.slug = r.slug")
+        .execute(&mut *tx)
+        .await
+        .context("dropping retired slugs a dish holds again")?;
 
     let dish_of: HashMap<Uuid, Uuid> = a_variant
         .iter()
