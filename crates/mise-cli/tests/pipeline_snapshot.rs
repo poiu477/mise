@@ -253,19 +253,10 @@ fn redact_ids(s: &str) -> String {
 /// A dish page: the dish with its options and versions, then each version at every serving count in `SERVINGS`,
 /// as the API serves them. Versions are numbered in the order the page lists them.
 async fn dish_page(state: &AppState, slug: &str) -> String {
-    let Json(mut dish) = dishes::get(State(state.clone()), ApiPath(slug.to_string()))
+    // Options and their choices keep the order the API gives: `derive_options` settles it from the data alone.
+    let Json(dish) = dishes::get(State(state.clone()), ApiPath(slug.to_string()))
         .await
         .unwrap_or_else(|e| panic!("dish {slug}: {e}"));
-    // `derive_options` orders a dish's choices by how many versions offer each, and choices with as many come out
-    // in hash-map order, which varies between runs. Until it settles ties itself (see "Known issues" in
-    // docs/status.md), the snapshot keeps that order and settles ties by value.
-    for o in &mut dish.options {
-        o.choices.sort_by(|a, b| {
-            b.variants
-                .cmp(&a.variants)
-                .then_with(|| a.value.cmp(&b.value))
-        });
-    }
     let mut versions: Vec<&dishes::VariantSummary> = dish.variants.iter().collect();
     // The API lists the newest first; title and subtitle settle a tie, so the order never varies between runs.
     versions.sort_by(|a, b| {

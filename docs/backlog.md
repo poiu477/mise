@@ -107,21 +107,6 @@ Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" 
 - **Done when:** the job passes, fails on a deliberately broken intra-doc link (try it, then revert), and the Pages
   URL serves `mise_core`'s documentation.
 
-### T18 · A set order for a dish's option choices
-
-`derive_options` ranks a dish's choices by how many versions offer each, and choices that tie come out in hash-map
-order, so a re-run can swap them (the Black Bean Tacos' two versions do). The pipeline snapshot test settles ties
-itself for now.
-
-- Settle ties in `crates/mise-ingest/src/options.rs`: the dish's default first, then by value, or another rule that
-  reads well on the dish page. Then remove the sort in `dish_page` in `crates/mise-cli/tests/pipeline_snapshot.rs`
-  and update the snapshots if the order changes.
-- **Touches:** `crates/mise-ingest/src/options.rs`, `crates/mise-cli/tests/pipeline_snapshot.rs`,
-  `fixtures/demo-bundle/snapshots/`.
-- **Needs:** T15 (it edits the same file).
-- **Done when:** the snapshot test passes twenty runs in a row without its own sort; the known issue in status.md is
-  gone.
-
 ## Needs a decision first
 
 Each of these waits on a question in status.md's "Open questions" or on Paul.

@@ -72,9 +72,6 @@ What a reviewer can rely on today:
 - Some step text from the source lost a space in a mixed number ("10-12 11⁄2-inch meatballs").
 - The pot pie dish's address still says "beef" (slugs are fixed at first import) until a fresh install.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
-- A dish option's choices that as many versions offer (each of the Black Bean Tacos' two versions) come in no set
-  order: `derive-options` ranks them by count alone, so a re-run can swap them. The pipeline snapshot test settles
-  ties itself until T18 fixes it.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
   the list reloads a moment later.
@@ -110,3 +107,4 @@ What a reviewer can rely on today:
 | 2026-11-08 | Mira reviews merge requests and CodeRabbit is dropped: Mira runs on the maintainer's own models, which can be more capable. Renovate, run from a scheduled GitLab pipeline, replaces Dependabot |
 | 2026-11-08 | Security scans come from GitLab's security configuration profiles (Advanced SAST, dependency scanning, secret detection) plus a Semgrep job for Rust, which Advanced SAST doesn't cover. A merge request approval policy holds new high or critical SAST findings for the maintainer's approval; authors may approve their own merge requests, since there's one maintainer |
 | 2026-11-10 | The import pipeline's output is snapshotted as plain text files that read like the dish page, reviewed with `git diff` and rewritten with `MISE_UPDATE_SNAPSHOTS=1`, rather than with `insta`: no header or extra tool, and a failing run prints a unified diff that names each change's dish, version and serving count |
+| 2026-11-10 | A dish option lists the choices most versions offer first; on a tie, the dish's default, then the option's reading order (Regular before Double protein; Standard, v2, v3; proteins alphabetically, then No meat). Versions are numbered by how many versions share them, then by label, so a re-run of `derive-options` changes nothing |
