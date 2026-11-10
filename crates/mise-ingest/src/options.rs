@@ -28,13 +28,20 @@ const PANTRY_SHIPPED_SHARE: f64 = 0.5;
 /// A one-for-one swap needs to appear in this many dishes before it is proposed for review.
 const MIN_SWAP_DISHES: usize = 2;
 
+/// What one run derived, for the command's summary.
 #[derive(Debug, Default)]
 pub struct OptionStats {
+    /// Dishes looked at: every dish with a version in it.
     pub dishes: usize,
+    /// Dishes offering a choice of protein: "Chicken", "Shrimp", "No meat".
     pub with_protein_choice: usize,
+    /// Dishes offering "Regular" or "Double protein".
     pub with_double_portion: usize,
+    /// Dishes with more than one ingredient set: "Standard" and others named by what differs.
     pub with_versions: usize,
+    /// Attributes written, one per version per key (protein, portion, version).
     pub attributes: usize,
+    /// One-for-one swaps seen in several dishes, queued for review as an alias or a substitution.
     pub swaps_proposed: usize,
 }
 
@@ -71,6 +78,8 @@ struct Facts {
     signature: BTreeSet<Uuid>,
 }
 
+/// Rewrites every dish's options and every version's attributes from scratch, in one transaction, and replaces
+/// the open swap proposals. Needs foods matched first: lines without a food are ignored.
 pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
     let mut stats = OptionStats::default();
     let variants: Vec<VariantRow> = sqlx::query_as(

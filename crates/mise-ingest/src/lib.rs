@@ -1,5 +1,7 @@
 //! Importing recipes into the data core: seed bundles first, other importers later.
 
+#![warn(missing_docs)]
+
 pub mod bundle;
 pub mod curate;
 pub mod dish_decisions;

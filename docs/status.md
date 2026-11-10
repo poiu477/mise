@@ -56,6 +56,8 @@ What a reviewer can rely on today:
   merge request claims a backlog task. Everything but the maintainer-only tasks runs on the demo data.
 - **Reviews:** Mira (`@mira`), the maintainer's self-hosted AI reviewer, reviews every merge request. CodeRabbit
   also reviewed GitHub pull requests until the move to GitLab.
+- **Rust docs:** every public item in `mise-core`, `mise-db` and `mise-ingest` has a doc comment; `missing_docs` is on
+  in each, and clippy's `-D warnings` fails a missing one. `mise-api` follows in T16.
 - **Web app:** pages load server data through TanStack Query; ESLint's React hooks rules run as errors, including
   `set-state-in-effect`, and `jsdoc/require-jsdoc` fails any export in `web/src` without a doc comment.
 - **Decisions:** architecture decision records in [`docs/adr/`](adr/README.md), each with the alternatives weighed.
@@ -98,7 +100,7 @@ What a reviewer can rely on today:
 | 2026-11-04 | The repository goes public with its history as it is; the private seed's details live in the ignored `CLAUDE.local.md` |
 | 2026-11-08 | The web app loads server data with TanStack Query; the shopping list's device copy and queue stay its own |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |
-| 2026-11-08 | Doc comments are required on public Rust items and exported TypeScript, and lints enforce it (`jsdoc/require-jsdoc` for the web app, on since T13; `missing_docs`, on for `mise-core` since T14 and for the other crates in T15 and T16); they say what a thing means, not its types. CodeRabbit's docstring score is not the gate |
+| 2026-11-08 | Doc comments are required on public Rust items and exported TypeScript, and lints enforce it (`jsdoc/require-jsdoc` for the web app, on since T13; `missing_docs`, on for `mise-core` since T14, for `mise-db` and `mise-ingest` since T15, and for `mise-api` in T16); they say what a thing means, not its types. CodeRabbit's docstring score is not the gate |
 | 2026-11-08 | `AGENTS.md` holds the working rules for every coding agent and person, and `CLAUDE.md` imports it; a draft merge request claims a backlog task. The private seed moves to its own private repository on the maintainer's GitLab, cloned into the ignored `seed/` |
 | 2026-11-08 | The maintainer's GitLab becomes the main repository, with merge requests and GitLab CI; GitHub is a read-only mirror of every branch, kept as a backup. GitLab CI can later reach the private seed, which GitHub never could |
 | 2026-11-08 | Mira reviews merge requests and CodeRabbit is dropped: Mira runs on the maintainer's own models, which can be more capable. Renovate, run from a scheduled GitLab pipeline, replaces Dependabot |

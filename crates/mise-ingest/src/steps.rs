@@ -11,20 +11,30 @@ use uuid::Uuid;
 
 const BATCH: usize = 5000;
 
+/// What one parse found across every step, for the command's summary.
 #[derive(Debug, Default)]
 pub struct ParseStats {
+    /// Steps parsed.
     pub steps: usize,
     /// Steps whose published text varies by yield.
     pub with_alts: usize,
+    /// Amounts found in step text: "1 TBSP butter".
     pub amounts: usize,
+    /// Amounts that publish another yield's amount too: "1 TBSP butter (2 TBSP for 4 servings)".
     pub amounts_with_alts: usize,
+    /// Amounts tied to the ingredient line they measure out ("butter"), whose published amounts they can follow.
     pub linked: usize,
+    /// Words that change with the yield: "half the lime zest" → "all the lime zest".
     pub word_alternatives: usize,
+    /// Remarks for larger yields, kept as written: "(For 4 servings, use two baking sheets.)".
     pub notes: usize,
     /// Yield-dependent parentheticals left as published text.
     pub unparsed: usize,
 }
 
+/// Parses every step's published text again into a template it can render at any serving count, linking
+/// amounts to the ingredient lines they measure out, and stores the templates. Steps of soups and rice dishes
+/// drop the boil-off rule, since their water is the dish.
 pub async fn parse_steps(pool: &PgPool) -> Result<ParseStats> {
     let mut lines: HashMap<Uuid, Vec<(String, String)>> = HashMap::new();
     let rows: Vec<(Uuid, String, String)> = sqlx::query_as(

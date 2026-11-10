@@ -91,25 +91,16 @@ Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" 
   journey shows one onion line for the demo week and keeps its tick across a reload.
 
 
-### T15 · Rust doc comments: `mise-db` and `mise-ingest`
-
-- As `mise-core` already does: `#![warn(missing_docs)]` at the top of each `lib.rs` (clippy's `-D warnings` makes it
-  an error in CI), then a comment on every public item it reports (93 between them), in style.md's voice: what it is
-  or does, an example in quotes where it helps, never a restated signature, no `# Arguments` or `# Returns` sections.
-  Doc examples only where a function is pure enough to run without a database.
-- **Touches:** `crates/mise-db/src/`, `crates/mise-ingest/src/` (comments only).
-- **Done when:** clippy passes with the lint on in both crates; removing one doc comment makes it fail.
-
 ### T16 · Rust doc comments: `mise-api`, then the lint for the whole workspace
 
-- As T15, for `crates/mise-api` (213 items). In this crate `///` on a handler or a request or response type also
-  becomes its description in the OpenAPI document, so regenerate `web/src/api/schema.d.ts` and keep
-  `check-openapi.mjs` passing; write those comments for an API reader.
+- As `mise-core`, `mise-db` and `mise-ingest` already do, for `crates/mise-api` (213 items). In this crate `///` on a
+  handler or a request or response type also becomes its description in the OpenAPI document, so regenerate
+  `web/src/api/schema.d.ts` and keep `check-openapi.mjs` passing; write those comments for an API reader.
 - Then move the lint to the workspace: `[workspace.lints.rust] missing_docs = "warn"` in `Cargo.toml` and
   `[lints] workspace = true` in every crate's `Cargo.toml`, removing the per-crate attributes. `mise-cli` is a binary
   and has no public items, so it's covered without work.
 - **Touches:** `crates/mise-api/src/` (comments only), `web/src/api/schema.d.ts` (regenerated), every `Cargo.toml`.
-- **Needs:** T7 (it rewrites the same annotations), T15. Not while the database-code rework is in flight: it
+- **Needs:** T7 (it rewrites the same annotations). Not while the database-code rework is in flight: it
   moves most of this crate.
 - **Done when:** clippy passes workspace-wide with the lint in `Cargo.toml`; a missing doc comment in any crate fails
   it.

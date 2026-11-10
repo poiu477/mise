@@ -140,13 +140,20 @@ const AMBIGUOUS: &[(&str, &str)] = &[(
     "black pepper or bell pepper (as a pantry item it is usually black pepper)",
 )];
 
+/// What one matching run did, for the command's summary.
 #[derive(Debug, Default)]
 pub struct MatchStats {
+    /// Distinct spellings on unmatched lines at the start ("Onion" and "onions" count as two).
     pub names: usize,
+    /// Foods made for names no existing food had.
     pub foods_created: usize,
+    /// Ingredient lines now pointing at a food.
     pub lines_matched: u64,
+    /// New foods placed under another as a kind of it: "red onion" under "onion".
     pub kind_of_links: usize,
+    /// New foods linked to one they're made from: "onion powder" to "onion".
     pub related_links: usize,
+    /// Links and names left for a person to decide, such as "pepper", which could be black or bell.
     pub review_items: usize,
 }
 
