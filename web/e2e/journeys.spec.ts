@@ -1,6 +1,7 @@
 // The household's journeys through mise in a real browser, on the demo recipes (fixtures/demo-bundle), from an
-// empty install: first-run setup, cooking at any serving count, planning a week, shopping (offline too), phone
-// layout, accessibility and signing out. They run in order and share one browser session, as a person would.
+// empty install: first-run setup, cooking at any serving count, an old dish address, planning a week, shopping
+// (offline too), phone layout, accessibility and signing out. They run in order and share one browser session, as
+// a person would.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
@@ -69,6 +70,14 @@ test("a dish reads as published, and scales to any serving count", async () => {
   await page.getByRole("region", { name: "Servings" }).getByRole("button", { name: "2" }).click();
   await page.getByRole("button", { name: "Add to plan" }).click();
   await expect(page.getByRole("button", { name: "Added" })).toBeDisabled();
+});
+
+test("an old address for a renamed dish lands on its current one", async () => {
+  // serve.mjs retires "tomato-pasta" for this dish, as grouping does when a dish is renamed.
+  await page.goto("/dishes/tomato-pasta?s=4");
+  await expect(page).toHaveURL(/\/dishes\/weeknight-tomato-pasta\?s=4$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weeknight Tomato Pasta");
+  await expect(amountOf("Spaghetti")).toHaveText("12 oz");
 });
 
 test("two more dishes and the week's list take under 20 interactions", async () => {
