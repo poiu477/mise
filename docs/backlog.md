@@ -306,16 +306,6 @@ commands and the gate report.
 - **Done when:** API tests decide one item of each kind and show a re-run of the stage keeps the decision; the
   exports round-trip through `apply`; a browser journey accepts a food match.
 
-### T33 · Printable recipe cards
-
-- A card for any version with its chosen options and servings, at `/dishes/{slug}/card`: photo, ingredients with
-  scaled amounts, steps, on one page for a typical recipe through a print stylesheet; the browser's print dialog
-  makes the PDF. (The design named Typst for PDFs; say in the merge request whether the print page leaves anything
-  that would need it.)
-- **Touches:** `web/src/` (a new page and print styles), `web/e2e/`.
-- **Done when:** a browser journey opens a demo dish's card at 2 and at 6 servings and finds the same amounts as the
-  dish page shows, and Playwright's PDF of each demo recipe's card is one page.
-
 ## Needs a decision first
 
 Each of these waits on a question in status.md's "Open questions" or on Paul.
@@ -355,8 +345,8 @@ Phase 3, still to build:
 - Nextcloud Tasks (the list as CalDAV to-dos) and Calendar (the plan as events or an iCal feed).
 - Days in the plan (meals belong to a week today).
 
-Phase 4, kitchen and imports, is broken into T22 to T33 under Ready: recipes owned by a household, kitchen
-mode, import from a link and from files, the editor and forks, sharing, review queues in the web app, and
-printable cards. Its gate is T24's kitchen journey and T25's 20 sample pages.
+Phase 4, kitchen and imports, is broken into T22 to T32 under Ready: recipes owned by a household, kitchen
+mode, import from a link and from files, the editor and forks, sharing, and review queues in the web app (printable
+cards, T33, are done). Its gate is T24's kitchen journey and T25's 20 sample pages.
 
 Break a phase item into Ready tasks, in the shape above, before starting it.

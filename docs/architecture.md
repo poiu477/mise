@@ -90,10 +90,11 @@ the stored marks, extras, staples and unit choices on top.
 
 React 19 with React Router, Vite and TypeScript. `api/client.ts` is an `openapi-fetch` client typed from the
 generated `api/schema.d.ts`; pages load through TanStack Query (`api/query.ts`), which caches answers per page,
-reloads them when a page comes back into view and keeps one account's data apart from another's. `session.tsx`
-knows who is signed in (or, offline, who last was); `components/Layout.tsx`
-gates pages on it. Pages: search, dish (options, servings, add to plan), plan, shopping, account, sign-in and first-run
-setup.
+reloads them when a page comes back into view and keeps one account's data apart from another's. `session.tsx` knows
+who is signed in (or, offline, who last was); `components/Layout.tsx` gates pages on it. Pages: search, dish
+(options, servings, add to plan), recipe card (one version and serving count laid out to print on a page), plan,
+shopping, account, sign-in and first-run setup. `choose.ts` holds which version and serving count a card's address
+opens on, by the dish page's rules (the dish page still has its own copy).
 
 Offline: `public/sw.js` keeps the app's files and recipe data (network first, cache as fallback; photos cache first)
 and never caches account data. The shopping list keeps its own copy in `offline.ts`: each week's list as last seen,

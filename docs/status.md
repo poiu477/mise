@@ -11,7 +11,7 @@ both in the same merge request as the work.
 | 1 Data core | Done; its gate (500 full-archive dishes checked by hand) was waived when the hand-trimmed launch seed took the full archive's place (see Decisions) | Seed bundle format and importer; food matching, tree and curation files; dish grouping with drift splitting, protein twins and recorded decisions; options; content-addressed media with web-size copies; grouping gate report |
 | 2 Browse and cook | Done (gate passed on 60 seed recipes, 2026-11-01) | REST API with OpenAPI; web app (PWA) with search, dish pages, option toggles, any serving count; step text rewritten for the chosen servings; local accounts, households, OIDC single sign-on, sessions, API tokens; Docker Compose stack with nightly backups |
 | 3 Plan and shop | Core done (gate passed in use, 2026-11-03) | Weekly household plan; shopping list worked out from it, exact totals by store section, household and per-food weight units, pantry staples, hand-added items, ticks, printing, works offline on a phone |
-| 4 Kitchen and imports | Not started; broken into tasks T22 to T33 in the backlog | |
+| 4 Kitchen and imports | Started; the rest is tasks T22 to T32 in the backlog | Printable recipe cards: any version at any serving count on one page, printed or saved as PDF from the browser |
 | 5 Optional extras | Not started | |
 
 The live data is the launch seed: 237 dishes and 308 versions from meals received between October 2023 and October
@@ -72,6 +72,10 @@ What a reviewer can rely on today:
 - Some step text from the source lost a space in a mixed number ("10-12 11⁄2-inch meatballs").
 - The pot pie dish's address still says "beef" (slugs are fixed at first import) until T21.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
+- A recipe card fits one page up to about 17 ingredients and 2,400 characters of steps (nine in ten of the
+  household's recipes); longer ones may run onto a second page.
+- On the dish page, the warm "Amounts scaled" and "Check amounts" step notes (`.step-flag`) are under axe's 4.5:1
+  contrast (about 3.5:1). The accessibility scan opens dish pages only at published serving counts, so it misses them.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
   the list reloads a moment later.
@@ -112,3 +116,4 @@ What a reviewer can rely on today:
 | 2026-11-10 | GitHub keeps its copy of CI after a review suggested dropping it: it costs nothing to run, and it caught a race in a browser journey that GitLab's run had missed |
 | 2026-11-10 | Phase 4 is broken into Ready tasks (T22 to T33). Process work stops growing: no new workflow rules or CI unless a task needs them |
 | 2026-11-10 | A dish option lists the choices most versions offer first; on a tie, the dish's default, then the option's reading order (Regular before Double protein; Standard, v2, v3; proteins alphabetically, then No meat). Versions are numbered by how many versions share them, then by label, so a re-run of `derive-options` changes nothing |
+| 2026-11-10 | Recipe cards print through the browser from a print stylesheet, not Typst: the print dialog makes the PDF, a journey checks the page count, and the server needs no PDF engine. Typst stays an option for things the browser can't do, such as a book of many cards |
