@@ -5,7 +5,9 @@
 ignore = [
     # The Marvin attack recovers an RSA private key by timing decryption or signing. mise uses rsa only through
     # openidconnect, to verify a sign-in provider's ID token signature with its public key, which handles no
-    # secret. No fixed release exists. Review by 2027-05-01, or sooner if a fixed rsa ships or openidconnect drops it.
+    # secret. rsa 0.10 fixes it, but openidconnect 4.1.0 (the newest) still requires rsa 0.9, so it waits on an
+    # openidconnect release: then raise openidconnect and the dev-dependency in crates/mise-api together, and drop
+    # this. Review by 2027-05-01 in any case.
     { id = "RUSTSEC-2023-0071", reason = "rsa is used only for public-key signature verification (openidconnect)" },
 ]
 
