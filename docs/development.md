@@ -114,7 +114,7 @@ git config core.hooksPath .githooks
 | --- | --- | --- |
 | Rust formatting | `cargo fmt --all` (CI: `--check`) | rustfmt at its defaults (`rustfmt.toml`) |
 | Rust lints | `cargo clippy --workspace --all-targets -- -D warnings` | Zero warnings |
-| Rust unit, property and integration tests | `cargo test --workspace` | API tests need `DATABASE_URL` and make a throwaway database each; skipped when it isn't set |
+| Rust unit, property and integration tests | `cargo test --workspace` | API tests and the pipeline snapshot test need `DATABASE_URL` and make a throwaway database each; skipped when it isn't set |
 | Rust dependencies | `cargo deny check` | Advisories, licenses, bans and sources (`deny.toml`); CI runs it |
 | Web formatting and lints | `cd web && npm run format` and `npm run lint` | Prettier at width 100; ESLint with the React hooks rules and a doc comment on every export |
 | Web unit tests | `cd web && npm test` | Vitest; pure modules (`choose.ts`, `offline.ts`, `week.ts`) |
@@ -125,6 +125,32 @@ git config core.hooksPath .githooks
 
 The fuzz suite in `crates/mise-core/tests/fuzz.rs` takes about 25 seconds in a debug build. The plan for the
 remaining repeatable gate (a seed gate) is in [backlog.md](backlog.md).
+
+### Pipeline snapshots
+
+`crates/mise-cli/tests/pipeline_snapshot.rs` runs the demo recipes through every import stage in a throwaway database
+(like the API tests, it needs `DATABASE_URL`) and compares the result with the plain-text files in
+`fixtures/demo-bundle/snapshots/`: `pipeline.txt` holds each stage's report, the row counts, the open review items
+and the food tree, and each `<dish slug>.txt` holds the dish page and every version at 1 to 6 servings as the API
+renders it. A change to food matching, grouping, options, step parsing or rounding, or to the demo bundle itself,
+makes it fail with a unified diff whose hunk headers name the dish version and serving count:
+
+```text
+@@ -92,7 +92,7 @@ ### Version 1 at 5 servings (derived)
+-- ½ cup + 2 TBSP Parmesan [scaled]
++- ⅔ cup Parmesan [scaled]
+```
+
+When the change is meant, accept it by rewriting the snapshots, then review them as you would code:
+
+```bash
+MISE_UPDATE_SNAPSHOTS=1 cargo test -p mise-cli --test pipeline_snapshot
+git diff fixtures/demo-bundle/snapshots/    # every changed line should be one the change explains
+```
+
+The rewrite also adds a file for a new dish and removes the file of one that is gone. Commit the snapshots with the
+change that caused them, and say in the merge request why they moved; a reviewer reads that diff to see what the
+change does to real recipes.
 
 ## CI
 

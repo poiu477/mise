@@ -17,17 +17,6 @@ status.md if it changed either.
 ## Ready
 
 
-### T4 · Pipeline snapshot test
-
-A change to grouping, matching, step parsing or rounding should show up as a reviewable diff.
-
-- A test that imports `fixtures/demo-bundle` through every stage (import, match foods, apply curation, group dishes,
-  derive options, parse steps), checks the counts, and compares every dish page at 1 to 6 servings with a
-  committed snapshot (the `insta` crate, or plain files under `fixtures/demo-bundle/snapshots/`).
-- **Touches:** a new test in `crates/mise-ingest` or `crates/mise-cli`, `fixtures/demo-bundle/`.
-- **Done when:** the test passes in CI; changing one rounding rule makes it fail with a readable diff (try it, then
-  revert).
-
 ### T6 · Security headers and a written security stance
 
 - Add response headers from the server: a Content-Security-Policy that the app and its service worker work under,
@@ -126,6 +115,21 @@ Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" 
   project.
 - **Done when:** the job passes, fails on a deliberately broken intra-doc link (try it, then revert), and the Pages
   URL serves `mise_core`'s documentation.
+
+### T18 · A set order for a dish's option choices
+
+`derive_options` ranks a dish's choices by how many versions offer each, and choices that tie come out in hash-map
+order, so a re-run can swap them (the Black Bean Tacos' two versions do). The pipeline snapshot test settles ties
+itself for now.
+
+- Settle ties in `crates/mise-ingest/src/options.rs`: the dish's default first, then by value, or another rule that
+  reads well on the dish page. Then remove the sort in `dish_page` in `crates/mise-cli/tests/pipeline_snapshot.rs`
+  and update the snapshots if the order changes.
+- **Touches:** `crates/mise-ingest/src/options.rs`, `crates/mise-cli/tests/pipeline_snapshot.rs`,
+  `fixtures/demo-bundle/snapshots/`.
+- **Needs:** T15 (it edits the same file).
+- **Done when:** the snapshot test passes twenty runs in a row without its own sort; the known issue in status.md is
+  gone.
 
 ## Needs a decision first
 

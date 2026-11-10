@@ -1,6 +1,6 @@
 # Status
 
-As of 2026-11-08. Where things stand, known issues, open questions and the decisions made. The work still to do is in
+As of 2026-11-10. Where things stand, known issues, open questions and the decisions made. The work still to do is in
 [backlog.md](backlog.md); the maintainer's design document (private) holds the goals and the long-range roadmap. Update
 both in the same merge request as the work.
 
@@ -41,7 +41,10 @@ What a reviewer can rely on today:
   for sign-in, plan and shopping, and for search, dish pages, options, versions at published and scaled serving counts,
   photos and signed-out requests on the demo bundle (loaded through `mise-ingest`), sharing one harness
   (`crates/mise-api/tests/common`) that gives each test its own database and media folder and drops them even when the
-  test fails;
+  test fails; a pipeline snapshot test (`crates/mise-cli/tests/pipeline_snapshot.rs`) that runs the demo bundle
+  through every import stage and compares each stage's report, the food tree and every dish page at 1 to 6 servings
+  with plain-text snapshots in `fixtures/demo-bundle/snapshots/`, so a change to matching, grouping, step parsing or
+  rounding shows as a diff;
   single sign-on end to end against a fake OpenID Connect provider (RS256, ES256, EdDSA); Playwright journeys on
   the demo bundle covering first-run setup, scaling, planning to a full list, ticks across reloads, offline use (an
   addition resent after a lost answer lands once), a 375 px layout, an axe scan and sign-out.
@@ -68,7 +71,8 @@ What a reviewer can rely on today:
 - The pot pie dish's address still says "beef" (slugs are fixed at first import) until a fresh install.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
 - A dish option's choices that as many versions offer (each of the Black Bean Tacos' two versions) come in no set
-  order: `derive-options` ranks them by count alone, so a re-run can swap them.
+  order: `derive-options` ranks them by count alone, so a re-run can swap them. The pipeline snapshot test settles
+  ties itself until T18 fixes it.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
   the list reloads a moment later.
@@ -103,3 +107,4 @@ What a reviewer can rely on today:
 | 2026-11-08 | The maintainer's GitLab becomes the main repository, with merge requests and GitLab CI; GitHub is a read-only mirror of every branch, kept as a backup. GitLab CI can later reach the private seed, which GitHub never could |
 | 2026-11-08 | Mira reviews merge requests and CodeRabbit is dropped: Mira runs on the maintainer's own models, which can be more capable. Renovate, run from a scheduled GitLab pipeline, replaces Dependabot |
 | 2026-11-08 | Security scans come from GitLab's security configuration profiles (Advanced SAST, dependency scanning, secret detection) plus a Semgrep job for Rust, which Advanced SAST doesn't cover. A merge request approval policy holds new high or critical SAST findings for the maintainer's approval; authors may approve their own merge requests, since there's one maintainer |
+| 2026-11-10 | The import pipeline's output is snapshotted as plain text files that read like the dish page, reviewed with `git diff` and rewritten with `MISE_UPDATE_SNAPSHOTS=1`, rather than with `insta`: no header or extra tool, and a failing run prints a unified diff that names each change's dish, version and serving count |
