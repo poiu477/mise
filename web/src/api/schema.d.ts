@@ -130,7 +130,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A dish with its options and versions. */
+        /** A dish with its options and versions, by its slug or one it used to have (its `slug` is always the current one). */
         get: operations["get_dish"];
         put?: never;
         post?: never;
@@ -1095,6 +1095,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The dish's slug, or one it had before it was renamed */
                 slug: string;
             };
             cookie?: never;

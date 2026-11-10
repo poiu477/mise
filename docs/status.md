@@ -71,7 +71,8 @@ What a reviewer can rely on today:
 - 36 versions (269 lines) publish 3-serving amounts equal to their 4-serving ones; left as published.
 - Two review items stay open: green beans swapped for broccoli or carrots between versions; nothing records swaps yet.
 - Some step text from the source lost a space in a mixed number ("10-12 11⁄2-inch meatballs").
-- The pot pie dish's address still says "beef" (slugs are fixed at first import) until T21.
+- The pot pie dish's address on the seed still says "beef": it was set before grouping renamed dishes' slugs (T21).
+  It clears once Paul re-runs grouping on the seed; the old address keeps working after that.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
