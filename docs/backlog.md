@@ -149,22 +149,6 @@ kitchen mode's wake lock and an Alexa endpoint need it too. Two ways, both docum
   trusting Caddy's root certificate, fetches `/api/health` over HTTPS, sees plain HTTP redirected to HTTPS, and sees
   a Secure session cookie on sign-in.
 
-### T21 · Old dish addresses keep working
-
-A dish's slug is fixed when it is first made, so a renamed dish keeps an address that no longer matches (the pot pie
-still says "beef").
-
-- A new table of retired slugs (slug → dish), through a new migration. When `group_dishes` keeps a dish whose
-  title's slug has changed, the dish takes the new slug and its old one is retired, not lost. A slug a live dish
-  takes is removed from the retired list; numbered copies (`beef-ragu-2` becoming `beef-ragu`) work as today.
-- `GET` a dish by a retired slug answers with the dish (its `slug` field is the current one); the web app's dish page
-  replaces the address with the current slug, so bookmarks and old links keep working.
-- **Touches:** a new migration, `crates/mise-ingest/src/dishes.rs`, `crates/mise-api/src/dishes.rs`,
-  `web/src/pages/DishPage.tsx`.
-- **Done when:** an ingest test renames a dish between two runs and finds it by both slugs; an API test fetches it by
-  the old slug and gets the new one back; a browser journey opens the old address and lands on the new one. The
-  known issue in status.md goes once Paul has re-run grouping on the seed.
-
 ### T22 · Recipes that belong to a household
 
 Imports, the editor and forks all make recipes that belong to one household; today every recipe is visible to every
@@ -342,6 +326,9 @@ These need the private seed, which is not in the repo.
 - **Deploy the stack on the seed:** rebuild the image, run the full Compose stack, copy the `seed/` files deploy.md
   names to the server (the `-seed` versions of curation, dish decisions and preferred versions).
 - **HTTPS for the household's install:** proxy mise through the existing Caddy, as T20's deploy.md section says.
+- **Dish addresses on the seed:** run `group-dishes` (then `derive-options`) on the seed once T21's migration is in,
+  so renamed dishes such as the pot pie take addresses that match their names; then drop that known issue from
+  status.md.
 - **Off-machine backups** of the database and `seed/`.
 - **GitHub mirror settings:** turn on secret scanning (free on public repositories; GitLab's pipeline already runs
   secret detection).
