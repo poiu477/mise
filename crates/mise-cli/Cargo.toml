@@ -24,3 +24,9 @@ tokio = { version = "1.54.1", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid.workspace = true
+
+[dev-dependencies]
+# tests/pipeline_snapshot.rs calls the API's dish and version handlers directly, as the router would.
+axum = "0.8.9"
+# tests/pipeline_snapshot.rs shows a changed snapshot as a unified diff.
+similar = "3.2.1"

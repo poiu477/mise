@@ -1,0 +1,116 @@
+# The demo bundle through every stage
+
+## Import
+
+ImportStats {
+    read: 5,
+    inserted: 5,
+    new_versions: 0,
+    unchanged: 0,
+    lineage_links: 1,
+}
+
+## Match foods
+
+MatchStats {
+    names: 25,
+    foods_created: 25,
+    lines_matched: 39,
+    kind_of_links: 0,
+    related_links: 0,
+    review_items: 0,
+}
+
+## Apply curation
+
+29 changes
+
+## Group dishes
+
+GroupStats {
+    variants: 5,
+    dishes: 4,
+    merged_by_title: 1,
+    merged_as_protein_swap: 0,
+    merged_by_similarity: 0,
+    merged_by_title_key: 0,
+    kept_apart_for_review: 0,
+    split_from_drift: 0,
+    merged_as_cross_lineage_twin: 0,
+    merged_by_decision: 0,
+    dishes_kept: 0,
+    slugs_changed: 0,
+}
+
+## Derive options
+
+OptionStats {
+    dishes: 4,
+    with_protein_choice: 0,
+    with_double_portion: 0,
+    with_versions: 1,
+    attributes: 15,
+    swaps_proposed: 0,
+}
+
+## Parse steps
+
+ParseStats {
+    steps: 18,
+    with_alts: 6,
+    amounts: 7,
+    amounts_with_alts: 6,
+    linked: 4,
+    word_alternatives: 0,
+    notes: 0,
+    unparsed: 0,
+}
+
+## Rows
+
+sources: 1
+source_records: 5
+variants: 5
+variant_yields: 9
+ingredient_lines: 39
+line_amounts: 72
+steps: 18
+foods: 25
+food_aliases: 25
+food_relations: 0
+dishes: 4
+dish_options: 1
+variant_attributes: 15
+review_items: 0
+
+## Open review items
+
+none
+
+## Foods
+
+- Black Beans {"store_section":"Canned & Jarred"}
+- Black Pepper
+- Butter {"store_section":"Dairy & Eggs"}
+- Cheddar Cheese {"store_section":"Dairy & Eggs"}
+- Chicken Breasts {"store_section":"Meat & Seafood"}
+- Chicken Stock Concentrate {"count_size":"2 tsp","count_unit":"packet","store_section":"Sauces & Condiments"}
+- Crushed Tomatoes {"store_section":"Canned & Jarred"}
+- Flour Tortillas {"count_unit":"tortilla","store_section":"Bakery"}
+- Garlic {"store_section":"Produce"}
+- Jasmine Rice {"store_section":"Pasta & Grains"}
+- Lemon {"count_unit":"lemon","store_section":"Produce"}
+- Lime {"count_unit":"lime","store_section":"Produce"}
+- Monterey Jack Cheese {"store_section":"Dairy & Eggs"}
+- Olive Oil
+- Parmesan {"store_section":"Dairy & Eggs"}
+- Parsley {"store_section":"Produce"}
+- Red Pepper Flakes {"store_section":"Spices & Seasonings"}
+- Salt
+- Scallions {"count_unit":"stalk","store_section":"Produce"}
+- Sesame Oil {"store_section":"Sauces & Condiments"}
+- Sour Cream {"store_section":"Dairy & Eggs"}
+- Soy Sauce {"store_section":"Sauces & Condiments"}
+- Spaghetti {"store_section":"Pasta & Grains"}
+- Taco Spice Blend {"store_section":"Spices & Seasonings"}
+- Yellow Onion {"count_unit":"onion","store_section":"Produce"}

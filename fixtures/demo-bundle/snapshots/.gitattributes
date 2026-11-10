@@ -1,0 +1,2 @@
+# git diff names the heading (dish, version, serving count) each change falls under.
+*.txt diff=markdown

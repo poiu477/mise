@@ -1,0 +1,121 @@
+# Lemon Herb Chicken
+with a Garlic Pan Sauce
+
+slug lemon-herb-chicken · recipe · opens on version 1
+
+## Options
+
+none
+
+## Versions, newest first
+
+1. Lemon Herb Chicken, with a Garlic Pan Sauce · published 2026-11-01 · yields 2, 4 · steps · attributes {"portion":"regular","protein":"Chicken","version":"standard"}
+
+## Version 1: Lemon Herb Chicken
+with a Garlic Pan Sauce
+
+yields 2, 4
+Golden chicken with a bright, buttery pan sauce made in the same skillet.
+meta {"content_type":"recipe","difficulty":1,"prep_time":"PT30M","tags":[]}
+
+### Version 1 at 1 serving (derived)
+
+- 6 oz Chicken Breasts [scaled]
+- ½ lemon Lemon [scaled]
+- ½ clove Garlic [scaled]
+- ⅛ oz Parsley [scaled]
+- ½ packet (1 tsp) Chicken Stock Concentrate [scaled]
+- 1½ tsp Butter [scaled]
+- 1½ tsp Olive Oil [scaled; pantry]
+- to taste Salt [pantry]
+- to taste Black Pepper [pantry]
+
+0. Pat the chicken dry and season all over with salt and pepper. Zest and halve the lemon. Mince the garlic and chop the parsley.
+1. Heat 1½ tsp olive oil in a large pan over medium-high heat. Cook the chicken until browned and cooked through, 5-7 minutes per side. Set aside. [scaled]
+2. Lower the heat to medium. Add the garlic and cook 30 seconds. Stir in the stock concentrate and 3½ TBSP water; simmer until reduced by half, 2-3 minutes. [scaled]
+3. Off the heat, stir in the butter, the lemon zest and a squeeze of lemon juice. Slice the chicken, spoon over the sauce and scatter with parsley.
+
+### Version 1 at 2 servings (as published)
+
+- 12 oz Chicken Breasts
+- 1 lemon Lemon
+- 1 clove Garlic
+- ¼ oz Parsley
+- 1 packet (2 tsp) Chicken Stock Concentrate
+- 1 TBSP Butter
+- 1 TBSP Olive Oil [pantry]
+- to taste Salt [pantry]
+- to taste Black Pepper [pantry]
+
+0. Pat the chicken dry and season all over with salt and pepper. Zest and halve the lemon. Mince the garlic and chop the parsley.
+1. Heat 1 TBSP olive oil in a large pan over medium-high heat. Cook the chicken until browned and cooked through, 5-7 minutes per side. Set aside.
+2. Lower the heat to medium. Add the garlic and cook 30 seconds. Stir in the stock concentrate and ¼ cup water; simmer until reduced by half, 2-3 minutes.
+3. Off the heat, stir in the butter, the lemon zest and a squeeze of lemon juice. Slice the chicken, spoon over the sauce and scatter with parsley.
+
+### Version 1 at 3 servings (derived)
+
+- 18 oz Chicken Breasts [scaled]
+- 1½ lemons Lemon [scaled]
+- 1½ cloves Garlic [scaled]
+- ¼ oz Parsley [scaled]
+- 1½ packets (1 TBSP) Chicken Stock Concentrate [scaled]
+- 1½ TBSP Butter [scaled]
+- 1½ TBSP Olive Oil [scaled; pantry]
+- to taste Salt [pantry]
+- to taste Black Pepper [pantry]
+
+0. Pat the chicken dry and season all over with salt and pepper. Zest and halve the lemon. Mince the garlic and chop the parsley.
+1. Heat 1½ TBSP olive oil in a large pan over medium-high heat. Cook the chicken until browned and cooked through, 5-7 minutes per side. Set aside. [scaled]
+2. Lower the heat to medium. Add the garlic and cook 30 seconds. Stir in the stock concentrate and ¼ cup + 2 tsp water; simmer until reduced by half, 2-3 minutes. [scaled]
+3. Off the heat, stir in the butter, the lemon zest and a squeeze of lemon juice. Slice the chicken, spoon over the sauce and scatter with parsley.
+
+### Version 1 at 4 servings (as published)
+
+- 24 oz Chicken Breasts
+- 2 lemons Lemon
+- 2 cloves Garlic
+- ¼ oz Parsley
+- 2 packets (4 tsp) Chicken Stock Concentrate
+- 2 TBSP Butter
+- 2 TBSP Olive Oil [pantry]
+- to taste Salt [pantry]
+- to taste Black Pepper [pantry]
+
+0. Pat the chicken dry and season all over with salt and pepper. Zest and halve the lemon. Mince the garlic and chop the parsley.
+1. Heat 2 TBSP olive oil in a large pan over medium-high heat. Cook the chicken until browned and cooked through, 5-7 minutes per side. Set aside.
+2. Lower the heat to medium. Add the garlic and cook 30 seconds. Stir in the stock concentrate and ⅓ cup water; simmer until reduced by half, 2-3 minutes.
+3. Off the heat, stir in the butter, the lemon zest and a squeeze of lemon juice. Slice the chicken, spoon over the sauce and scatter with parsley.
+
+### Version 1 at 5 servings (derived)
+
+- 30 oz Chicken Breasts [scaled]
+- 2½ lemons Lemon [scaled]
+- 2½ cloves Garlic [scaled]
+- ½ oz Parsley [scaled]
+- 2½ packets (5 tsp) Chicken Stock Concentrate [scaled]
+- 2½ TBSP Butter [scaled]
+- 2½ TBSP Olive Oil [scaled; pantry]
+- to taste Salt [pantry]
+- to taste Black Pepper [pantry]
+
+0. Pat the chicken dry and season all over with salt and pepper. Zest and halve the lemon. Mince the garlic and chop the parsley.
+1. Heat 2½ TBSP olive oil in a large pan over medium-high heat. Cook the chicken until browned and cooked through, 5-7 minutes per side. Set aside. [scaled]
+2. Lower the heat to medium. Add the garlic and cook 30 seconds. Stir in the stock concentrate and ⅓ cup + 2 tsp water; simmer until reduced by half, 2-3 minutes. [scaled]
+3. Off the heat, stir in the butter, the lemon zest and a squeeze of lemon juice. Slice the chicken, spoon over the sauce and scatter with parsley.
+
+### Version 1 at 6 servings (derived)
+
+- 36 oz Chicken Breasts [scaled]
+- 3 lemons Lemon [scaled]
+- 3 cloves Garlic [scaled]
+- ½ oz Parsley [scaled]
+- 3 packets (2 TBSP) Chicken Stock Concentrate [scaled]
+- 3 TBSP Butter [scaled]
+- 3 TBSP Olive Oil [scaled; pantry]
+- to taste Salt [pantry]
+- to taste Black Pepper [pantry]
+
+0. Pat the chicken dry and season all over with salt and pepper. Zest and halve the lemon. Mince the garlic and chop the parsley.
+1. Heat 3 TBSP olive oil in a large pan over medium-high heat. Cook the chicken until browned and cooked through, 5-7 minutes per side. Set aside. [scaled]
+2. Lower the heat to medium. Add the garlic and cook 30 seconds. Stir in the stock concentrate and ⅓ cup + 1½ TBSP water; simmer until reduced by half, 2-3 minutes. [scaled]
+3. Off the heat, stir in the butter, the lemon zest and a squeeze of lemon juice. Slice the chicken, spoon over the sauce and scatter with parsley.

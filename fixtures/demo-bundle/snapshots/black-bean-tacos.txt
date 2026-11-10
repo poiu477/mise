@@ -1,0 +1,209 @@
+# Black Bean Tacos
+with Lime Crema
+
+slug black-bean-tacos · recipe · opens on version 1
+
+## Options
+
+- Version (version), default standard
+  - standard: Standard · 1 version · 2026
+  - v2: with Cheddar Cheese instead of Monterey Jack Cheese · 1 version · 2026
+
+## Versions, newest first
+
+1. Black Bean Tacos, with Lime Crema · published 2026-11-02 · yields 2, 4 · steps · attributes {"portion":"regular","protein":"none","version":"standard"}
+2. Black Bean Tacos, with Lime Crema · published 2026-11-01 · yields 2, 4 · steps · attributes {"portion":"regular","protein":"none","version":"v2"}
+
+## Version 1: Black Bean Tacos
+with Lime Crema
+
+yields 2, 4
+Smoky beans, crisp onion and a tangy lime crema, now with melty Monterey Jack.
+meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegetarian"]}
+
+### Version 1 at 1 serving (derived)
+
+- 3 tortillas Flour Tortillas [scaled]
+- ½ can Black Beans [scaled]
+- ¼ onion Yellow Onion [scaled]
+- ¼ cup Monterey Jack Cheese [scaled]
+- ½ lime Lime [scaled]
+- 1 TBSP Sour Cream [scaled]
+- 1½ tsp Taco Spice Blend [scaled]
+- ½ tsp Olive Oil [scaled; pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat ½ tsp olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through. [scaled]
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+### Version 1 at 2 servings (as published)
+
+- 6 tortillas Flour Tortillas
+- 1 can Black Beans
+- ½ onion Yellow Onion
+- ½ cup Monterey Jack Cheese
+- 1 lime Lime
+- 2 TBSP Sour Cream
+- 1 TBSP Taco Spice Blend
+- 1 tsp Olive Oil [pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat 1 tsp olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through.
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+### Version 1 at 3 servings (derived)
+
+- 9 tortillas Flour Tortillas [scaled]
+- 1½ cans Black Beans [scaled]
+- ¾ onion Yellow Onion [scaled]
+- ¾ cup Monterey Jack Cheese [scaled]
+- 1½ limes Lime [scaled]
+- 3 TBSP Sour Cream [scaled]
+- 1½ TBSP Taco Spice Blend [scaled]
+- 1½ tsp Olive Oil [scaled; pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat 1½ tsp olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through. [scaled]
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+### Version 1 at 4 servings (as published)
+
+- 12 tortillas Flour Tortillas
+- 2 cans Black Beans
+- 1 onion Yellow Onion
+- 1 cup Monterey Jack Cheese
+- 2 limes Lime
+- 4 TBSP Sour Cream
+- 2 TBSP Taco Spice Blend
+- 2 tsp Olive Oil [pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat 2 tsp olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through.
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+### Version 1 at 5 servings (derived)
+
+- 15 tortillas Flour Tortillas [scaled]
+- 2½ cans Black Beans [scaled]
+- 1½ onions Yellow Onion [scaled]
+- 1¼ cups Monterey Jack Cheese [scaled]
+- 2½ limes Lime [scaled]
+- ¼ cup + 1 TBSP Sour Cream [scaled]
+- 2½ TBSP Taco Spice Blend [scaled]
+- 2½ tsp Olive Oil [scaled; pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat 2½ tsp olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through. [scaled]
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+### Version 1 at 6 servings (derived)
+
+- 18 tortillas Flour Tortillas [scaled]
+- 3 cans Black Beans [scaled]
+- 1½ onions Yellow Onion [scaled]
+- 1½ cups Monterey Jack Cheese [scaled]
+- 3 limes Lime [scaled]
+- ⅓ cup + 2 tsp Sour Cream [scaled]
+- 3 TBSP Taco Spice Blend [scaled]
+- 1 TBSP Olive Oil [scaled; pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat 1 TBSP olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through. [scaled]
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+## Version 2: Black Bean Tacos
+with Lime Crema
+
+yields 2, 4
+Smoky beans, crisp onion and a tangy lime crema, ready in twenty minutes.
+meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegetarian"]}
+
+### Version 2 at 1 serving (derived)
+
+- 3 tortillas Flour Tortillas [scaled]
+- ½ can Black Beans [scaled]
+- ¼ onion Yellow Onion [scaled]
+- ¼ cup Cheddar Cheese [scaled]
+- ½ lime Lime [scaled]
+- 1 TBSP Sour Cream [scaled]
+- 1½ tsp Taco Spice Blend [scaled]
+- ½ tsp Olive Oil [scaled; pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat ½ tsp olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through. [scaled]
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+### Version 2 at 2 servings (as published)
+
+- 6 tortillas Flour Tortillas
+- 1 can Black Beans
+- ½ onion Yellow Onion
+- ½ cup Cheddar Cheese
+- 1 lime Lime
+- 2 TBSP Sour Cream
+- 1 TBSP Taco Spice Blend
+- 1 tsp Olive Oil [pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat 1 tsp olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through.
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+### Version 2 at 3 servings (derived)
+
+- 9 tortillas Flour Tortillas [scaled]
+- 1½ cans Black Beans [scaled]
+- ¾ onion Yellow Onion [scaled]
+- ¾ cup Cheddar Cheese [scaled]
+- 1 lime Lime [scaled]
+- 3 TBSP Sour Cream [scaled]
+- 1½ TBSP Taco Spice Blend [scaled]
+- 1½ tsp Olive Oil [scaled; pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat 1½ tsp olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through. [scaled]
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+### Version 2 at 4 servings (as published)
+
+- 12 tortillas Flour Tortillas
+- 2 cans Black Beans
+- 1 onion Yellow Onion
+- 1 cup Cheddar Cheese
+- 1 lime Lime
+- 4 TBSP Sour Cream
+- 2 TBSP Taco Spice Blend
+- 2 tsp Olive Oil [pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat 2 tsp olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through.
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+### Version 2 at 5 servings (derived)
+
+- 15 tortillas Flour Tortillas [scaled]
+- 2½ cans Black Beans [scaled]
+- 1½ onions Yellow Onion [scaled]
+- 1¼ cups Cheddar Cheese [scaled]
+- 1½ limes Lime [scaled]
+- ¼ cup + 1 TBSP Sour Cream [scaled]
+- 2½ TBSP Taco Spice Blend [scaled]
+- 2½ tsp Olive Oil [scaled; pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat 2½ tsp olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through. [scaled]
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.
+
+### Version 2 at 6 servings (derived)
+
+- 18 tortillas Flour Tortillas [scaled]
+- 3 cans Black Beans [scaled]
+- 1½ onions Yellow Onion [scaled]
+- 1½ cups Cheddar Cheese [scaled]
+- 1½ limes Lime [scaled]
+- ⅓ cup + 2 tsp Sour Cream [scaled]
+- 3 TBSP Taco Spice Blend [scaled]
+- 1 TBSP Olive Oil [scaled; pantry]
+
+0. Finely chop the onion. Drain and rinse the beans. Halve the lime; in a small bowl, mix the sour cream with a squeeze of lime juice.
+1. Heat 1 TBSP olive oil in a pan over medium heat. Cook half the onion until soft, 3-4 minutes. Add the beans and taco spice; mash lightly and cook until warmed through. [scaled]
+2. Warm the tortillas. Fill with the beans, then top with the cheese, the remaining onion and the lime crema.

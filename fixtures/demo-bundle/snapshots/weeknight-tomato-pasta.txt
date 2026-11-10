@@ -1,0 +1,121 @@
+# Weeknight Tomato Pasta
+with Garlic and Parmesan
+
+slug weeknight-tomato-pasta · recipe · opens on version 1
+
+## Options
+
+none
+
+## Versions, newest first
+
+1. Weeknight Tomato Pasta, with Garlic and Parmesan · published 2026-11-01 · yields 2, 4 · steps · attributes {"portion":"regular","protein":"none","version":"standard"}
+
+## Version 1: Weeknight Tomato Pasta
+with Garlic and Parmesan
+
+yields 2, 4
+A pantry pasta for busy nights: a quick tomato sauce, plenty of garlic and a handful of cheese.
+meta {"content_type":"recipe","difficulty":1,"prep_time":"PT25M","tags":["vegetarian","quick"]}
+
+### Version 1 at 1 serving (derived)
+
+- 3 oz Spaghetti [scaled]
+- ½ can Crushed Tomatoes [scaled]
+- 1 clove Garlic [scaled]
+- ½ onion Yellow Onion [scaled]
+- 2 TBSP Parmesan [scaled]
+- 1 pinch Red Pepper Flakes [scaled]
+- 1½ tsp Olive Oil [scaled; pantry]
+- to taste Salt [pantry]
+
+0. Bring a large pot of salted water to a boil. Peel and finely chop the onion. Mince the garlic.
+1. Heat 1½ tsp olive oil in a large pan over medium heat. Add the onion and cook until soft, 5-6 minutes. Add the garlic and red pepper flakes; cook 1 minute more. [scaled]
+2. Stir in the crushed tomatoes and a pinch of salt. Simmer until slightly thickened, 8-10 minutes.
+3. Meanwhile, cook the spaghetti until al dente, 9-11 minutes. Reserve ¼ cup cooking water, then drain. [scaled]
+4. Toss the spaghetti with the sauce, adding splashes of reserved water as needed. Serve topped with the Parmesan.
+
+### Version 1 at 2 servings (as published)
+
+- 6 oz Spaghetti
+- 1 can Crushed Tomatoes
+- 2 cloves Garlic
+- 1 onion Yellow Onion
+- ¼ cup Parmesan
+- 1 pinch Red Pepper Flakes
+- 1 TBSP Olive Oil [pantry]
+- to taste Salt [pantry]
+
+0. Bring a large pot of salted water to a boil. Peel and finely chop the onion. Mince the garlic.
+1. Heat 1 TBSP olive oil in a large pan over medium heat. Add the onion and cook until soft, 5-6 minutes. Add the garlic and red pepper flakes; cook 1 minute more.
+2. Stir in the crushed tomatoes and a pinch of salt. Simmer until slightly thickened, 8-10 minutes.
+3. Meanwhile, cook the spaghetti until al dente, 9-11 minutes. Reserve ½ cup cooking water, then drain.
+4. Toss the spaghetti with the sauce, adding splashes of reserved water as needed. Serve topped with the Parmesan.
+
+### Version 1 at 3 servings (derived)
+
+- 9 oz Spaghetti [scaled]
+- 1½ cans Crushed Tomatoes [scaled]
+- 3 cloves Garlic [scaled]
+- 1½ onions Yellow Onion [scaled]
+- ⅓ cup + 2 tsp Parmesan [scaled]
+- 2 pinches Red Pepper Flakes [scaled]
+- 1½ TBSP Olive Oil [scaled; pantry]
+- to taste Salt [pantry]
+
+0. Bring a large pot of salted water to a boil. Peel and finely chop the onion. Mince the garlic.
+1. Heat 1½ TBSP olive oil in a large pan over medium heat. Add the onion and cook until soft, 5-6 minutes. Add the garlic and red pepper flakes; cook 1 minute more. [scaled]
+2. Stir in the crushed tomatoes and a pinch of salt. Simmer until slightly thickened, 8-10 minutes.
+3. Meanwhile, cook the spaghetti until al dente, 9-11 minutes. Reserve ¾ cup cooking water, then drain. [scaled]
+4. Toss the spaghetti with the sauce, adding splashes of reserved water as needed. Serve topped with the Parmesan.
+
+### Version 1 at 4 servings (as published)
+
+- 12 oz Spaghetti
+- 2 cans Crushed Tomatoes
+- 4 cloves Garlic
+- 2 onions Yellow Onion
+- ½ cup Parmesan
+- 2 pinches Red Pepper Flakes
+- 2 TBSP Olive Oil [pantry]
+- to taste Salt [pantry]
+
+0. Bring a large pot of salted water to a boil. Peel and finely chop the onion. Mince the garlic.
+1. Heat 2 TBSP olive oil in a large pan over medium heat. Add the onion and cook until soft, 5-6 minutes. Add the garlic and red pepper flakes; cook 1 minute more.
+2. Stir in the crushed tomatoes and a pinch of salt. Simmer until slightly thickened, 8-10 minutes.
+3. Meanwhile, cook the spaghetti until al dente, 9-11 minutes. Reserve 1 cup cooking water, then drain.
+4. Toss the spaghetti with the sauce, adding splashes of reserved water as needed. Serve topped with the Parmesan.
+
+### Version 1 at 5 servings (derived)
+
+- 15 oz Spaghetti [scaled]
+- 2½ cans Crushed Tomatoes [scaled]
+- 5 cloves Garlic [scaled]
+- 2½ onions Yellow Onion [scaled]
+- ½ cup + 2 TBSP Parmesan [scaled]
+- 3 pinches Red Pepper Flakes [scaled]
+- 2½ TBSP Olive Oil [scaled; pantry]
+- to taste Salt [pantry]
+
+0. Bring a large pot of salted water to a boil. Peel and finely chop the onion. Mince the garlic.
+1. Heat 2½ TBSP olive oil in a large pan over medium heat. Add the onion and cook until soft, 5-6 minutes. Add the garlic and red pepper flakes; cook 1 minute more. [scaled]
+2. Stir in the crushed tomatoes and a pinch of salt. Simmer until slightly thickened, 8-10 minutes.
+3. Meanwhile, cook the spaghetti until al dente, 9-11 minutes. Reserve 1¼ cups cooking water, then drain. [scaled]
+4. Toss the spaghetti with the sauce, adding splashes of reserved water as needed. Serve topped with the Parmesan.
+
+### Version 1 at 6 servings (derived)
+
+- 18 oz Spaghetti [scaled]
+- 3 cans Crushed Tomatoes [scaled]
+- 6 cloves Garlic [scaled]
+- 3 onions Yellow Onion [scaled]
+- ¾ cup Parmesan [scaled]
+- 3 pinches Red Pepper Flakes [scaled]
+- 3 TBSP Olive Oil [scaled; pantry]
+- to taste Salt [pantry]
+
+0. Bring a large pot of salted water to a boil. Peel and finely chop the onion. Mince the garlic.
+1. Heat 3 TBSP olive oil in a large pan over medium heat. Add the onion and cook until soft, 5-6 minutes. Add the garlic and red pepper flakes; cook 1 minute more. [scaled]
+2. Stir in the crushed tomatoes and a pinch of salt. Simmer until slightly thickened, 8-10 minutes.
+3. Meanwhile, cook the spaghetti until al dente, 9-11 minutes. Reserve 1½ cups cooking water, then drain. [scaled]
+4. Toss the spaghetti with the sauce, adding splashes of reserved water as needed. Serve topped with the Parmesan.
