@@ -1,0 +1,22 @@
+# The changes CI makes to compose.yaml to run the stack on a runner's own Docker, beside other jobs' containers
+# (the `docker image` job in .gitlab-ci.yml). Ports would collide with another job's, so none are published: the job
+# reaches the stack from a container on its network. The runner's Docker can't see the job's checkout, so folders
+# from the host become volumes, removed with the job, and the job copies the Caddyfile in.
+services:
+  app:
+    image: ${MISE_IMAGE:?set MISE_IMAGE to the image the job built}
+    ports: !reset []
+    volumes: !override
+      - media:/data/media
+  backup:
+    volumes: !override
+      - backups:/backups
+  caddy:
+    ports: !reset []
+    volumes: !override
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  media:
+  backups:

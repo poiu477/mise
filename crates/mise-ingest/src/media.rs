@@ -793,7 +793,8 @@ mod tests {
 
     #[test]
     fn orders_by_modification_time_with_unlisted_last() {
-        let root = std::env::temp_dir().join(format!("mise-media-order-{}", Uuid::now_v7()));
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
         std::fs::create_dir_all(root.join("a/images")).unwrap();
         std::fs::create_dir_all(root.join("b/images")).unwrap();
         let base = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
@@ -815,8 +816,7 @@ mod tests {
         ]
         .map(String::from)
         .into();
-        let ordered = in_disk_order(&root, paths, |p| p.as_str(), &threads);
-        std::fs::remove_dir_all(&root).unwrap();
+        let ordered = in_disk_order(root, paths, |p| p.as_str(), &threads);
         assert_eq!(
             ordered,
             [
