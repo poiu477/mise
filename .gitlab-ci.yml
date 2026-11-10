@@ -161,9 +161,14 @@ rust dependencies:
     - cargo deny check
 
 docker image:
-  # The rust and web jobs already prove the code compiles and the web app builds, and Docker-in-Docker starts with no
-  # cache, so this release build takes minutes. On a merge request it runs only when something the image build itself
-  # depends on changes; on main and on tags it always runs, so nothing gets past it for longer than one merge.
+  # Builds the image, then runs the stack as docs/deploy.md sets it up with the stack's own Caddy (the https profile)
+  # and a certificate from Caddy's own authority, and checks it as a phone would see it: /api/health over HTTPS with
+  # Caddy's root trusted, plain HTTP redirected to HTTPS, and a Secure session cookie from signing in. The first
+  # account is a throwaway made on the empty database, which goes with the job.
+  #
+  # The rust and web jobs already prove the code compiles and the web app builds, so this release build only adds the
+  # image itself. On a merge request it runs only when something the image build or the stack depends on changes; on
+  # main and on tags it always runs, so nothing gets past it for longer than one merge.
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
@@ -177,24 +182,77 @@ docker image:
         - rust-toolchain.toml
         - web/package.json
         - web/package-lock.json
+        - compose.yaml
+        - Caddyfile
+        - .gitlab/compose.ci.yaml
         - .gitlab-ci.yml
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: never
     - when: on_success
-  # Needs a runner that allows privileged jobs, for Docker-in-Docker.
+  # Runs on a runner that lends jobs its own Docker through the socket (docs/development.md, "CI runners"), not on
+  # Docker-in-Docker: no privileged containers, and the build cache stays between runs. Everything this job starts
+  # shares that Docker with other jobs, so it carries the job's id in its name and is removed at the end.
+  tags: [docker-socket]
   image: docker:29-cli
-  services:
-    - name: docker:29-dind
-      alias: docker
   variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: /certs
-    DOCKER_CERT_PATH: /certs/client
-    DOCKER_TLS_VERIFY: "1"
+    MISE_IMAGE: mise:ci-$CI_JOB_ID
+    COMPOSE_PROJECT_NAME: mise-ci-$CI_JOB_ID
+    # .gitlab/compose.ci.yaml takes away the published ports and the folders on the host (see there).
+    COMPOSE_FILE: compose.yaml:.gitlab/compose.ci.yaml
+    COMPOSE_PROFILES: https
+    # A container on the stack's network that makes the requests, as a phone would through Caddy.
+    PROBE: mise-ci-$CI_JOB_ID-probe
+    TO_STACK: "--connect-to ::caddy:"
+    # The stack's settings, as .env would hold them on a server (POSTGRES_PASSWORD is set for the whole pipeline).
+    MISE_HOST: mise.example.com
+    MISE_TLS: internal
+    PUBLIC_BASE_URL: https://mise.example.com
   stage: test
   needs: []
   script:
-    - docker build --tag mise:ci .
+    - docker build --tag "$MISE_IMAGE" .
+    # Created first so the Caddyfile can be copied in: the runner's Docker can't see this checkout to bind-mount it.
+    - docker compose create
+    - docker compose cp Caddyfile caddy:/etc/caddy/Caddyfile
+    - docker compose up --detach --no-build --wait --wait-timeout 180
+    - >-
+      docker run --detach --name "$PROBE" --network "${COMPOSE_PROJECT_NAME}_default"
+      --entrypoint sleep docker:29-cli 900
+    - docker exec "$PROBE" apk add --no-cache curl
+    - |
+      for i in $(seq 30); do
+        docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt caddy-root.crt 2>/dev/null && break
+        sleep 2
+      done
+      test -s caddy-root.crt || { echo "Caddy made no root certificate"; exit 1; }
+      docker cp caddy-root.crt "$PROBE":/caddy-root.crt
+    # HTTPS, trusting only Caddy's root.
+    - >-
+      docker exec "$PROBE" curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 2
+      --cacert /caddy-root.crt $TO_STACK "https://$MISE_HOST/api/health"
+    # Plain HTTP redirects to the same address over HTTPS.
+    - |
+      redirect=$(docker exec "$PROBE" curl --silent --show-error --output /dev/null \
+        --write-out '%{http_code} %{redirect_url}' $TO_STACK "http://$MISE_HOST/api/health")
+      echo "$redirect"
+      test "$redirect" = "308 https://$MISE_HOST/api/health" || { echo "HTTP isn't redirected to HTTPS"; exit 1; }
+    # Signing in (here the first account's setup) sets a Secure session cookie.
+    - |
+      docker exec "$PROBE" curl --fail --silent --show-error --cacert /caddy-root.crt $TO_STACK \
+        --dump-header - --output /dev/null --header 'Content-Type: application/json' \
+        --data "{\"username\":\"ci\",\"password\":\"$(head -c 18 /dev/urandom | base64)\"}" \
+        "https://$MISE_HOST/api/auth/setup" > headers.txt
+      grep -i '^set-cookie: mise_session=' headers.txt | sed 's/=[^;]*/=(value)/'
+      grep -qi '^set-cookie: mise_session=.*; *secure' headers.txt \
+        || { echo "The session cookie isn't Secure"; exit 1; }
+  after_script:
+    - '[ "$CI_JOB_STATUS" = success ] || docker compose logs --no-color'
+    # Leave the runner's Docker as it was: this job's containers, volumes and image go; build cache older than a week
+    # goes too, so the cache can't fill the disk.
+    - docker rm --force "$PROBE" || true
+    - docker compose down --volumes --remove-orphans || true
+    - docker image rm --force "$MISE_IMAGE" || true
+    - docker builder prune --force --filter until=168h || true
 
 rust sast:
   # GitLab Advanced SAST doesn't read Rust, so this runs Semgrep's Rust rules and writes GitLab's SAST format. The

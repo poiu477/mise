@@ -75,5 +75,29 @@ services:
           find /backups -name 'mise-*.dump' -mtime +$${BACKUP_DAYS} -delete
         done
 
+  # HTTPS for installs without a reverse proxy of their own, started with `docker compose --profile https up -d`.
+  # Set MISE_HOST, MISE_TLS and PUBLIC_BASE_URL in .env, and MISE_LISTEN=127.0.0.1 so the app is reached only
+  # through it (see docs/deploy.md).
+  caddy:
+    image: caddy:2.11.9
+    profiles: [https]
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      MISE_HOST: ${MISE_HOST:-localhost}
+      MISE_TLS: ${MISE_TLS:-internal}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates, and with MISE_TLS=internal the root that phones trust: keep it, or every phone trusts again.
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

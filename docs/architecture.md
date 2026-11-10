@@ -106,5 +106,5 @@ the device is per account and cleared on sign-out. Service workers need HTTPS on
 ## Deployment
 
 `Dockerfile` builds one image with both binaries and the web app; `compose.yaml` runs it with Postgres and a nightly
-`pg_dump` backup. Settings are environment variables with defaults (`deploy.env.example`); see
-[deploy.md](deploy.md). The server applies migrations when it starts.
+`pg_dump` backup, and with the `https` profile, Caddy in front of it (`Caddyfile`). Settings are environment variables
+with defaults (`deploy.env.example`); see [deploy.md](deploy.md). The server applies migrations when it starts.
