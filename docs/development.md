@@ -117,9 +117,9 @@ git config core.hooksPath .githooks
 | Rust unit, property and integration tests | `cargo test --workspace` | API tests and the pipeline snapshot test need `DATABASE_URL` and make a throwaway database each; skipped when it isn't set |
 | Rust dependencies | `cargo deny check` | Advisories, licenses, bans and sources (`deny.toml`); CI runs it |
 | Web formatting and lints | `cd web && npm run format` and `npm run lint` | Prettier at width 100; ESLint with the React hooks rules and a doc comment on every export |
-| Web unit tests | `cd web && npm test` | Vitest; pure modules (`choose.ts`, `offline.ts`, `week.ts`) |
+| Web unit tests | `cd web && npm test` | Vitest; pure modules (`choose.ts`, `offline.ts`, `recipe.ts`, `week.ts`) |
 | Types and build | `cd web && npm run build` | Runs the TypeScript check first |
-| Browser journeys | `cd web && npm run e2e` | Playwright in Chromium against `mise-server` on a fresh `mise_e2e` database built from the demo recipes (`fixtures/demo-bundle`). Build first: `cargo build -p mise-cli -p mise-api` and `npm run build`; once, `npx playwright install chromium`. Covers first-run setup, scaling, planning (the Phase 3 gate: under 20 interactions), shopping offline including opening with no connection, phone width, an axe accessibility scan and sign-out |
+| Browser journeys | `cd web && npm run e2e` | Playwright in Chromium against `mise-server` on a fresh `mise_e2e` database built from the demo recipes (`fixtures/demo-bundle`). Build first: `cargo build -p mise-cli -p mise-api` and `npm run build`; once, `npx playwright install chromium`. Covers first-run setup, scaling, recipe cards (the dish page's amounts, one printed page), planning (the Phase 3 gate: under 20 interactions), shopping offline including opening with no connection, phone width, an axe accessibility scan and sign-out |
 | Scaling report | `mise scaling-report --sample 300 --out reports/scaling.html` | Compares derived amounts with what the source published; read-only |
 | Grouping report | `mise gate-report` | A stratified sample of dishes to check grouping by hand |
 

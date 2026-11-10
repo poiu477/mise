@@ -7,6 +7,7 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 import { Layout } from "./components/Layout";
 import { SearchPage } from "./pages/SearchPage";
 import { DishPage } from "./pages/DishPage";
+import { CardPage } from "./pages/CardPage";
 import { NotFound } from "./pages/NotFound";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
     children: [
       { path: "/", element: <SearchPage /> },
       { path: "/dishes/:slug", element: <DishPage /> },
+      { path: "/dishes/:slug/card", element: <CardPage /> },
       { path: "/plan", element: <PlanPage /> },
       { path: "/shopping", element: <ShoppingPage /> },
       { path: "/login", element: <LoginPage /> },
