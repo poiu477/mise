@@ -90,7 +90,7 @@ Claude desktop app doesn't run it, so offline start-up has to be tried in a real
 `./check` runs CI's build, lint and test steps in CI's order, and stops at the first failure, naming the step:
 
 ```bash
-./check            # Rust formatting, clippy, tests, the API document check, then web formatting, lint, tests, build
+./check            # Rust formatting, clippy, tests, docs, the API document check, then web formatting, lint, tests, build
 ./check --e2e      # the same, then the browser journeys
 ./check --fast     # formatting and lints only
 ```
@@ -99,8 +99,8 @@ It runs the test steps with `CI` set, as CI does. So the API tests fail when `DA
 `.env`, and passed on to the browser journeys) is missing or unreachable, rather than skipping, and Vitest and
 Playwright refuse a focused `.only` test. As in CI, it regenerates `web/src/api/schema.d.ts` and fails if git shows a
 change, leaving the new file to commit. It runs `npm ci` only when `web/node_modules` is missing or older than
-`web/package-lock.json`. Without `--e2e` it skips the browser journeys. `cargo deny`, `npm audit` and the Docker
-image build stay CI-only: `./check` never runs them.
+`web/package-lock.json`. Without `--e2e` it skips the browser journeys. `cargo deny`, `npm audit`, the Docker
+image build and publishing the docs stay CI-only: `./check` never runs them.
 
 A pre-commit hook runs `./check --fast` on the working tree before each commit. Turn it on once per clone:
 
@@ -115,6 +115,7 @@ git config core.hooksPath .githooks
 | Rust formatting | `cargo fmt --all` (CI: `--check`) | rustfmt at its defaults (`rustfmt.toml`) |
 | Rust lints | `cargo clippy --workspace --all-targets -- -D warnings` | Zero warnings |
 | Rust unit, property and integration tests | `cargo test --workspace` | API tests and the pipeline snapshot test need `DATABASE_URL` and make a throwaway database each; skipped when it isn't set |
+| Rust docs | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` | A broken intra-doc link or bad doc markup fails it; add `--open` to read them |
 | Rust dependencies | `cargo deny check` | Advisories, licenses, bans and sources (`deny.toml`); CI runs it |
 | Web formatting and lints | `cd web && npm run format` and `npm run lint` | Prettier at width 100; ESLint with the React hooks rules and a doc comment on every export |
 | Web unit tests | `cd web && npm test` | Vitest; pure modules (`choose.ts`, `offline.ts`, `recipe.ts`, `week.ts`) |
@@ -192,9 +193,10 @@ dismiss a false positive in the vulnerability report with the reason.
 
 The steps: the Rust job (formatting, clippy, tests against a Postgres service, a check that every response in the
 OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-openapi.mjs`), and a check that
-`web/src/api/schema.d.ts` matches the server), the web job (formatting, lint, tests, build, an audit of shipped npm
-packages), the browser journeys (keeping Playwright's report and traces when they fail), `cargo deny`, and a build of
-the Docker image.
+`web/src/api/schema.d.ts` matches the server), the Rust docs built with warnings as errors (`rust docs` on merge
+requests; on `main`, `pages` builds them once and publishes them to GitLab Pages, opening at `mise_core`), the web job
+(formatting, lint, tests, build, an audit of shipped npm packages), the browser journeys (keeping Playwright's report
+and traces when they fail), `cargo deny`, and a build of the Docker image.
 
 Renovate keeps dependencies current. A daily pipeline schedule on `main` (with the variable `SCHEDULE=dependencies`)
 runs the `renovate` job. Ordinary updates come on Mondays (UTC), one merge request per ecosystem as `renovate.json`

@@ -116,8 +116,8 @@ cd web && npm run api                  # regenerate src/api/schema.d.ts after ch
 ```
 
 The steps it runs, for running one alone: `cargo fmt --all --check`; `cargo clippy --workspace --all-targets -- -D
-warnings`; `cargo test --workspace`; the API document check; then in `web/`, `npm run format:check`, `lint`, `test`,
-`build` and (`--e2e`) `e2e`.
+warnings`; `cargo test --workspace`; `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`; the API document
+check; then in `web/`, `npm run format:check`, `lint`, `test`, `build` and (`--e2e`) `e2e`.
 
 When the release build is locked, regenerate the types from the debug build instead:
 `../target/debug/mise-server openapi > openapi.json && npx openapi-typescript openapi.json -o src/api/schema.d.ts`.
