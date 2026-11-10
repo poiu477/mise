@@ -12,6 +12,7 @@
 
 <!-- Anything outside the task's "Touches" that it needed, follow-ups, or "nothing". -->
 
+- [ ] `origin/main` is merged into the branch (conflicts in the docs resolved keeping both sides)
 - [ ] `./check` passes (and `./check --e2e` if the web app or API changed)
 - [ ] The task is deleted from `docs/backlog.md`, and `docs/status.md` records anything that changed
 - [ ] No recipe content that wasn't written for mise

@@ -75,12 +75,17 @@ once without stepping on each other.
 5. **Run the everyday commands below** and fix what they report.
 6. **Update the docs in the same merge request:** delete the task from the backlog; record anything that changed in
    status.md (where things stand, a decision, a known issue); fix any doc the change makes wrong.
-7. **Mark the merge request ready** once it's done, filling in the template: what changed, how it was checked,
+7. **Merge `main` into the branch** just before marking it ready: `git fetch origin && git merge origin/main`. Other
+   tasks merge while yours is open, and every one of them edits `docs/backlog.md` and `docs/status.md`, so expect
+   conflicts there. Keep both sides: everything the other merges added or removed, and your own changes (your task
+   stays deleted). Then run `./check` again and push. Merge rather than rebase, so nothing is force-pushed and
+   review comments keep their place. If `main` moves again and GitLab reports a conflict, do this again.
+8. **Mark the merge request ready** once it's done, filling in the template: what changed, how it was checked,
    anything left undone. CI runs on it (a fork's pipeline waits for Paul to start it), and Mira (`@mira`), the
    project's AI reviewer, reviews it. Fix each valid finding, or reply with why it doesn't apply. The security
    widget lists what the scanners found; a new high or critical SAST finding holds the merge request for Paul's
    approval, so fix it, or explain in the merge request why it's a false positive.
-8. **Paul merges,** with a merge commit (the project merges no other way), or says to merge once the pipeline
+9. **Paul merges,** with a merge commit (the project merges no other way), or says to merge once the pipeline
    passes.
 
 Stop and ask in the merge request (or an issue) instead of guessing when a task needs a decision listed under "Open
@@ -94,7 +99,7 @@ Running in parallel:
 - **Tests:** API tests each make their own throwaway database, so they can run side by side. The browser journeys
   use the fixed database `mise_e2e` and port 8095, so run them one session at a time on a machine (CI runs them for
   every merge request anyway).
-- **Generated files:** after rebasing over another API change, regenerate `web/src/api/schema.d.ts` rather than
+- **Generated files:** after merging `main` in over another API change, regenerate `web/src/api/schema.d.ts` rather than
   merging it by hand.
 
 ## Everyday commands
