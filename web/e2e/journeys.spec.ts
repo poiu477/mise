@@ -112,6 +112,21 @@ test("a serving count the server refuses says why, on the dish page and its card
   await page.getByRole("link", { name: "Back to the dish" }).click();
   await expect(page).toHaveURL(/\/dishes\/weeknight-tomato-pasta$/);
   await expect(amountOf("Spaghetti")).toHaveText("6 oz");
+
+  // A server error, such as a proxy's 502 while mise restarts, isn't a refusal: it reads as before, with Try again.
+  // The service worker fetches recipe data itself, so the browser context, not the page, sees the request.
+  await context.route("**/api/variants/*", (r) => r.fulfill({ status: 502, body: "Bad Gateway" }));
+  for (const path of [
+    "/dishes/weeknight-tomato-pasta?s=5",
+    "/dishes/weeknight-tomato-pasta/card?s=5",
+  ]) {
+    await page.goto(path);
+    await expect(page.getByText("Can't reach the server"), path).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" }), path).toBeVisible();
+  }
+  await context.unroute("**/api/variants/*");
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(page.locator(".card-steps li").first()).toBeVisible();
 });
 
 test("a dish prints as a card with the amounts the dish page shows", async () => {

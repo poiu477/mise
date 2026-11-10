@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { api, type Variant } from "../api/client";
-import { answer, Refused } from "../api/query";
+import { answer, Refused, refusedRequest } from "../api/query";
 import {
   available,
   cardParams,
@@ -226,7 +226,7 @@ export function DishPage() {
                 </li>
               ))}
             </ul>
-          ) : variantQuery.error instanceof Refused ? (
+          ) : refusedRequest(variantQuery.error) ? (
             // The server answered but won't give this (a serving count out of range): say why, as it put it.
             <p className="empty">{variantQuery.error.message}</p>
           ) : variantQuery.isError ? (

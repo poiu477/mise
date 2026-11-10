@@ -15,6 +15,12 @@ export class Refused extends Error {
   }
 }
 
+/** Whether the server refused what was asked (a 4xx, such as a serving count out of range), as opposed to failing
+ * itself: a 5xx, or a proxy's 502 while mise restarts, is worth trying again. */
+export function refusedRequest(error: unknown): error is Refused {
+  return error instanceof Refused && error.status < 500;
+}
+
 /** The data an API call answered with. Throws `Refused` for any other answer; a call that gets no answer at all
  * throws as `fetch` does. */
 export async function answer<T>(
