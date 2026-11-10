@@ -1,5 +1,5 @@
 // Starts mise for the browser journeys: a fresh `mise_e2e` database on the dev Postgres (or the server in
-// DATABASE_URL), the demo bundle imported and curated, then mise-server on 127.0.0.1:8095 serving web/dist.
+// DATABASE_URL), the demo bundle imported and curated (plus one retired dish address), then mise-server on 127.0.0.1:8095 serving web/dist.
 // Playwright runs this as its webServer and stops it when the tests end; each start drops and rebuilds the
 // database, so every run begins from an empty install. Needs `cargo build -p mise-cli -p mise-api` and
 // `npm run build` first.
@@ -36,6 +36,14 @@ mise("food", "apply", "fixtures/demo-bundle/curation.json");
 mise("group-dishes");
 mise("derive-options");
 mise("parse-steps");
+
+// An old address for one dish, as grouping leaves when a dish is renamed, for the journey that follows one.
+const db = new pg.Client({ connectionString: url });
+await db.connect();
+await db.query(
+  "INSERT INTO retired_slugs (slug, dish_id) SELECT 'tomato-pasta', id FROM dishes WHERE slug = 'weeknight-tomato-pasta'",
+);
+await db.end();
 
 const child = spawn(bin("mise-server"), [], {
   cwd: root,

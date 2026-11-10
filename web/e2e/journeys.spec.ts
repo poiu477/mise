@@ -71,6 +71,14 @@ test("a dish reads as published, and scales to any serving count", async () => {
   await expect(page.getByRole("button", { name: "Added" })).toBeDisabled();
 });
 
+test("an old address for a renamed dish lands on its current one", async () => {
+  // serve.mjs retires "tomato-pasta" for this dish, as grouping does when a dish is renamed.
+  await page.goto("/dishes/tomato-pasta?s=4");
+  await expect(page).toHaveURL(/\/dishes\/weeknight-tomato-pasta\?s=4$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weeknight Tomato Pasta");
+  await expect(amountOf("Spaghetti")).toHaveText("12 oz");
+});
+
 test("two more dishes and the week's list take under 20 interactions", async () => {
   // The Phase 3 gate: from a plan with one dish to the full list, counting every click and keystroke burst.
   let interactions = 0;
