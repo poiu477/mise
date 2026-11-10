@@ -1,0 +1,66 @@
+[
+  {
+    "description": "Red lentils, warm spices and a squeeze of lime.",
+    "external_id": "https://pulsepot.example/spiced-lentil-soup",
+    "hero_image": "https://pulsepot.example/images/lentil-soup.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 cup red lentils"
+      },
+      {
+        "key": "2",
+        "name": "1 onion, chopped"
+      },
+      {
+        "key": "3",
+        "name": "2 tsp curry powder"
+      },
+      {
+        "key": "4",
+        "name": "4 cups water"
+      },
+      {
+        "key": "5",
+        "name": "1 lime"
+      }
+    ],
+    "meta": {
+      "author": "Sasha Bloom",
+      "categories": [
+        "Soup"
+      ],
+      "cook_time": "PT25M",
+      "cuisines": [
+        "Indian"
+      ],
+      "images": [
+        "https://pulsepot.example/images/lentil-soup.jpg"
+      ],
+      "prep_time": "PT10M",
+      "yield_text": "Serves 4 to 6"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Soften the onion in a little oil, then stir in the curry powder."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Add the lentils and water and simmer for 20 minutes."
+      },
+      {
+        "images": [],
+        "index": 3,
+        "text": "Season and finish with lime juice."
+      }
+    ],
+    "title": "Spiced Lentil Soup",
+    "url": "https://pulsepot.example/spiced-lentil-soup",
+    "yields": [
+      4.0
+    ]
+  }
+]

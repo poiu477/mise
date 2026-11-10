@@ -1,0 +1,53 @@
+[
+  {
+    "description": null,
+    "external_id": "https://lowandslow.example/white-bean-chili",
+    "hero_image": "https://lowandslow.example/i/white-bean-chili.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "2 cans white beans, drained"
+      },
+      {
+        "key": "2",
+        "name": "1 lb chicken thighs"
+      },
+      {
+        "key": "3",
+        "name": "1 can diced green chiles"
+      },
+      {
+        "key": "4",
+        "name": "2 cups chicken stock"
+      },
+      {
+        "key": "5",
+        "name": "1 tsp ground cumin"
+      }
+    ],
+    "meta": {
+      "cook_time": "PT6H",
+      "images": [
+        "https://lowandslow.example/i/white-bean-chili.jpg"
+      ],
+      "yield_text": "4-6 servings"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Put everything in the slow cooker and cook on low for 6 hours."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Shred the chicken with two forks and stir it back in."
+      }
+    ],
+    "title": "Slow Cooker White Bean Chili",
+    "url": "https://lowandslow.example/white-bean-chili",
+    "yields": [
+      4.0
+    ]
+  }
+]

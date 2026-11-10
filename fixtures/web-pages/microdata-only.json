@@ -1,0 +1,55 @@
+[
+  {
+    "description": "Blanched beans finished in a garlicky butter.",
+    "external_id": "https://oldsite-recipes.example/sides/garlic-butter-green-beans.html",
+    "hero_image": "https://fixtures.example/images/green-beans.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 lb green beans, trimmed"
+      },
+      {
+        "key": "2",
+        "name": "2 tbsp butter"
+      },
+      {
+        "key": "3",
+        "name": "3 garlic cloves, sliced"
+      },
+      {
+        "key": "4",
+        "name": "salt and pepper"
+      }
+    ],
+    "meta": {
+      "author": "Pat Okafor",
+      "cook_time": "PT8M",
+      "images": [
+        "https://fixtures.example/images/green-beans.jpg"
+      ],
+      "prep_time": "PT10M"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Boil the beans in salted water for 4 minutes, then drain."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Melt the butter, add the garlic and cook until fragrant."
+      },
+      {
+        "images": [],
+        "index": 3,
+        "text": "Toss the beans in the garlic butter and season."
+      }
+    ],
+    "title": "Garlic Butter Green Beans",
+    "url": "https://oldsite-recipes.example/sides/garlic-butter-green-beans.html",
+    "yields": [
+      4.0
+    ]
+  }
+]

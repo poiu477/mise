@@ -1,0 +1,62 @@
+[
+  {
+    "description": null,
+    "external_id": "https://fillandbake.example/stuffed-peppers",
+    "hero_image": "https://fillandbake.example/stuffed-peppers.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "4 bell peppers"
+      },
+      {
+        "key": "2",
+        "name": "1 cup cooked rice"
+      },
+      {
+        "key": "3",
+        "name": "1/2 lb ground turkey"
+      },
+      {
+        "key": "4",
+        "name": "1 cup tomato sauce"
+      },
+      {
+        "key": "5",
+        "name": "1/2 cup shredded cheese"
+      }
+    ],
+    "meta": {
+      "cook_time": "PT35M",
+      "images": [
+        "https://fillandbake.example/stuffed-peppers.jpg"
+      ],
+      "prep_time": "PT15M"
+    },
+    "steps": [
+      {
+        "images": [
+          "https://fillandbake.example/steps/peppers-1.jpg"
+        ],
+        "index": 1,
+        "text": "Cut the tops off the peppers and scoop out the seeds."
+      },
+      {
+        "images": [
+          "https://fillandbake.example/steps/peppers-2.jpg"
+        ],
+        "index": 2,
+        "text": "Brown the turkey, then mix it with the rice and half the sauce. Leftover rice works best."
+      },
+      {
+        "images": [],
+        "index": 3,
+        "text": "Fill the peppers, top with the rest of the sauce and the cheese, and bake at 375°F for 30 minutes."
+      }
+    ],
+    "title": "Stuffed Peppers",
+    "url": "https://fillandbake.example/stuffed-peppers",
+    "yields": [
+      4.0
+    ]
+  }
+]

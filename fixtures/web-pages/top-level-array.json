@@ -1,0 +1,52 @@
+[
+  {
+    "description": "Cool and quick, for a hot evening.",
+    "external_id": "https://greenplate.example/cucumber-yogurt-salad",
+    "hero_image": "https://greenplate.example/photos/cucumber-salad.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 large cucumber"
+      },
+      {
+        "key": "2",
+        "name": "1/2 cup plain yogurt"
+      },
+      {
+        "key": "3",
+        "name": "1 small garlic clove, grated"
+      },
+      {
+        "key": "4",
+        "name": "1 tbsp chopped dill"
+      },
+      {
+        "key": "5",
+        "name": "salt"
+      }
+    ],
+    "meta": {
+      "images": [
+        "https://greenplate.example/photos/cucumber-salad.jpg"
+      ],
+      "total_time": "PT10M"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Slice the cucumber thinly and salt it lightly."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Stir the yogurt, garlic and dill together and fold in the cucumber."
+      }
+    ],
+    "title": "Cucumber Yogurt Salad",
+    "url": "https://greenplate.example/cucumber-yogurt-salad",
+    "yields": [
+      2.0
+    ]
+  }
+]

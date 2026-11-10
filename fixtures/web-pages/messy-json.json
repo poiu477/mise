@@ -1,0 +1,52 @@
+[
+  {
+    "description": "Crisp tofu in a sticky sauce. Good with rice.",
+    "external_id": "https://tofutuesday.example/honey-garlic-tofu",
+    "hero_image": "https://tofutuesday.example/img/honey-garlic-tofu.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "14 oz firm tofu, cubed"
+      },
+      {
+        "key": "2",
+        "name": "2 tbsp cornstarch"
+      },
+      {
+        "key": "3",
+        "name": "3 tbsp honey"
+      },
+      {
+        "key": "4",
+        "name": "2 tbsp soy sauce"
+      },
+      {
+        "key": "5",
+        "name": "3 garlic cloves, minced"
+      }
+    ],
+    "meta": {
+      "images": [
+        "https://tofutuesday.example/img/honey-garlic-tofu.jpg"
+      ],
+      "yield_text": "2 servings"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Toss the tofu in the cornstarch and fry until crisp on all sides."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Add the honey, soy sauce and garlic and toss until glossy."
+      }
+    ],
+    "title": "Honey Garlic Tofu",
+    "url": "https://tofutuesday.example/honey-garlic-tofu",
+    "yields": [
+      2.0
+    ]
+  }
+]

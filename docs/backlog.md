@@ -173,20 +173,6 @@ The Echo Show's browser can't sign in comfortably or send headers, so kitchen mo
   this week's first planned dish, steps through it, starts a timer from a step and sees it count down; the axe scan
   passes on the view.
 
-### T25 · Read schema.org Recipe data
-
-The shared parser behind import from a link and from files.
-
-- In `mise-ingest`, turn a page's schema.org Recipe data (JSON-LD, including `@graph` and arrays; microdata as a
-  fallback) into the same normalized record the seed bundle makes: title, yields, ingredient lines, steps
-  (`HowToStep` and `HowToSection`), times (ISO 8601 durations), image URLs, source URL.
-- Fixtures: 20 sample pages **written for mise** under `fixtures/web-pages/`, each shaped like a common site's
-  markup (a blog plugin's JSON-LD, a `@graph` page, microdata only, sections, odd yields such as "4-6 servings"),
-  with the record each should give. Never a page saved from a real site.
-- **Touches:** `crates/mise-ingest/src/` (a new module), `fixtures/web-pages/`.
-- **Done when:** this phase's gate, half two: all 20 pages parse to their expected records in a test; a page with no
-  Recipe data gives a clear error.
-
 ### T26 · Import from a link
 
 - `mise import url <url>` and `POST /api/v1/imports` with an "Import from a link" form in the web app. The server
@@ -316,6 +302,6 @@ Phase 3, still to build:
 
 Phase 4, kitchen and imports, is broken into T22 to T32 under Ready: recipes owned by a household, kitchen
 mode, import from a link and from files, the editor and forks, sharing, and review queues in the web app (printable
-cards, T33, are done). Its gate is T24's kitchen journey and T25's 20 sample pages.
+cards, T33, are done). Its gate is T24's kitchen journey and T25's 20 sample pages (that half passes since T25).
 
 Break a phase item into Ready tasks, in the shape above, before starting it.
