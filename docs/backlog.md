@@ -131,24 +131,6 @@ Cheapest now, while the web app is the API's only caller (see Decisions, 2026-11
   one and carries `Deprecation`; one test checks that each kind of error, a refused extractor included, has both
   `error` and `code`; the browser journeys pass, the offline one included.
 
-### T20 · HTTPS, behind an existing proxy or with the stack's own
-
-A phone opens the shopping list offline only from an HTTPS address (service workers need a secure origin), and
-kitchen mode's wake lock and an Alexa endpoint need it too. Two ways, both documented (see Decisions, 2026-11-10):
-
-- **An existing reverse proxy:** rewrite `docs/deploy.md` section 7 with a working Caddy site block (and a line each
-  for nginx and Traefik), `PUBLIC_BASE_URL`, `MISE_LISTEN=127.0.0.1`, and what to check afterwards (Secure cookies,
-  the service worker registered).
-- **The stack's own Caddy:** an optional `caddy` service in `compose.yaml` under a Compose profile (`https`), with a
-  `Caddyfile` in the repo, a pinned image, and settings in `deploy.env.example`: `MISE_HOST`, and either a contact
-  email for a public certificate or `tls internal` on a home network (deploy.md says how to trust Caddy's root
-  certificate on a phone, since a phone won't trust it otherwise).
-- **Touches:** `compose.yaml`, a new `Caddyfile`, `deploy.env.example`, `docs/deploy.md`, `.gitlab-ci.yml` (the
-  check below, and the `docker image` job's change rules).
-- **Done when:** a CI step brings the stack up on Docker-in-Docker with the `https` profile and `tls internal`, then,
-  trusting Caddy's root certificate, fetches `/api/health` over HTTPS, sees plain HTTP redirected to HTTPS, and sees
-  a Secure session cookie on sign-in.
-
 ### T21 · Old dish addresses keep working
 
 A dish's slug is fixed when it is first made, so a renamed dish keeps an address that no longer matches (the pot pie
@@ -198,7 +180,7 @@ The Echo Show's browser can't sign in comfortably or send headers, so kitchen mo
 
 - A kitchen view of a planned dish for a 1280 × 800 screen: one step at a time in large type, the step's ingredients
   with amounts at the planned servings, swipe or tap to move, the screen kept awake (Screen Wake Lock API, which
-  needs HTTPS: T20). A time in the step ("bake 10 to 12 minutes") is a button that starts a timer, with an alarm in
+  needs HTTPS: deploy.md section 7). A time in the step ("bake 10 to 12 minutes") is a button that starts a timer, with an alarm in
   the page; a range starts at its lower end and says when to check.
 - Finding times in step text is pure logic: a function in `mise-core` with unit tests and doc examples.
 - **Touches:** `crates/mise-core/src/` (step times), `web/src/` (a new page and route), `web/e2e/`.
@@ -341,7 +323,7 @@ These need the private seed, which is not in the repo.
   "matches the source" score, which counts every round-up as a miss.
 - **Deploy the stack on the seed:** rebuild the image, run the full Compose stack, copy the `seed/` files deploy.md
   names to the server (the `-seed` versions of curation, dish decisions and preferred versions).
-- **HTTPS for the household's install:** proxy mise through the existing Caddy, as T20's deploy.md section says.
+- **HTTPS for the household's install:** proxy mise through the existing Caddy, as deploy.md section 7 says.
 - **Off-machine backups** of the database and `seed/`.
 - **GitHub mirror settings:** turn on secret scanning (free on public repositories; GitLab's pipeline already runs
   secret detection).
