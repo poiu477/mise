@@ -10,7 +10,11 @@
 //! Versions that differ from Standard by exactly one ingredient swapped for another are mined across all
 //! dishes: a swap seen in several dishes becomes a review item proposing an alias (same food, another name)
 //! or a substitution rule.
+//!
+//! What a run writes depends only on the data: rows are read in a set order and every ranking settles its ties,
+//! so running it again over the same recipes gives the same versions, numbers and choice order.
 
+use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use anyhow::{Context, Result};
@@ -67,6 +71,7 @@ struct LineRow {
 struct FoodRow {
     id: Uuid,
     name: String,
+    slug: String,
     parent_id: Option<Uuid>,
     kind: String,
     strict: bool,
@@ -84,7 +89,8 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
     let mut stats = OptionStats::default();
     let variants: Vec<VariantRow> = sqlx::query_as(
         "SELECT v.id, v.dish_id, v.title, v.published_at AS published, d.default_variant_id = v.id AS is_default
-         FROM variants v JOIN dishes d ON d.id = v.dish_id",
+         FROM variants v JOIN dishes d ON d.id = v.dish_id
+         ORDER BY v.published_at DESC NULLS LAST, v.title, v.content_hash",
     )
     .fetch_all(pool)
     .await?;
@@ -92,13 +98,14 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
         "SELECT il.variant_id, il.food_id, il.shipped, la.amount::float8 AS amount, la.unit
          FROM ingredient_lines il
          LEFT JOIN LATERAL (SELECT amount, unit FROM line_amounts WHERE line_id = il.id ORDER BY servings LIMIT 1) la ON true
-         WHERE il.food_id IS NOT NULL",
+         WHERE il.food_id IS NOT NULL
+         ORDER BY il.variant_id, il.position, il.line_key",
     )
     .fetch_all(pool)
     .await
     .context("loading lines")?;
     let foods: HashMap<Uuid, FoodRow> = sqlx::query_as::<_, FoodRow>(
-        "SELECT id, name, parent_id, kind::text AS kind, coalesce(props->>'default_flexibility', '') = 'strict' AS strict FROM foods",
+        "SELECT id, name, slug, parent_id, kind::text AS kind, coalesce(props->>'default_flexibility', '') = 'strict' AS strict FROM foods",
     )
     .fetch_all(pool)
     .await?
@@ -178,6 +185,16 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
         }
     }
     let name_of = |id: &Uuid| foods.get(id).map(|f| f.name.clone()).unwrap_or_default();
+    // An ingredient set by its foods' slugs, which are unique (names aren't) and the same on every import (ids
+    // aren't).
+    let slugs_of = |sig: &BTreeSet<Uuid>| -> Vec<&str> {
+        let mut slugs: Vec<&str> = sig
+            .iter()
+            .filter_map(|id| foods.get(id).map(|f| f.slug.as_str()))
+            .collect();
+        slugs.sort_unstable();
+        slugs
+    };
 
     let mut by_dish: HashMap<Uuid, Vec<&VariantRow>> = HashMap::new();
     for v in &variants {
@@ -192,6 +209,7 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
     let mut swaps: HashMap<(Uuid, Uuid), (HashSet<Uuid>, usize)> = HashMap::new();
 
     for (dish_id, members) in &by_dish {
+        // Versions come newest first, so a dish with no default set falls back to its newest version.
         let default = members
             .iter()
             .find(|v| v.is_default)
@@ -214,35 +232,43 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
             .collect();
 
         // Versions: the most common ingredient set is Standard; others are labelled by their difference.
+        // Standard is the set most versions have, the default version's on a tie. The others are numbered v2, v3
+        // and on by how many versions have them, then by label, then by their foods.
         let mut sig_count: HashMap<&BTreeSet<Uuid>, usize> = HashMap::new();
         for v in members {
             *sig_count.entry(&facts[&v.id].signature).or_default() += 1;
         }
+        let default_sig = &facts[&default.id].signature;
         let standard = *sig_count
             .iter()
-            .max_by_key(|(sig, n)| (**n, **sig == &facts[&default.id].signature))
+            .min_by_key(|(sig, n)| (Reverse(**n), **sig != default_sig, slugs_of(sig)))
             .map(|(sig, _)| sig)
             .unwrap();
+        let mut others: Vec<_> = sig_count
+            .iter()
+            .filter(|(sig, _)| **sig != standard)
+            .map(|(sig, n)| {
+                let added: Vec<Uuid> = sig.difference(standard).copied().collect();
+                let removed: Vec<Uuid> = standard.difference(sig).copied().collect();
+                let label = describe_difference(&added, &removed, &name_of);
+                (*sig, *n, added, removed, label)
+            })
+            .collect();
+        others.sort_by_cached_key(|(sig, n, _, _, label)| {
+            (Reverse(*n), label.clone(), slugs_of(sig))
+        });
         let mut version_of: HashMap<&BTreeSet<Uuid>, String> =
             HashMap::from([(standard, "standard".to_string())]);
         let mut version_labels: HashMap<String, String> =
             HashMap::from([("standard".into(), "Standard".into())]);
-        for (sig, n) in &sig_count {
-            if version_of.contains_key(sig) {
-                continue;
-            }
-            let value = format!("v{}", version_of.len() + 1);
-            let added: Vec<Uuid> = sig.difference(standard).copied().collect();
-            let removed: Vec<Uuid> = standard.difference(sig).copied().collect();
+        for (i, (sig, n, added, removed, label)) in others.into_iter().enumerate() {
+            let value = format!("v{}", i + 2);
             if let ([a], [r]) = (added.as_slice(), removed.as_slice()) {
                 let e = swaps.entry((*r, *a)).or_default();
                 e.0.insert(*dish_id);
                 e.1 += n;
             }
-            version_labels.insert(
-                value.clone(),
-                describe_difference(&added, &removed, &name_of),
-            );
+            version_labels.insert(value.clone(), label);
             version_of.insert(sig, value);
         }
 
@@ -292,29 +318,31 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
                 "portion" => stats.with_double_portion += 1,
                 _ => stats.with_versions += 1,
             }
-            let mut choices: Vec<_> = vals
+            let mut choices: Vec<Choice> = vals
                 .iter()
-                .map(|(value, vs)| {
-                    let shown = match key {
+                .map(|(value, vs)| Choice {
+                    value: value.clone(),
+                    label: match key {
                         "protein" if value == "none" => "No meat".to_string(),
                         "protein" => value.clone(),
                         "portion" if value == "double" => "Double protein".into(),
                         "portion" => "Regular".into(),
                         _ => version_labels[value].clone(),
-                    };
-                    json!({ "value": value, "label": shown, "variants": vs.len(), "years": years(vs) })
+                    },
+                    variants: vs.len(),
+                    years: years(vs),
                 })
                 .collect();
-            choices.sort_by_key(|c| std::cmp::Reverse(c["variants"].as_u64()));
             let default_value = vals
                 .iter()
                 .find(|(_, vs)| vs.iter().any(|v| v.id == default.id))
                 .map(|(k, _)| k.clone());
+            order_choices(key, &mut choices, default_value.as_deref());
             o_dish.push(*dish_id);
             o_key.push(key.to_string());
             o_label.push(label.to_string());
             o_pos.push(pos as i32);
-            o_choices.push(serde_json::Value::Array(choices).to_string());
+            o_choices.push(serde_json::to_string(&choices)?);
             o_default.push(default_value);
         }
     }
@@ -390,6 +418,49 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
     Ok(stats)
 }
 
+/// One choice of a dish option, as `dish_options.choices` stores it and the dish page shows it.
+#[derive(Debug, serde::Serialize)]
+struct Choice {
+    /// The attribute value on the versions that offer it: "Chicken", "double", "v2".
+    value: String,
+    /// What the page shows: "Double protein", "with Cheddar Cheese instead of Monterey Jack Cheese".
+    label: String,
+    /// How many versions offer it.
+    variants: usize,
+    /// The years those versions were published: "2024", "2022–2024", or empty.
+    years: String,
+}
+
+/// Puts an option's choices in the order the dish page lists them. Choices more versions offer come first. On a
+/// tie the dish's default comes first, since the page opens on it, then the option's own reading order: Regular
+/// before Double protein; Standard, then v2, v3 and on (v10 after v9); named proteins alphabetically, then No meat.
+/// The value settles anything left, so the order never depends on the order the choices came in.
+fn order_choices(key: &str, choices: &mut [Choice], default: Option<&str>) {
+    let is_default = |c: &Choice| Some(c.value.as_str()) == default;
+    choices.sort_by(|a, b| {
+        b.variants
+            .cmp(&a.variants)
+            .then_with(|| is_default(b).cmp(&is_default(a)))
+            .then_with(|| reading_rank(key, &a.value).cmp(&reading_rank(key, &b.value)))
+            .then_with(|| a.label.cmp(&b.label))
+            .then_with(|| a.value.cmp(&b.value))
+    });
+}
+
+/// Where a value sits in its option's reading order, lowest first; values that rank alike go by label.
+fn reading_rank(key: &str, value: &str) -> u32 {
+    match key {
+        "portion" => u32::from(value != "regular"),
+        "protein" => u32::from(value == "none"),
+        "version" if value == "standard" => 1,
+        "version" => value
+            .strip_prefix('v')
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(u32::MAX),
+        _ => 0,
+    }
+}
+
 /// "with Squash instead of Zucchini", "with Broccoli added", "without Feta", or a count when it's many things.
 fn describe_difference(
     added: &[Uuid],
@@ -428,5 +499,111 @@ fn years(vs: &[&VariantRow]) -> String {
         (Some(a), Some(b)) if a == b => a.to_string(),
         (Some(a), Some(b)) => format!("{a}–{b}"),
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn choice(value: &str, label: &str, variants: usize) -> Choice {
+        Choice {
+            value: value.into(),
+            label: label.into(),
+            variants,
+            years: String::new(),
+        }
+    }
+
+    /// The values in the order `order_choices` puts them, from choices given in `given` order.
+    fn ordered(key: &str, given: &[(&str, &str, usize)], default: Option<&str>) -> Vec<String> {
+        let mut choices: Vec<Choice> = given.iter().map(|(v, l, n)| choice(v, l, *n)).collect();
+        order_choices(key, &mut choices, default);
+        choices.into_iter().map(|c| c.value).collect()
+    }
+
+    /// Every order of `given` gives `expected`: the result never depends on the order choices come in.
+    fn assert_order(
+        key: &str,
+        given: &[(&str, &str, usize)],
+        default: Option<&str>,
+        expected: &[&str],
+    ) {
+        let mut given = given.to_vec();
+        for _ in 0..given.len() {
+            assert_eq!(ordered(key, &given, default), expected, "from {given:?}");
+            given.reverse();
+            assert_eq!(ordered(key, &given, default), expected, "from {given:?}");
+            given.rotate_left(1);
+        }
+    }
+
+    #[test]
+    fn choices_more_versions_offer_come_first() {
+        assert_order(
+            "protein",
+            &[
+                ("Chicken", "Chicken", 1),
+                ("Shrimp", "Shrimp", 3),
+                ("none", "No meat", 2),
+            ],
+            Some("Chicken"),
+            &["Shrimp", "none", "Chicken"],
+        );
+    }
+
+    #[test]
+    fn on_a_tie_the_default_comes_first() {
+        assert_order(
+            "version",
+            &[
+                ("standard", "Standard", 1),
+                (
+                    "v2",
+                    "with Cheddar Cheese instead of Monterey Jack Cheese",
+                    1,
+                ),
+            ],
+            Some("v2"),
+            &["v2", "standard"],
+        );
+        assert_order(
+            "portion",
+            &[("regular", "Regular", 2), ("double", "Double protein", 2)],
+            Some("double"),
+            &["double", "regular"],
+        );
+    }
+
+    #[test]
+    fn other_ties_follow_the_option_s_reading_order() {
+        assert_order(
+            "portion",
+            &[("double", "Double protein", 1), ("regular", "Regular", 1)],
+            None,
+            &["regular", "double"],
+        );
+        assert_order(
+            "version",
+            &[
+                ("v10", "without Feta", 1),
+                ("v2", "with Kale added", 1),
+                ("standard", "Standard", 1),
+                ("v9", "without Basil", 1),
+            ],
+            None,
+            &["standard", "v2", "v9", "v10"],
+        );
+        assert_order(
+            "protein",
+            &[
+                ("none", "No meat", 1),
+                ("Shrimp", "Shrimp", 1),
+                ("Chicken", "Chicken", 1),
+                ("Beef", "Beef", 1),
+            ],
+            Some("Shrimp"),
+            &["Shrimp", "Beef", "Chicken", "none"],
+        );
     }
 }

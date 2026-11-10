@@ -72,9 +72,6 @@ What a reviewer can rely on today:
 - Some step text from the source lost a space in a mixed number ("10-12 11⁄2-inch meatballs").
 - The pot pie dish's address still says "beef" (slugs are fixed at first import) until T21.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
-- A dish option's choices that as many versions offer (each of the Black Bean Tacos' two versions) come in no set
-  order: `derive-options` ranks them by count alone, so a re-run can swap them. The pipeline snapshot test settles
-  ties itself until T18 fixes it.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
   the list reloads a moment later.
@@ -114,3 +111,4 @@ What a reviewer can rely on today:
 | 2026-11-10 | A dish's address follows its title, and old addresses keep working (T21), instead of slugs fixed at first import |
 | 2026-11-10 | GitHub keeps its copy of CI after a review suggested dropping it: it costs nothing to run, and it caught a race in a browser journey that GitLab's run had missed |
 | 2026-11-10 | Phase 4 is broken into Ready tasks (T22 to T33). Process work stops growing: no new workflow rules or CI unless a task needs them |
+| 2026-11-10 | A dish option lists the choices most versions offer first; on a tie, the dish's default, then the option's reading order (Regular before Double protein; Standard, v2, v3; proteins alphabetically, then No meat). Versions are numbered by how many versions share them, then by label, so a re-run of `derive-options` changes nothing |
