@@ -60,6 +60,18 @@ export function CardPage() {
       </p>
     );
   }
+  if (variantQuery.error instanceof Refused) {
+    // The server answered but won't give this (a serving count out of range): say why, as it put it, and link
+    // back to the dish as the address had it, less the serving count it refused.
+    const back = new URLSearchParams(params);
+    back.delete("s");
+    return (
+      <p className="empty">
+        {variantQuery.error.message}{" "}
+        <Link to={{ pathname: `/dishes/${slug}`, search: back.toString() }}>Back to the dish</Link>
+      </p>
+    );
+  }
   if ((dishQuery.isError && !dish) || variantQuery.isError) {
     return (
       <p className="empty">

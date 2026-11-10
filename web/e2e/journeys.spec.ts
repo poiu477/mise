@@ -76,6 +76,8 @@ test("a dish reads as published, and scales to any serving count", async () => {
   await expect(page.getByText("3 servings isn't a published size")).toBeVisible();
   await expect(amountOf("Spaghetti")).toHaveText("≈9 oz");
   await expect(amountOf("Garlic")).toHaveText("≈3 cloves");
+  // Steps with amounts are rewritten and say so (the accessibility scan below opens this page for these notes).
+  await expect(page.getByText("Amounts scaled for this serving count.").first()).toBeVisible();
 
   // 4 is published again: exact, no marks.
   await page.getByRole("button", { name: "More servings" }).click();
@@ -94,6 +96,22 @@ test("an old address for a renamed dish lands on its current one", async () => {
   await expect(page).toHaveURL(/\/dishes\/weeknight-tomato-pasta\?s=4$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weeknight Tomato Pasta");
   await expect(amountOf("Spaghetti")).toHaveText("12 oz");
+});
+
+test("a serving count the server refuses says why, on the dish page and its card", async () => {
+  // The API takes more than 0 and at most 24 servings (or the largest published size, when that's more).
+  const refused = "Servings must be more than 0 and at most 24.";
+  await page.goto("/dishes/weeknight-tomato-pasta?s=500");
+  await expect(page.getByText(refused)).toBeVisible();
+  await expect(page.getByText("Can't reach the server")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+
+  await page.goto("/dishes/weeknight-tomato-pasta/card?s=500");
+  await expect(page.getByText(refused)).toBeVisible();
+  await expect(page.getByText("Can't reach the server")).toHaveCount(0);
+  await page.getByRole("link", { name: "Back to the dish" }).click();
+  await expect(page).toHaveURL(/\/dishes\/weeknight-tomato-pasta$/);
+  await expect(amountOf("Spaghetti")).toHaveText("6 oz");
 });
 
 test("a dish prints as a card with the amounts the dish page shows", async () => {
@@ -375,6 +393,8 @@ test("work queued as one person never lands on whoever signs in after them", asy
 const pages = [
   "/",
   "/dishes/weeknight-tomato-pasta",
+  // Scaled: the "Amounts scaled" and "Check amounts" step notes show.
+  "/dishes/weeknight-tomato-pasta?s=3",
   "/dishes/weeknight-tomato-pasta/card?s=6",
   "/plan",
   "/shopping",

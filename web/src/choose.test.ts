@@ -8,6 +8,7 @@ import {
   selectionOf,
   startingServings,
   versionFor,
+  versionOf,
   type Selection,
 } from "./choose";
 
@@ -101,6 +102,30 @@ describe("versionFor", () => {
   });
   it("ignores a combination no version has", () => {
     expect(at("protein=Beef&version=lime")).toBe("pork-std");
+  });
+});
+
+describe("versionOf", () => {
+  const dish: Dish = {
+    id: "dish",
+    slug: "dish",
+    title: "Dish",
+    content_type: "recipe",
+    default_variant: "pork-std",
+    options,
+    variants,
+  };
+  it("shows a pinned version, whatever the options say", () => {
+    expect(versionOf(dish, { protein: "Beef" }, "chicken-std-nosteps")?.id).toBe(
+      "chicken-std-nosteps",
+    );
+  });
+  it("shows the version the options pick, preferring one with steps", () => {
+    expect(versionOf(dish, { protein: "Chicken", version: "std" }, null)?.id).toBe("chicken-std");
+  });
+  it("falls back to the default when no version has the options", () => {
+    expect(versionOf(dish, { protein: "Beef", version: "lime" }, null)?.id).toBe("pork-std");
+    expect(versionOf(dish, { protein: "Beef", version: "lime" }, "gone")?.id).toBe("pork-std");
   });
 });
 
