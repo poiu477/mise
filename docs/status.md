@@ -9,7 +9,7 @@ both in the same merge request as the work.
 | Phase | State | What exists |
 | --- | --- | --- |
 | 1 Data core | Done; its gate (500 full-archive dishes checked by hand) was waived when the hand-trimmed launch seed took the full archive's place (see Decisions) | Seed bundle format and importer; food matching, tree and curation files; dish grouping with drift splitting, protein twins and recorded decisions; options; content-addressed media with web-size copies; grouping gate report |
-| 2 Browse and cook | Done (gate passed on 60 seed recipes, 2026-11-01) | REST API with OpenAPI; web app (PWA) with search, dish pages, option toggles, any serving count; step text rewritten for the chosen servings; local accounts, households, OIDC single sign-on, sessions, API tokens; Docker Compose stack with nightly backups |
+| 2 Browse and cook | Done (gate passed on 60 seed recipes, 2026-11-01) | REST API with OpenAPI; web app (PWA) with search, dish pages, option toggles, any serving count; step text rewritten for the chosen servings; local accounts, households, OIDC single sign-on, sessions, API tokens; Docker Compose stack with nightly backups, and HTTPS behind an existing proxy or through the stack's own Caddy (the `https` profile) |
 | 3 Plan and shop | Core done (gate passed in use, 2026-11-03) | Weekly household plan; shopping list worked out from it, exact totals by store section, household and per-food weight units, pantry staples, hand-added items, ticks, printing, works offline on a phone |
 | 4 Kitchen and imports | Not started; broken into tasks T22 to T33 in the backlog | |
 | 5 Optional extras | Not started | |
@@ -28,8 +28,9 @@ What a reviewer can rely on today:
 - **CI** (`.gitlab-ci.yml` on every merge request; `.github/workflows/ci.yml`, actions pinned to SHAs, again on the
   mirror): rustfmt, clippy with warnings as errors, Rust tests against a Postgres service (API tests fail rather than
   skip when it's missing), the OpenAPI document checked and the web types compared with it, web format, lint, tests and
-  build, `npm audit` of shipped packages, `cargo deny`, browser journeys, security scans, and the Docker image built
-  (on merge requests only when its build inputs change).
+  build, `npm audit` of shipped packages, `cargo deny`, browser journeys, security scans, and the Docker image built and the
+  stack run with its own Caddy, checked over HTTPS (redirect, certificate, Secure session cookie); on merge requests
+  only when the image's build inputs or the stack change.
 - **Security:** GitLab Advanced SAST, dependency scanning and secret detection (the project's security configuration
   profiles) and Semgrep's Rust rules (`rust sast`) on every merge request; a new high or critical SAST finding needs the
   maintainer's approval before merging (an approval policy). The advanced vulnerability management views run on advanced
@@ -70,11 +71,9 @@ What a reviewer can rely on today:
 - 36 versions (269 lines) publish 3-serving amounts equal to their 4-serving ones; left as published.
 - Two review items stay open: green beans swapped for broccoli or carrots between versions; nothing records swaps yet.
 - Some step text from the source lost a space in a mixed number ("10-12 11⁄2-inch meatballs").
-- The pot pie dish's address still says "beef" (slugs are fixed at first import) until T21.
+- The pot pie dish's address on the seed still says "beef": it was set before grouping renamed dishes' slugs (T21).
+  It clears once Paul re-runs grouping on the seed; the old address keeps working after that.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
-- A dish option's choices that as many versions offer (each of the Black Bean Tacos' two versions) come in no set
-  order: `derive-options` ranks them by count alone, so a re-run can swap them. The pipeline snapshot test settles
-  ties itself until T18 fixes it.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
   the list reloads a moment later.
@@ -114,3 +113,4 @@ What a reviewer can rely on today:
 | 2026-11-10 | A dish's address follows its title, and old addresses keep working (T21), instead of slugs fixed at first import |
 | 2026-11-10 | GitHub keeps its copy of CI after a review suggested dropping it: it costs nothing to run, and it caught a race in a browser journey that GitLab's run had missed |
 | 2026-11-10 | Phase 4 is broken into Ready tasks (T22 to T33). Process work stops growing: no new workflow rules or CI unless a task needs them |
+| 2026-11-10 | A dish option lists the choices most versions offer first; on a tie, the dish's default, then the option's reading order (Regular before Double protein; Standard, v2, v3; proteins alphabetically, then No meat). Versions are numbered by how many versions share them, then by label, so a re-run of `derive-options` changes nothing |

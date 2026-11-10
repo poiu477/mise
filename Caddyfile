@@ -1,0 +1,16 @@
+# HTTPS in front of mise, for the `caddy` service in compose.yaml (docker compose --profile https up -d).
+# Settings come from .env: MISE_HOST, the address phones open, and MISE_TLS, which is `internal` for a certificate
+# from Caddy's own authority (home network; phones must trust its root, see docs/deploy.md) or a contact email for a
+# public certificate from Let's Encrypt (MISE_HOST must then resolve here and ports 80 and 443 be open to the internet).
+# Plain HTTP on port 80 redirects to HTTPS.
+
+{
+	# The root certificate is for phones and browsers to trust, not this container.
+	skip_install_trust
+}
+
+{$MISE_HOST} {
+	tls {$MISE_TLS}
+	# mise compresses its own responses.
+	reverse_proxy app:8080
+}

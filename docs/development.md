@@ -157,11 +157,28 @@ change does to real recipes.
 `.gitlab-ci.yml` runs on every merge request and every push to `main`, on the project's GitLab runner, and a merge
 request merges only when it passes. `.github/workflows/ci.yml` runs the same steps again on the GitHub mirror after
 each push to `main`, as a second opinion. Both run what `./check` runs, with the same commands; change all three
-together. Its Docker image job needs a runner that allows
-privileged jobs, and since the other jobs already prove the code builds, it runs on a merge request only when
-something the image build depends on changes (the Dockerfile, the Cargo and npm manifests and lockfiles, the Rust
-version, the pipeline itself); on `main` and tags it always runs. The Rust caches are keyed on the Rust version, not
+together. Since the other jobs already prove the code builds, the Docker image job runs on a merge request only when
+something the image build or the stack depends on changes (the Dockerfile, the Cargo and npm manifests and lockfiles,
+the Rust version, `compose.yaml`, the `Caddyfile`, the pipeline itself); on `main` and tags it always runs. The Rust caches are keyed on the Rust version, not
 `Cargo.lock`, so a dependency update rebuilds only what it changed.
+
+### CI runners
+
+Most jobs run on any Docker runner. The Docker image job builds the image and starts the whole stack, so it needs a
+Docker of its own to talk to; it takes a runner tagged `docker-socket`, which lends jobs its own Docker through the
+socket instead of running Docker-in-Docker. That needs no privileged containers, which matters on runners in
+unprivileged Proxmox LXCs (with nesting on, so Docker runs inside), and the build cache stays between runs. A job
+there can control that Docker, so give the tag only to runners whose Docker serves CI and nothing else. In the
+runner's `config.toml`:
+
+```toml
+[runners.docker]
+  privileged = false
+  volumes = ["/var/run/docker.sock:/var/run/docker.sock", "/cache"]
+```
+
+Then tag the runner `docker-socket` (Admin, CI/CD, Runners), leaving "Run untagged jobs" on so it takes the other
+jobs too. A fork's pipeline needs a runner set up the same way for this one job.
 
 Security scanning comes from two places. The project's security configuration profiles (Secure, Security configuration;
 not in `.gitlab-ci.yml`) add GitLab Advanced SAST, dependency scanning and secret detection to every merge request and
