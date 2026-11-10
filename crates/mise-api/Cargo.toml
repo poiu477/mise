@@ -46,4 +46,6 @@ image = { version = "0.25.8", default-features = false, features = ["jpeg", "png
 mise-ingest = { version = "0.1.0", path = "../mise-ingest" }
 p256 = { version = "0.14.0", features = ["ecdsa"] }
 rsa = { version = "0.9.10", features = ["sha2", "getrandom"] }
+# Test media folders: private, and removed even when a test fails.
+tempfile = "3.27.0"
 tower = { version = "0.5.3", features = ["util"] }

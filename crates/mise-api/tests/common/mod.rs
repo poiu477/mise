@@ -222,25 +222,32 @@ impl TestApp {
     }
 }
 
-/// A media folder made for one test under the system's temporary folder, and removed with it, even when the test
-/// fails.
+/// A media folder made for one test, and removed with it, even when the test fails. `tempfile` creates it in one
+/// step with a name nobody else can have taken and access for this user only, rather than reusing whatever is
+/// already at a guessed path in the shared temporary folder.
 struct MediaDir {
     path: PathBuf,
+    /// Taken in `drop`, to remove the folder and report a failure.
+    dir: Option<tempfile::TempDir>,
 }
 
 impl MediaDir {
     fn create() -> MediaDir {
-        let path =
-            std::env::temp_dir().join(format!("mise-test-media-{}", uuid::Uuid::now_v7().simple()));
-        std::fs::create_dir_all(&path).unwrap();
-        MediaDir { path }
+        let dir = tempfile::Builder::new()
+            .prefix("mise-test-media-")
+            .tempdir()
+            .unwrap();
+        MediaDir {
+            path: dir.path().to_path_buf(),
+            dir: Some(dir),
+        }
     }
 }
 
 impl Drop for MediaDir {
     /// Reported, not raised, as for the database: panicking while a failed test unwinds would abort the run.
     fn drop(&mut self) {
-        if let Err(e) = std::fs::remove_dir_all(&self.path) {
+        if let Some(Err(e)) = self.dir.take().map(tempfile::TempDir::close) {
             eprintln!(
                 "couldn't remove test media folder {}: {e}",
                 self.path.display()
