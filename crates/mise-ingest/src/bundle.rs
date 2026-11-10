@@ -82,12 +82,18 @@ struct BundleStep {
     images: Vec<String>,
 }
 
+/// What one import did, for the command's summary.
 #[derive(Debug, Default)]
 pub struct ImportStats {
+    /// Variant lines read from `variants.ndjson`, blank lines aside.
     pub read: u64,
+    /// Records seen for the first time.
     pub inserted: u64,
+    /// Known records whose content changed, each now a new variant whose parent is the previous one.
     pub new_versions: u64,
+    /// Known records with the same content hash, skipped.
     pub unchanged: u64,
+    /// Variants linked to the record they were copied from (`parent_external_id`).
     pub lineage_links: u64,
 }
 
@@ -344,6 +350,9 @@ impl Batch {
     }
 }
 
+/// Imports the bundle in `dir` (its `manifest.json` and `variants.ndjson`) under the manifest's source, creating
+/// the source on first import. Fails on a format other than "mise-seed/1" or a line that doesn't parse, naming the
+/// line; batches written before that stay in.
 pub async fn import_bundle(pool: &PgPool, dir: &Path) -> Result<ImportStats> {
     let manifest: Manifest = serde_json::from_reader(
         File::open(dir.join("manifest.json")).context("opening manifest.json")?,

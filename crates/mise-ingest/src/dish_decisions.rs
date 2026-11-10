@@ -11,13 +11,19 @@ use sqlx::PgPool;
 #[derive(Deserialize)]
 pub struct Record(pub String, pub String);
 
+/// A decision about one pair of records: `{"decision": "merge", "a": [...], "b": [...], "note": "renamed"}`.
 #[derive(Deserialize)]
 pub struct Decision {
+    /// "merge" (the two belong in one dish) or "keep_apart" (looked at; don't propose the pair again).
     pub decision: String,
+    /// One record of the pair; which is `a` and which `b` doesn't matter.
     pub a: Record,
+    /// The other record.
     pub b: Record,
+    /// Who decided: "user", or "claude" when decided on the person's behalf from their earlier decisions.
     #[serde(default = "user")]
     pub by: String,
+    /// Why, in a few words: "renamed: same recipe".
     pub note: Option<String>,
 }
 
@@ -25,9 +31,12 @@ fn user() -> String {
     "user".into()
 }
 
+/// How many decisions of each kind a file held, for the command's summary.
 #[derive(Debug, Default)]
 pub struct ApplyStats {
+    /// Pairs to join into one dish.
     pub merge: usize,
+    /// Pairs kept apart.
     pub keep_apart: usize,
     /// Decisions naming a record that is not in the database (pruned, or not imported yet). Kept, harmless.
     pub unknown_records: usize,
@@ -36,7 +45,9 @@ pub struct ApplyStats {
 /// How often a household has had one version.
 #[derive(Deserialize)]
 pub struct Preferred {
+    /// The version, by its record.
     pub record: Record,
+    /// How many times it's been had: 14.
     pub times: i32,
 }
 
@@ -64,6 +75,8 @@ pub async fn apply_preferred(pool: &PgPool, path: &Path) -> Result<usize> {
     Ok(list.len())
 }
 
+/// Loads a file of dish decisions (an array of [`Decision`]), replacing those recorded before, all or nothing.
+/// The same pair decided twice keeps the later decision; an unknown `decision` fails the whole file.
 pub async fn apply_file(pool: &PgPool, path: &Path) -> Result<ApplyStats> {
     let decisions: Vec<Decision> = serde_json::from_reader(
         std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?,

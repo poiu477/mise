@@ -33,20 +33,34 @@ const WEAK_CORE_SIMILARITY: f64 = 0.34;
 const TWIN_OVERLAP: f64 = 0.5;
 const TWIN_SUBTITLE_SIMILARITY: f64 = 0.6;
 
+/// What one grouping run did, step by step, for the command's summary. The `merged_*` counts are joins that
+/// brought two groups together; a join between versions already in one group isn't counted.
 #[derive(Debug, Default)]
 pub struct GroupStats {
+    /// Versions the run grouped: those not pinned by a person and not in a dish a person made.
     pub variants: usize,
+    /// Dishes the run ended with.
     pub dishes: usize,
+    /// Copies joined to their parent because the cleaned titles match.
     pub merged_by_title: usize,
+    /// Copies joined to their parent with only the protein changed: "Chicken Tacos" → "Pork Tacos".
     pub merged_as_protein_swap: usize,
+    /// Copies joined to their parent on a similar title and shared shipped ingredients, or on near-identical
+    /// shipped ingredients alone.
     pub merged_by_similarity: usize,
+    /// Separate lineages joined because their cleaned title and subtitle match.
     pub merged_by_title_key: usize,
+    /// Copies too unlike their parent to join, queued for a person to review.
     pub kept_apart_for_review: usize,
+    /// New dishes split off a family that drifted, one small change at a time, into a different dish.
     pub split_from_drift: usize,
+    /// Protein twins from separate lineages joined: "Lemon Herb Salmon" and "Lemon Herb Cod".
     pub merged_as_cross_lineage_twin: usize,
+    /// Joins made because a person decided the pair is one dish (`dish_decisions`).
     pub merged_by_decision: usize,
-    /// Dishes that kept their id from the previous run, and how many of those got a different slug.
+    /// Dishes that kept their id from the previous run, so links to them still work.
     pub dishes_kept: usize,
+    /// Kept dishes whose slug changed: their name changed, or "beef-ragu-2" became "beef-ragu" once that was free.
     pub slugs_changed: usize,
 }
 
@@ -88,6 +102,9 @@ impl UnionFind {
     }
 }
 
+/// Regroups every version the job owns into dishes, in one transaction: joins them, sets each dish's default
+/// version, name and slug, and queues doubtful copies for review. Running it again on the same data gives the
+/// same dishes, ids and slugs.
 pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let mut stats = GroupStats::default();
     let mut tx = pool.begin().await?;

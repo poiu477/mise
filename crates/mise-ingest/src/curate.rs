@@ -12,32 +12,66 @@ use serde_json::Value;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
+/// One hand edit. Foods are named as people write them ("green onions") and found by alias or slug; a name that
+/// matches no food fails with the closest names, and one that matches several asks for a merge first. In a JSON
+/// file each is an object tagged by `op`: `{"op": "alias", "food": "scallion", "alias": "green onion"}`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Op {
     /// Create a food (or brand, variety, cut...). Does nothing if a food with this name already exists.
     Add {
+        /// The new food's name: "smoked paprika".
         name: String,
+        /// What it's a kind of, if anything: "paprika".
         parent: Option<String>,
+        /// A `food_kind`: "food" (the default), "brand", "variety", "cut", "form" or "proprietary".
         #[serde(default = "default_kind")]
         kind: String,
+        /// Other names it goes by, besides its own.
         #[serde(default)]
         aliases: Vec<String>,
     },
     /// Make `food` a kind of `parent` (replacing any related link between the two).
-    SetParent { food: String, parent: String },
+    SetParent {
+        /// The food to move: "baby spinach".
+        food: String,
+        /// What it becomes a kind of: "spinach". Refused if it's `food` or one of its descendants.
+        parent: String,
+    },
     /// Make `food` top-level.
-    Unparent { food: String },
+    Unparent {
+        /// The food to move to the top.
+        food: String,
+    },
     /// Another name for the same food.
-    Alias { food: String, alias: String },
+    Alias {
+        /// The food that gains the name: "scallion".
+        food: String,
+        /// The other name: "green onion".
+        alias: String,
+    },
     /// Remove a `related` link between two foods.
-    Unrelate { food: String, other: String },
+    Unrelate {
+        /// One food of the pair.
+        food: String,
+        /// The other; the order doesn't matter.
+        other: String,
+    },
     /// `from` and `into` are the same food: move everything to `into` and delete `from`.
-    Merge { from: String, into: String },
+    Merge {
+        /// The duplicate: "cilantro leaves". Its lines, children, facts, aliases and links move to `into`, and
+        /// then it is deleted.
+        from: String,
+        /// The food that stays: "cilantro".
+        into: String,
+    },
     /// Set a property, e.g. `default_flexibility` = "strict" or `store_section` = "Dairy".
     Set {
+        /// The food to change.
         food: String,
+        /// The property's name: "store_section".
         key: String,
+        /// Its new value, any JSON: "Dairy".
         value: Value,
     },
 }
@@ -46,6 +80,8 @@ fn default_kind() -> String {
     "food".into()
 }
 
+/// Applies one operation in its own transaction and says what it did: "added smoked paprika",
+/// "scallion: already exists".
 pub async fn apply(pool: &PgPool, op: &Op) -> Result<String> {
     let mut tx = pool.begin().await?;
     let done = apply_in(&mut tx, op)

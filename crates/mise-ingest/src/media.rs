@@ -50,6 +50,7 @@ const MISSING_LOGGED: u64 = 20;
 pub struct MediaOptions {
     /// Archive root the referenced paths are relative to (the bundle's `media_root`). Needed to store.
     pub archive_root: Option<PathBuf>,
+    /// Where mise keeps its photos (`MEDIA_ROOT`, "./data/media"): originals by hash, and their web copies.
     pub media_root: PathBuf,
     /// Process at most this many new files (store) and media (derivatives); for trial runs.
     pub limit: Option<usize>,
@@ -57,15 +58,20 @@ pub struct MediaOptions {
     pub jobs: usize,
 }
 
+/// What the store and link passes did, for the command's summary.
 #[derive(Debug, Default)]
 pub struct StoreStats {
     /// Distinct archive paths referenced by variants and ingredient lines.
     pub referenced: u64,
     /// Paths stored by an earlier run, skipped without reading.
     pub already_stored: u64,
+    /// Files read this run, images or not.
     pub read: u64,
+    /// Total size of the image files read.
     pub bytes_read: u64,
+    /// Referenced files not in the archive; left to retry next run.
     pub missing: u64,
+    /// Files that failed to read or to place under `media_root` for another reason; left to retry next run.
     pub unreadable: u64,
     /// Read files whose content is not an image (e.g. a saved error page); not stored.
     pub not_image: u64,
@@ -73,24 +79,32 @@ pub struct StoreStats {
     pub new_media: u64,
     /// Read files whose content was already stored under another path.
     pub duplicates: u64,
+    /// Images placed by hard link, taking no extra space (the archive is on the same volume).
     pub hard_linked: u64,
+    /// Images placed by copy (the archive is on another volume).
     pub copied: u64,
     /// Content already on disk (stored earlier in this run under another path, or by an interrupted run).
     pub present: u64,
+    /// Hero images newly linked to their version.
     pub hero_links: u64,
+    /// Step images newly linked to their version, with or without their step.
     pub step_links: u64,
     /// Step images whose step could not be found; linked to the variant with no step.
     pub step_links_without_step: u64,
+    /// Foods given a picture: the image their ingredient lines use most.
     pub food_images: u64,
 }
 
+/// What the web-copy pass did, for the command's summary.
 #[derive(Debug, Default)]
 pub struct DerivativeStats {
     /// Media needing at least one web size when the pass started (after `--limit`).
     pub queued: u64,
+    /// Queued media given their missing web sizes this run.
     pub done: u64,
-    /// Resized copies encoded and written, and their total size.
+    /// Resized copies encoded and written.
     pub files_written: u64,
+    /// Total size of the copies written.
     pub bytes_written: u64,
     /// Sizes the original already fit, hard-linked to the original instead of re-encoded.
     pub files_linked: u64,

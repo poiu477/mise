@@ -10,10 +10,14 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use sqlx::{PgPool, Postgres, Transaction};
 
+/// What one prune deleted, for the command's summary.
 #[derive(Debug, Default)]
 pub struct PruneStats {
+    /// Imported versions deleted, with their lines, amounts and steps.
     pub variants: u64,
+    /// Source records left with no version, deleted too.
     pub source_records: u64,
+    /// Dishes the grouping job made that were left empty, deleted too.
     pub dishes: u64,
 }
 
