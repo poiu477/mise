@@ -237,7 +237,8 @@ docker image:
         --data "{\"username\":\"ci\",\"password\":\"$(head -c 18 /dev/urandom | base64)\"}" \
         "https://$MISE_HOST/api/auth/setup"
       grep -i '^set-cookie: mise_session=' headers.txt | sed 's/=[^;]*/=(value)/'
-      grep -qi '^set-cookie: mise_session=.*; *secure' headers.txt || { echo "The session cookie isn't Secure"; exit 1; }
+      grep -qi '^set-cookie: mise_session=.*; *secure' headers.txt \
+        || { echo "The session cookie isn't Secure"; exit 1; }
   after_script:
     - '[ "$CI_JOB_STATUS" = success ] || docker compose --profile https logs --no-color'
 

@@ -1,7 +1,8 @@
 # Running mise on a home server
 
 mise runs as one Docker Compose stack: Postgres, the app (API, web app and the `mise` admin command in one
-image), a nightly database backup and, for HTTPS, an optional Caddy. These steps use a Proxmox LXC; any Linux host with Docker works the same.
+image), a nightly database backup and, for HTTPS, an optional Caddy. These steps use a Proxmox LXC; any Linux host
+with Docker works the same.
 
 ## 1. The container
 
@@ -23,8 +24,8 @@ docker compose up -d --build
 ```
 
 Open `http://<container address>:8080`. The first visit creates the admin account (see [sign-in.md](sign-in.md)).
-Phones need HTTPS to keep the shopping list offline; section 7 sets it up.
-The app applies database migrations whenever it starts.
+The app applies database migrations whenever it starts. Phones need HTTPS to keep the shopping list offline; section
+7 sets it up.
 
 ## 3. Photos
 
@@ -107,7 +108,8 @@ origin. Kitchen mode's screen wake lock and an Alexa endpoint need HTTPS too. Th
 | [The stack's own Caddy](#the-stacks-own-caddy) | Nothing else does: the `https` profile adds a Caddy in front of mise |
 
 Either way, set `PUBLIC_BASE_URL` to the `https` address, which marks session cookies Secure, and check the result
-([below](#check-it)). Every page needs a signed-in account; only `/api/health` is open.
+([below](#check-it)). Every page needs a signed-in account; only `/api/health` is open. Make the first account before
+the address can be reached from the internet: until then, whoever opens it first becomes the admin.
 
 ### Behind an existing reverse proxy
 
