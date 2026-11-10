@@ -168,18 +168,26 @@ pub struct Dish {
     pub variants: Vec<VariantSummary>,
 }
 
-/// A dish with its options and versions.
+/// id, slug, title, subtitle, content type, default version.
+type DishRow = (Uuid, String, String, Option<String>, String, Option<Uuid>);
+
+/// A dish with its options and versions, by its slug or one it used to have (its `slug` is always the current one).
 #[utoipa::path(
-    get, path = "/api/dishes/{slug}", operation_id = "get_dish", tag = "dishes", params(("slug" = String, Path)),
+    get, path = "/api/dishes/{slug}", operation_id = "get_dish", tag = "dishes",
+    params(("slug" = String, Path, description = "The dish's slug, or one it had before it was renamed")),
     responses((status = 200, description = "The dish with its versions and options", body = Dish), (status = 404, description = "No such dish", body = crate::error::ErrorBody))
 )]
 pub async fn get(State(s): State<AppState>, Path(slug): Path<String>) -> ApiResult<Json<Dish>> {
-    let (id, slug, title, subtitle, content_type, default_variant): (Uuid, String, String, Option<String>, String, Option<Uuid>) =
-        sqlx::query_as("SELECT id, slug, title, subtitle, content_type::text, default_variant_id FROM dishes WHERE slug = $1")
-            .bind(&slug)
-            .fetch_optional(&s.pool)
-            .await?
-            .ok_or(ApiError::NotFound)?;
+    // A live slug wins over a retired one; grouping keeps the two apart, so this only guards a stray row.
+    let (id, slug, title, subtitle, content_type, default_variant): DishRow = sqlx::query_as(
+        "SELECT d.id, d.slug, d.title, d.subtitle, d.content_type::text, d.default_variant_id FROM dishes d
+         WHERE d.slug = $1 OR d.id = (SELECT r.dish_id FROM retired_slugs r WHERE r.slug = $1)
+         ORDER BY d.slug = $1 DESC LIMIT 1",
+    )
+    .bind(&slug)
+    .fetch_optional(&s.pool)
+    .await?
+    .ok_or(ApiError::NotFound)?;
     let options = sqlx::query_as::<_, (String, String, serde_json::Value, Option<String>)>(
         "SELECT key, label, choices, default_value FROM dish_options WHERE dish_id = $1 ORDER BY position",
     )

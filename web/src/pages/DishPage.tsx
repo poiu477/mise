@@ -1,6 +1,6 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { api, type Dish, type Variant } from "../api/client";
 import { answer, Refused } from "../api/query";
 import { available, choose, pick, selectionOf, type Selection } from "../choose";
@@ -20,10 +20,18 @@ export function DishPage() {
   const pinned = params.get("v");
   const servingsParam = Number(params.get("s")) || undefined;
 
+  const queryClient = useQueryClient();
   const dishQuery = useQuery({
     queryKey: ["dish", slug],
-    queryFn: ({ signal }) =>
-      answer(api.GET("/api/dishes/{slug}", { params: { path: { slug } }, signal })),
+    /** Loads the dish. An old address answers with the dish under its current slug, which is cached too, so
+     * moving to the current address below shows it at once. */
+    queryFn: async ({ signal }) => {
+      const dish = await answer(
+        api.GET("/api/dishes/{slug}", { params: { path: { slug } }, signal }),
+      );
+      if (dish.slug !== slug) queryClient.setQueryData(["dish", dish.slug], dish);
+      return dish;
+    },
   });
   const dish = dishQuery.data;
   const missing = dishQuery.error instanceof Refused && dishQuery.error.status === 404;
@@ -90,6 +98,12 @@ export function DishPage() {
       update(() => ({ s: String(chosenServings) }));
   }, [chosenServings]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The dish was renamed since this address was made: replace it with the current one, keeping ?v=, ?s= and the
+  // options, so bookmarks and old links still land here.
+  if (dish && dish.slug !== slug)
+    return (
+      <Navigate to={{ pathname: `/dishes/${dish.slug}`, search: params.toString() }} replace />
+    );
   if (missing) {
     return (
       <p className="empty">

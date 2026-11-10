@@ -8,10 +8,10 @@ both in the same merge request as the work.
 
 | Phase | State | What exists |
 | --- | --- | --- |
-| 1 Data core | Done; its gate (500 full-archive dishes checked by hand) was never recorded as passed, and the hand-trimmed launch seed took its place | Seed bundle format and importer; food matching, tree and curation files; dish grouping with drift splitting, protein twins and recorded decisions; options; content-addressed media with web-size copies; grouping gate report |
+| 1 Data core | Done; its gate (500 full-archive dishes checked by hand) was waived when the hand-trimmed launch seed took the full archive's place (see Decisions) | Seed bundle format and importer; food matching, tree and curation files; dish grouping with drift splitting, protein twins and recorded decisions; options; content-addressed media with web-size copies; grouping gate report |
 | 2 Browse and cook | Done (gate passed on 60 seed recipes, 2026-11-01) | REST API with OpenAPI; web app (PWA) with search, dish pages, option toggles, any serving count; step text rewritten for the chosen servings; local accounts, households, OIDC single sign-on, sessions, API tokens; Docker Compose stack with nightly backups |
 | 3 Plan and shop | Core done (gate passed in use, 2026-11-03) | Weekly household plan; shopping list worked out from it, exact totals by store section, household and per-food weight units, pantry staples, hand-added items, ticks, printing, works offline on a phone |
-| 4 Kitchen and imports | Not started | |
+| 4 Kitchen and imports | Not started; broken into tasks T22 to T33 in the backlog | |
 | 5 Optional extras | Not started | |
 
 The live data is the launch seed: 237 dishes and 308 versions from meals received between October 2023 and October
@@ -70,11 +70,9 @@ What a reviewer can rely on today:
 - 36 versions (269 lines) publish 3-serving amounts equal to their 4-serving ones; left as published.
 - Two review items stay open: green beans swapped for broccoli or carrots between versions; nothing records swaps yet.
 - Some step text from the source lost a space in a mixed number ("10-12 11⁄2-inch meatballs").
-- The pot pie dish's address still says "beef" (slugs are fixed at first import) until a fresh install.
+- The pot pie dish's address on the seed still says "beef": it was set before grouping renamed dishes' slugs (T21).
+  It clears once Paul re-runs grouping on the seed; the old address keeps working after that.
 - Scaled counts round up to halves (½ lime), not whole items; revisit if whole items read better in use.
-- A dish option's choices that as many versions offer (each of the Black Bean Tacos' two versions) come in no set
-  order: `derive-options` ranks them by count alone, so a re-run can swap them. The pipeline snapshot test settles
-  ties itself until T18 fixes it.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
   the list reloads a moment later.
@@ -82,9 +80,7 @@ What a reviewer can rely on today:
 ## Open questions
 
 - Scaled counts: round up to halves (½ lime, today) or to whole items?
-- HTTPS: which reverse proxy and hostname, so phones can open the list offline?
 - Alexa route: a private skill through the reverse proxy, or an AWS Lambda relay (not before Phase 5)?
-- API contract: move to `/api/v1` with one error shape now, or when something outside the web app first uses it?
 - Hosted demo: where does it run, and does it reset on a schedule?
 
 ## Decisions
@@ -102,11 +98,18 @@ What a reviewer can rely on today:
 | 2026-11-03 | mise is a portfolio project held to production standards; "only for one household" no longer justifies a shortcut |
 | 2026-11-04 | Work moves to self-contained tasks in `docs/backlog.md`, one task per branch and pull request, so agent sessions can run in parallel |
 | 2026-11-04 | The repository goes public with its history as it is; the private seed's details live in the ignored `CLAUDE.local.md` |
-| 2026-11-08 | The web app loads server data with TanStack Query; the shopping list's device copy and queue stay its own |
 | 2026-11-04 | One pinned Rust (1.99.1) for local builds, CI and Docker, raised deliberately; `rust-version` matches it. RUSTSEC-2023-0071 (rsa, Marvin attack) is accepted in `deny.toml`: rsa only verifies sign-in providers' public-key signatures |
+| 2026-11-08 | The web app loads server data with TanStack Query; the shopping list's device copy and queue stay its own |
 | 2026-11-08 | Doc comments are required on public Rust items and exported TypeScript, and lints enforce it (`jsdoc/require-jsdoc` for the web app, on since T13; `missing_docs`, on for `mise-core` since T14, for `mise-db` and `mise-ingest` since T15, and for `mise-api` in T16); they say what a thing means, not its types. CodeRabbit's docstring score is not the gate |
 | 2026-11-08 | `AGENTS.md` holds the working rules for every coding agent and person, and `CLAUDE.md` imports it; a draft merge request claims a backlog task. The private seed moves to its own private repository on the maintainer's GitLab, cloned into the ignored `seed/` |
 | 2026-11-08 | The maintainer's GitLab becomes the main repository, with merge requests and GitLab CI; GitHub is a read-only mirror of every branch, kept as a backup. GitLab CI can later reach the private seed, which GitHub never could |
 | 2026-11-08 | Mira reviews merge requests and CodeRabbit is dropped: Mira runs on the maintainer's own models, which can be more capable. Renovate, run from a scheduled GitLab pipeline, replaces Dependabot |
 | 2026-11-08 | Security scans come from GitLab's security configuration profiles (Advanced SAST, dependency scanning, secret detection) plus a Semgrep job for Rust, which Advanced SAST doesn't cover. A merge request approval policy holds new high or critical SAST findings for the maintainer's approval; authors may approve their own merge requests, since there's one maintainer |
 | 2026-11-10 | The import pipeline's output is snapshotted as plain text files that read like the dish page, reviewed with `git diff` and rewritten with `MISE_UPDATE_SNAPSHOTS=1`, rather than with `insta`: no header or extra tool, and a failing run prints a unified diff that names each change's dish, version and serving count |
+| 2026-11-10 | Phase 1's gate (500 full-archive dishes checked by hand) is waived, not passed: the hand-trimmed launch seed replaced the full archive before it ran. Its repeatable form (the seed rebuild gives the same dishes and groupings, with no open review items outside an allowlist) becomes part of `mise gate seed` |
+| 2026-11-10 | The API moves under `/api/v1` before anything outside the web app depends on it (T19), and before T7 and T16 rewrite its annotations. Errors keep one body, `{"error": message}`, plus a stable `code`. The OIDC sign-in redirects aren't API calls and keep their paths, so no provider needs reconfiguring |
+| 2026-11-10 | HTTPS two ways (T20): the maintainer's install sits behind his existing Caddy, and the Compose stack ships an optional Caddy of its own for installs without a proxy. HTTPS comes before new features: the offline list on a phone, kitchen mode's screen wake lock and an Alexa endpoint all need it |
+| 2026-11-10 | A dish's address follows its title, and old addresses keep working (T21), instead of slugs fixed at first import |
+| 2026-11-10 | GitHub keeps its copy of CI after a review suggested dropping it: it costs nothing to run, and it caught a race in a browser journey that GitLab's run had missed |
+| 2026-11-10 | Phase 4 is broken into Ready tasks (T22 to T33). Process work stops growing: no new workflow rules or CI unless a task needs them |
+| 2026-11-10 | A dish option lists the choices most versions offer first; on a tie, the dish's default, then the option's reading order (Regular before Double protein; Standard, v2, v3; proteins alphabetically, then No meat). Versions are numbered by how many versions share them, then by label, so a re-run of `derive-options` changes nothing |
