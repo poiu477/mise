@@ -10,12 +10,37 @@ Each task gives:
 - **Done when:** the check that proves it. Every check is automated; "looks right" is not a check.
 - **Needs:** tasks to finish first, or a decision or action only Paul, the maintainer, can take (**Paul**).
 
-Take tasks from **Ready** in roughly the order listed. A task with an open merge request (a draft counts) is taken.
+Take tasks from **Ready** in the order listed, among those whose "Needs" are met: the order puts first what most
+other tasks wait on (T19 holds up T7, T22, T23 and T32, and through them most of Phase 4). A task with an open merge
+request (a draft counts) is taken.
 The merge request that finishes a task deletes it here and adds a line under "Where things stand" or "Decisions" in
 status.md if it changed either.
 
 ## Ready
 
+### T19 · The API under `/api/v1`, with one error shape
+
+Cheapest now, while the web app is the API's only caller (see Decisions, 2026-11-10).
+
+- Serve every API route under `/api/v1` (`/api/v1/dishes`, `/api/v1/openapi.json` and so on), and point the web app,
+  its service worker (`web/public/sw.js`), the Dockerfile's health check, `check-openapi.mjs` and the docs at the new
+  paths.
+- The old `/api/...` paths keep answering for one release, so a phone still running the cached web app, or with
+  changes queued offline, keeps working; they answer exactly as before plus a `Deprecation` header. Write in
+  `docs/deploy.md` when they go (the release after the one that adds `/api/v1`). Leave `/api/health` as a permanent
+  alias: proxies and monitors use it.
+- The OIDC start and callback routes are browser redirects, not API calls: they keep their paths, so no sign-in
+  provider needs its redirect address changed.
+- Every error, including a refused extractor (bad JSON, a bad path or query) and the catch-all 404, answers with
+  `ErrorBody`: `error`, the message shown today, plus `code`, a stable snake_case name (`not_found`,
+  `bad_request`, `unauthorized`, `bad_credentials`, `forbidden`, `conflict`, `account_changed`,
+  `too_many_requests`, `internal`). The web app reads `code` where it now matches on status or message text.
+- **Touches:** `crates/mise-api/src/` (routes, `error.rs`, the paths in `#[utoipa::path]`), `web/src/`,
+  `web/public/sw.js`, `web/scripts/check-openapi.mjs`, `Dockerfile`, `docs/`.
+- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T6 and T9 edit it too).
+- **Done when:** the API tests call `/api/v1` paths; one test asserts each old path still answers the same as its new
+  one and carries `Deprecation`; one test checks that each kind of error, a refused extractor included, has both
+  `error` and `code`; the browser journeys pass, the offline one included.
 
 ### T6 · Security headers and a written security stance
 
@@ -27,6 +52,7 @@ status.md if it changed either.
   if one turns out unprotected, fix it (for example by requiring a custom header) rather than describe a protection
   that isn't there. Include login throttling.
 - **Touches:** the router setup in `crates/mise-api/src/lib.rs`, `SECURITY.md`, `docs/architecture.md`.
+- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T9 and T19 edit it too).
 - **Done when:** an API test checks each header on a page and an API response; an API test shows a cross-site
   style request (no JSON content type, no custom header) to sign-out and to a DELETE route is refused or harmless,
   as the written stance says; the browser journeys pass (they would catch a policy that breaks the app).
@@ -48,6 +74,7 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
 - An option for JSON logs, a request id on every log line (and in the response), a readiness check that the
   database answers (next to the existing health check), and basic metrics (request counts and durations by route).
 - **Touches:** `crates/mise-api/src/main.rs`, `lib.rs`, `docs/deploy.md`.
+- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T6 and T19 edit it too).
 - **Done when:** API tests cover the readiness check and the request id header; deploy.md says how to turn JSON logs
   on.
 
@@ -107,30 +134,6 @@ Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" 
 - **Done when:** the job passes, fails on a deliberately broken intra-doc link (try it, then revert), and the Pages
   URL serves `mise_core`'s documentation.
 
-### T19 · The API under `/api/v1`, with one error shape
-
-Cheapest now, while the web app is the API's only caller (see Decisions, 2026-11-10).
-
-- Serve every API route under `/api/v1` (`/api/v1/dishes`, `/api/v1/openapi.json` and so on), and point the web app,
-  its service worker (`web/public/sw.js`), the Dockerfile's health check, `check-openapi.mjs` and the docs at the new
-  paths.
-- The old `/api/...` paths keep answering for one release, so a phone still running the cached web app, or with
-  changes queued offline, keeps working; they answer exactly as before plus a `Deprecation` header. Write in
-  `docs/deploy.md` when they go (the release after the one that adds `/api/v1`). Leave `/api/health` as a permanent
-  alias: proxies and monitors use it.
-- The OIDC start and callback routes are browser redirects, not API calls: they keep their paths, so no sign-in
-  provider needs its redirect address changed.
-- Every error, including a refused extractor (bad JSON, a bad path or query) and the catch-all 404, answers with
-  `ErrorBody`: `error`, the message shown today, plus `code`, a stable snake_case name (`not_found`,
-  `bad_request`, `unauthorized`, `bad_credentials`, `forbidden`, `conflict`, `account_changed`,
-  `too_many_requests`, `internal`). The web app reads `code` where it now matches on status or message text.
-- **Touches:** `crates/mise-api/src/` (routes, `error.rs`, the paths in `#[utoipa::path]`), `web/src/`,
-  `web/public/sw.js`, `web/scripts/check-openapi.mjs`, `Dockerfile`, `docs/`.
-- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T6 edits the router too).
-- **Done when:** the API tests call `/api/v1` paths; one test asserts each old path still answers the same as its new
-  one and carries `Deprecation`; one test checks that each kind of error, a refused extractor included, has both
-  `error` and `code`; the browser journeys pass, the offline one included.
-
 ### T22 · Recipes that belong to a household
 
 Imports, the editor and forks all make recipes that belong to one household; today every recipe is visible to every
@@ -164,8 +167,8 @@ The Echo Show's browser can't sign in comfortably or send headers, so kitchen mo
 
 - A kitchen view of a planned dish for a 1280 × 800 screen: one step at a time in large type, the step's ingredients
   with amounts at the planned servings, swipe or tap to move, the screen kept awake (Screen Wake Lock API, which
-  needs HTTPS: deploy.md section 7). A time in the step ("bake 10 to 12 minutes") is a button that starts a timer, with an alarm in
-  the page; a range starts at its lower end and says when to check.
+  needs HTTPS: deploy.md section 7). A time in the step ("bake 10 to 12 minutes") is a button that starts a timer,
+  with an alarm in the page; a range starts at its lower end and says when to check.
 - Finding times in step text is pure logic: a function in `mise-core` with unit tests and doc examples.
 - **Touches:** `crates/mise-core/src/` (step times), `web/src/` (a new page and route), `web/e2e/`.
 - **Needs:** T23.
