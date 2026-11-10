@@ -1,0 +1,51 @@
+[
+  {
+    "description": null,
+    "external_id": "https://fixtures.example/microdata-howto-steps.html",
+    "hero_image": "https://flatbreadday.example/pics/chickpea-flatbread.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 cup chickpea flour"
+      },
+      {
+        "key": "2",
+        "name": "1 cup water"
+      },
+      {
+        "key": "3",
+        "name": "2 tbsp olive oil"
+      },
+      {
+        "key": "4",
+        "name": "1/2 tsp salt"
+      }
+    ],
+    "meta": {
+      "author": "Mina Haddad",
+      "images": [
+        "https://flatbreadday.example/pics/chickpea-flatbread.jpg"
+      ],
+      "yield_text": "Serves 2"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Whisk the flour, water, salt and half the oil. Rest for 30 minutes."
+      },
+      {
+        "images": [
+          "https://flatbreadday.example/pics/flatbread-step-2.jpg"
+        ],
+        "index": 2,
+        "text": "Heat the rest of the oil in a skillet, pour in the batter and bake at 450°F for 15 minutes."
+      }
+    ],
+    "title": "Chickpea Flatbread",
+    "url": "https://fixtures.example/microdata-howto-steps.html",
+    "yields": [
+      2.0
+    ]
+  }
+]

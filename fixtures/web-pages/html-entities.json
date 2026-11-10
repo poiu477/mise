@@ -1,0 +1,62 @@
+[
+  {
+    "description": "Creamy, cheesy & done in one pot – no oven needed.\n\nIt’s the one the kids ask for.",
+    "external_id": "https://weeknightbowl.example/stovetop-mac-and-cheese/",
+    "hero_image": "https://weeknightbowl.example/wp-content/uploads/mac-cheese.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "8 oz elbow macaroni"
+      },
+      {
+        "key": "2",
+        "name": "2 cups whole milk"
+      },
+      {
+        "key": "3",
+        "name": "2 cups grated sharp cheddar"
+      },
+      {
+        "key": "4",
+        "name": "½ tsp mustard powder"
+      },
+      {
+        "key": "5",
+        "name": "2 tbsp butter"
+      },
+      {
+        "key": "6",
+        "name": "salt & pepper"
+      }
+    ],
+    "meta": {
+      "images": [
+        "https://weeknightbowl.example/wp-content/uploads/mac-cheese.jpg"
+      ],
+      "total_time": "PT25M",
+      "yield_text": "4 people"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Simmer the macaroni in the milk with ½ cup water, stirring often, until tender – about 12 minutes."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Off the heat, stir in the butter, mustard and cheese until it’s smooth & glossy."
+      },
+      {
+        "images": [],
+        "index": 3,
+        "text": "Season with salt & pepper and serve with \"extra\" cheese on top."
+      }
+    ],
+    "title": "Stovetop Mac & Cheese",
+    "url": "https://weeknightbowl.example/stovetop-mac-and-cheese/",
+    "yields": [
+      4.0
+    ]
+  }
+]

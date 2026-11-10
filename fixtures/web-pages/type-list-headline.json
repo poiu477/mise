@@ -1,0 +1,64 @@
+[
+  {
+    "description": null,
+    "external_id": "https://dailyladle.example/2026/10/tomato-egg-drop-soup",
+    "hero_image": "https://dailyladle.example/media/egg-drop.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "2 tomatoes, chopped"
+      },
+      {
+        "key": "2",
+        "name": "3 cups chicken stock"
+      },
+      {
+        "key": "3",
+        "name": "2 eggs, beaten"
+      },
+      {
+        "key": "4",
+        "name": "1 scallion, sliced"
+      },
+      {
+        "key": "5",
+        "name": "1 tsp cornstarch"
+      }
+    ],
+    "meta": {
+      "author": "Lee Park",
+      "images": [
+        "https://dailyladle.example/media/egg-drop.jpg"
+      ],
+      "tags": [
+        "soup",
+        "eggs",
+        "quick"
+      ],
+      "total_time": "PT15M",
+      "yield_text": "Serves 2"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Simmer the tomatoes in the stock for 5 minutes."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Stir in the cornstarch mixed with a little water."
+      },
+      {
+        "images": [],
+        "index": 3,
+        "text": "Drizzle in the eggs while stirring slowly, then add the scallion."
+      }
+    ],
+    "title": "Tomato Egg Drop Soup",
+    "url": "https://dailyladle.example/2026/10/tomato-egg-drop-soup",
+    "yields": [
+      2.0
+    ]
+  }
+]

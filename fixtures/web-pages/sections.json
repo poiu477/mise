@@ -1,0 +1,65 @@
+[
+  {
+    "description": null,
+    "external_id": "https://saladdays.example/crunchy-cabbage-slaw/",
+    "hero_image": "https://saladdays.example/uploads/cabbage-slaw.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1/2 head green cabbage"
+      },
+      {
+        "key": "2",
+        "name": "2 carrots"
+      },
+      {
+        "key": "3",
+        "name": "1/4 cup roasted peanuts"
+      },
+      {
+        "key": "4",
+        "name": "3 tbsp rice vinegar"
+      },
+      {
+        "key": "5",
+        "name": "1 tbsp honey"
+      },
+      {
+        "key": "6",
+        "name": "2 tbsp neutral oil"
+      }
+    ],
+    "meta": {
+      "images": [
+        "https://saladdays.example/uploads/cabbage-slaw.jpg"
+      ],
+      "prep_time": "PT20M",
+      "yield_text": "6 servings"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "section": "For the dressing",
+        "text": "Whisk the vinegar, honey and oil with a pinch of salt."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "section": "For the slaw",
+        "text": "Shred the cabbage finely and grate the carrots."
+      },
+      {
+        "images": [],
+        "index": 3,
+        "section": "For the slaw",
+        "text": "Toss with the dressing and scatter over the peanuts."
+      }
+    ],
+    "title": "Crunchy Cabbage Slaw",
+    "url": "https://saladdays.example/crunchy-cabbage-slaw/",
+    "yields": [
+      6.0
+    ]
+  }
+]

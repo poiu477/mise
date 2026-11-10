@@ -1,0 +1,72 @@
+[
+  {
+    "description": "Soft pancakes made in the blender from rolled oats and a ripe banana.",
+    "external_id": "https://crumbandkettle.example/oat-banana-pancakes/",
+    "hero_image": "https://crumbandkettle.example/wp-content/uploads/2026/03/pancakes-500x500.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 1/2 cups rolled oats"
+      },
+      {
+        "key": "2",
+        "name": "1 ripe banana"
+      },
+      {
+        "key": "3",
+        "name": "1 cup milk"
+      },
+      {
+        "key": "4",
+        "name": "1 egg"
+      },
+      {
+        "key": "5",
+        "name": "1 tsp baking powder"
+      },
+      {
+        "key": "6",
+        "name": "pinch of salt"
+      }
+    ],
+    "meta": {
+      "author": "Robin Ash",
+      "categories": [
+        "Breakfast"
+      ],
+      "cook_time": "PT15M",
+      "cuisines": [
+        "American"
+      ],
+      "images": [
+        "https://crumbandkettle.example/wp-content/uploads/2026/03/pancakes-500x500.jpg",
+        "https://crumbandkettle.example/wp-content/uploads/2026/03/pancakes-500x375.jpg",
+        "https://crumbandkettle.example/wp-content/uploads/2026/03/pancakes-480x270.jpg"
+      ],
+      "prep_time": "PT5M",
+      "tags": [
+        "banana pancakes",
+        "oat pancakes"
+      ],
+      "total_time": "PT20M",
+      "yield_text": "4 servings"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Blend the oats, banana, milk, egg, baking powder and salt until smooth. Rest for 5 minutes."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Cook 1/4 cup of batter at a time in a buttered pan over medium heat, 2 minutes a side."
+      }
+    ],
+    "title": "Oat and Banana Pancakes",
+    "url": "https://crumbandkettle.example/oat-banana-pancakes/",
+    "yields": [
+      4.0
+    ]
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "description": null,
+    "external_id": "https://slowsunday.example/braised-leeks",
+    "hero_image": "https://slowsunday.example/leeks.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "4 leeks, halved lengthwise"
+      },
+      {
+        "key": "2",
+        "name": "1 cup vegetable stock"
+      },
+      {
+        "key": "3",
+        "name": "2 tbsp butter"
+      },
+      {
+        "key": "4",
+        "name": "2 sprigs thyme"
+      }
+    ],
+    "meta": {
+      "cook_time": "PT1H30M",
+      "images": [
+        "https://slowsunday.example/leeks.jpg"
+      ],
+      "prep_time": "PT15M",
+      "total_time": "PT1H45M"
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Brown the leeks cut side down in the butter."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Add the stock and thyme, cover and braise at 325°F for 1 1/2 hours."
+      }
+    ],
+    "title": "Braised Leeks",
+    "url": "https://slowsunday.example/braised-leeks",
+    "yields": [
+      4.0
+    ]
+  }
+]

@@ -1,0 +1,53 @@
+[
+  {
+    "description": null,
+    "external_id": "https://ricecooker.example/lemon-rice",
+    "hero_image": "https://ricecooker.example/photos/lemon-rice.jpg",
+    "ingredients": [
+      {
+        "key": "1",
+        "name": "1 cup basmati rice"
+      },
+      {
+        "key": "2",
+        "name": "1 3/4 cups water"
+      },
+      {
+        "key": "3",
+        "name": "1 lemon, zest and juice"
+      },
+      {
+        "key": "4",
+        "name": "1 tbsp butter"
+      }
+    ],
+    "meta": {
+      "cook_time": "PT20M",
+      "images": [
+        "https://ricecooker.example/photos/lemon-rice.jpg"
+      ]
+    },
+    "steps": [
+      {
+        "images": [],
+        "index": 1,
+        "text": "Rinse the rice until the water runs clear."
+      },
+      {
+        "images": [],
+        "index": 2,
+        "text": "Bring the rice, water and butter to a boil, cover and cook on low for 15 minutes."
+      },
+      {
+        "images": [],
+        "index": 3,
+        "text": "Rest 5 minutes, then fork in the lemon zest and juice."
+      }
+    ],
+    "title": "Lemon Rice",
+    "url": "https://ricecooker.example/lemon-rice",
+    "yields": [
+      3.0
+    ]
+  }
+]
