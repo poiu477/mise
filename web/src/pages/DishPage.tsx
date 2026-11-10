@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { api, type Dish, type Variant } from "../api/client";
 import { answer, Refused } from "../api/query";
-import { available, choose, pick, selectionOf, type Selection } from "../choose";
+import { available, cardParams, choose, pick, selectionOf, type Selection } from "../choose";
 import { AddToPlan } from "../components/AddToPlan";
 import { Servings } from "../components/Servings";
 import { StepText } from "../components/StepText";
@@ -194,7 +194,7 @@ export function DishPage() {
       <Servings value={servings} published={chosen.yields} onChange={setServings} />
       <AddToPlan variantId={chosen.id} servings={servings} />
       <p className="card-link">
-        <Link to={`/dishes/${dish.slug}/card?v=${chosen.id}&s=${servings}`}>
+        <Link to={`/dishes/${dish.slug}/card?${cardParams(dish, params, chosen.id, servings)}`}>
           Print a recipe card
         </Link>
       </p>

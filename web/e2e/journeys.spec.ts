@@ -119,6 +119,17 @@ test("a dish prints as a card with the amounts the dish page shows", async () =>
   await page.getByRole("link", { name: "Back to the dish" }).click();
   await expect(page.getByRole("link", { name: "Print a recipe card" })).toBeVisible();
 
+  // A version chosen with the options prints, and coming back finds the options as they were.
+  await page.goto("/dishes/black-bean-tacos");
+  const cheddar = page.getByRole("radio", { name: /Cheddar/ });
+  await cheddar.click();
+  await expect(amountOf("Cheddar Cheese")).toBeVisible();
+  await page.getByRole("link", { name: "Print a recipe card" }).click();
+  await expect(page).toHaveURL(/\/dishes\/black-bean-tacos\/card\?version=v2&s=2$/);
+  await expect(amountOf("Cheddar Cheese")).toBeVisible();
+  await page.getByRole("link", { name: "Back to the dish" }).click();
+  await expect(cheddar).toHaveAttribute("aria-checked", "true");
+
   // A card's old address moves to the current one too.
   await page.goto("/dishes/tomato-pasta/card?s=4");
   await expect(page).toHaveURL(/\/dishes\/weeknight-tomato-pasta\/card\?s=4$/);

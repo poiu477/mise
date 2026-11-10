@@ -77,3 +77,18 @@ export function versionFor(dish: Dish, params: URLSearchParams): VariantSummary 
 export function startingServings(v: VariantSummary): number {
   return (v.yields.includes(2) ? 2 : v.yields[0]) ?? 2;
 }
+
+/** A recipe card's address parameters for what a dish page shows: the page's own (options, a pinned ?v=), with
+ * ?s= set to its servings, and ?v= added only when those alone would open another version. Coming back from the
+ * card then finds the options as they were. */
+export function cardParams(
+  dish: Dish,
+  params: URLSearchParams,
+  version: string,
+  servings: number,
+): URLSearchParams {
+  const card = new URLSearchParams(params);
+  card.set("s", String(servings));
+  if (versionFor(dish, card)?.id !== version) card.set("v", version);
+  return card;
+}
