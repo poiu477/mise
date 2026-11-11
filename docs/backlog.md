@@ -124,15 +124,15 @@ Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" 
 ### T17 · Published Rust documentation
 
 The doc check runs in CI (`rust docs`, and on the mirror) and in `./check`, and the `pages` job on `main` puts the
-docs in its `public/` artifact, opening at `mise_core`. What's left is publishing them.
+docs in its `public/` artifact, opening at `mise_core`. GitLab Pages is on, at `pages.pauldrakehughes.com` (a sibling
+of the GitLab domain, not under it, as GitLab advises), behind Caddy's wildcard certificate; the project's Pages are
+public and its unique domain is off, so the site is `https://personal.pages.pauldrakehughes.com/mise/`, the address
+`README.md` links to. What's left is seeing the first publish.
 
-- Enable GitLab Pages on the server with the domain `pages.pauldrakehughes.com` (a sibling of the GitLab domain, not
-  under it, as GitLab advises), and on the project with Pages access "everyone" (it's "private" today). Turn off the
-  project's "Use unique domain" so the site keeps the address `README.md` links to,
-  `https://personal.pages.pauldrakehughes.com/mise/`.
-- **Touches:** GitLab's settings, `README.md`.
-- **Needs:** **Paul**.
-- **Done when:** after a pipeline on `main`, the README's link serves `mise_core`'s documentation.
+- **Touches:** this entry.
+- **Needs:** the `pages` job's first run on `main`.
+- **Done when:** after a pipeline on `main`, the README's link serves `mise_core`'s documentation; then delete this
+  entry.
 
 ### T22 · Recipes that belong to a household
 

@@ -64,7 +64,7 @@ What a reviewer can rely on today:
 - **Rust docs:** every public item in `mise-core`, `mise-db` and `mise-ingest` has a doc comment; `missing_docs` is on
   in each, and clippy's `-D warnings` fails a missing one. `mise-api` follows in T16. `cargo doc` runs with warnings
   as errors in CI (`rust docs`, and on the mirror) and in `./check`, so a broken intra-doc link fails; on `main` the
-  `pages` job publishes the docs to GitLab Pages, which waits on Pages being enabled on the server (T17).
+  `pages` job publishes the docs to GitLab Pages, at <https://personal.pages.pauldrakehughes.com/mise/>.
 - **Web app:** pages load server data through TanStack Query; ESLint's React hooks rules run as errors, including
   `set-state-in-effect`, and `jsdoc/require-jsdoc` fails any export in `web/src` without a doc comment.
 - **Decisions:** architecture decision records in [`docs/adr/`](adr/README.md), each with the alternatives weighed.
