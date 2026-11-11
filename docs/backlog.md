@@ -77,19 +77,6 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
 - **Done when:** clippy passes workspace-wide with the lint in `Cargo.toml`; a missing doc comment in any crate fails
   it.
 
-### T17 · Published Rust documentation
-
-The doc check runs in CI (`rust docs`, and on the mirror) and in `./check`, and the `pages` job on `main` puts the
-docs in its `public/` artifact, opening at `mise_core`. GitLab Pages is on, at `pages.pauldrakehughes.com` (a sibling
-of the GitLab domain, not under it, as GitLab advises), behind Caddy's wildcard certificate; the project's Pages are
-public and its unique domain is off, so the site is `https://personal.pages.pauldrakehughes.com/mise/`, the address
-`README.md` links to. What's left is seeing the first publish.
-
-- **Touches:** this entry.
-- **Needs:** the `pages` job's first run on `main`.
-- **Done when:** after a pipeline on `main`, the README's link serves `mise_core`'s documentation; then delete this
-  entry.
-
 ### T22 · Recipes that belong to a household
 
 Imports, the editor and forks all make recipes that belong to one household; today every recipe is visible to every
