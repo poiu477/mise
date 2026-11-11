@@ -33,7 +33,9 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
   amount at each published yield. `shipped = false` marks pantry lines (salt, oil) the household is expected to have.
 - **Foods.** A single-parent tree (`foods.parent_id`) with `food_aliases`, `food_relations` and `food_facts`. Free-form
   properties live in `foods.props`: `count_unit` and `count_size` (how "1 unit" reads), `store_section`,
-  `default_flexibility`.
+  `default_flexibility`, `shop_as_one` (its kinds share a shopping line). `food_measures` hold what a food's amounts
+  convert by on the shopping list: a `density` (a volume and its weight) or an `item` size (the volume or weight of
+  one clove, one onion), set by curation; kinds of a food use the food's own when they have none.
 - **Steps.** `steps` hold the published text and, after `mise parse-steps`, a template (JSON) that can be rendered at
   any serving count.
 - **Media.** Content-addressed `media` (by hash) with `media_derivatives` (web sizes) and links to variants, steps
@@ -41,7 +43,8 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
 - **Review.** `review_items` queue doubtful merges, unmatched names and conflicting evidence for a person.
 - **Accounts.** `households` (the sharing boundary), `users`, `user_identities` (OIDC), `sessions`, `api_tokens`.
 - **Planning.** `plan_entries` (a version and serving count in a household's week, named by its Monday);
-  `shopping_marks` (ticked or removed items), `shopping_extras` (added by hand), `pantry_staples` (always on hand),
+  `shopping_marks` (ticked or removed, per food: the key is the food's id, or the name of an unmatched line),
+  `shopping_extras` (added by hand), `pantry_staples` (always on hand),
   `food_weight_units` (a food read in other units than the household's `weight_unit`).
 
 ## Getting data in
@@ -74,8 +77,10 @@ whose versions all joined another. A live dish's slug always wins over a retired
 - `step_amounts.rs`: step text parsed into parts (text, amounts linked to ingredient lines, worded alternatives,
   notes for larger yields) and rendered for a serving count, flagging amounts to check. Pan-sauce water keeps a
   fixed boil-off share once per pan. The rules and their evidence are in [scaling-rules.md](scaling-rules.md).
-- `shopping.rs`: `total()` adds a food's needs exactly, weights in a `WeightUnit` (lb + oz, oz, lb, metric), counted
-  items folded into a measure where their size is known; `SECTIONS` is the walking order of a shop.
+- `shopping.rs`: `Measures::total()` adds a line's needs exactly, weights in a `WeightUnit` (lb + oz, oz, lb, metric),
+  converting across units only where the food's density or item sizes say how; `gather()` puts kinds of a food on
+  its line; `foods_to_mark()` and `all_marked()` turn ticks on lines into ticks on foods and back; `SECTIONS` is the
+  walking order of a shop.
 
 ## The API (`mise-api`)
 
@@ -89,9 +94,13 @@ another household, and the app re-checks who is signed in. Handlers return `ApiR
 input reads as a 400 with a plain message. Endpoints that change a plan or a list answer with the whole plan or list,
 so the client never has to merge.
 
-The shopping list is never stored: `shopping::build` works it out from the week's plan on each request (lines grouped
-by food, the food's store section from itself or its nearest ancestor, pantry lines under "Check you have") and lays
-the stored marks, extras, staples and unit choices on top.
+The shopping list is never stored: `shopping::build` works it out from the week's plan on each request and lays the
+stored marks, extras, staples and unit choices on top. Lines are grouped by food, and kinds of a food join its line
+while a recipe in the week asks for the food itself (or the food is `shop_as_one`), never through a category; the
+line is named for the one kind when the rest is the parent it covers. A food's section, count words and measures are
+its own or its nearest ancestor's; pantry lines go under "Check you have". Marks are kept per food, so a line that
+merges or splits keeps its ticks: a merged line is ticked when every food on it is, and a tick sent for a line marks
+every food on the lines that now cover it.
 
 ## The web app (`web/`)
 

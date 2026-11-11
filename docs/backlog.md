@@ -89,24 +89,6 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
   image to the registry and creates the release; the test release and image are deleted afterwards. Syntax checks
   alone don't prove the release path.
 
-### T11 · Merge shopping lines across related foods and units
-
-Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" of garlic stays joined.
-
-- Add lines up at the parent food when the plan uses several kinds of one food, and across units when the food has
-  the data to convert: a density for weight and volume, and a size per item (weight or volume of one clove, one
-  onion) for counts. A count with no size per item stays its own line; density alone never turns "2 cloves" into
-  tablespoons. Densities and item sizes go in a new table, through a new migration.
-- Ticks belong to lines, so define and test what happens to them: a merged line is ticked when every line it
-  replaced was ticked (a mix shows as not ticked); ticking it ticks them all; ticks queued offline for a line that
-  has since merged or split apply to whatever lines now cover that food; a plan change that splits a merged line
-  again keeps each part's tick.
-- **Touches:** `crates/mise-core/src/shopping.rs`, `crates/mise-api/src/shopping.rs`, a new migration, the demo
-  bundle (add a case that exercises it).
-- **Done when:** unit tests cover both merges, the count that can't convert, and each tick rule above; a browser
-  journey shows one onion line for the demo week and keeps its tick across a reload.
-
-
 ### T16 · Rust doc comments: `mise-api`, then the lint for the whole workspace
 
 - As `mise-core`, `mise-db` and `mise-ingest` already do, for `crates/mise-api` (213 items). In this crate `///` on a

@@ -24,7 +24,8 @@ are scaled from the nearest one, and marked "≈". A derived amount is rounded *
 measures: one cup, spoon or pinch measure where that is at most 5% over, else the fewest that come closest ("1 tsp +
 1 pinch", "¼ cup + 1 TBSP"). Weights go up to the next ½ oz (¼ below one) and counts to the next half (quarter below
 one). Derived servings are capped at 24. The shopping list adds up exact amounts instead, with weights in the
-household's chosen units (pounds and ounces, ounces, pounds, or metric, per food if wanted).
+household's chosen units (pounds and ounces, ounces, pounds, or metric, per food if wanted). It converts between
+volume, weight and counts only to add a line up, and only by a food's recorded density or size per item.
 
 ## Exceptions the sources name
 
