@@ -271,6 +271,59 @@ async fn kinds_of_a_food_share_a_line_only_while_a_recipe_asks_for_the_food() {
 }
 
 #[tokio::test]
+async fn kinds_share_a_line_when_curation_buys_the_food_as_one() {
+    let app = test_app!(Kitchen::new());
+    let pepper = app
+        .food(
+            "Pepper",
+            json!({"count_unit": "pepper", "store_section": "Produce"}),
+        )
+        .await;
+    let bell = app.food("Bell Pepper", json!({})).await;
+    let poblano = app.food("Poblano Pepper", json!({})).await;
+    app.kind_of(bell, pepper).await;
+    app.kind_of(poblano, pepper).await;
+    let fajitas = app.recipe("Fajitas", &[(bell, 1.0, "unit", true)]).await;
+    let rajas = app.recipe("Rajas", &[(poblano, 2.0, "unit", true)]).await;
+    app.plan(fajitas).await;
+    app.plan(rajas).await;
+    // As a curation file sets it (`mise food apply`).
+    let pool = app.pool.clone();
+    let buy_as_one = |value: bool| {
+        let pool = pool.clone();
+        async move {
+            let op = mise_ingest::curate::Op::Set {
+                food: "Pepper".into(),
+                key: "shop_as_one".into(),
+                value: json!(value),
+            };
+            mise_ingest::curate::apply(&pool, &op).await
+        }
+    };
+
+    // No recipe asks for any pepper, so each kind keeps its own line.
+    let list = app.list().await;
+    assert_eq!(names(&list), ["Bell Pepper", "Poblano Pepper"]);
+
+    // Bought as one: one line named for the pepper, the amounts added up.
+    buy_as_one(true).await.unwrap();
+    let list = app.list().await;
+    assert_eq!(names(&list), ["Pepper"]);
+    let peppers = item(&list, "Pepper").unwrap();
+    assert_eq!(peppers["key"], pepper.to_string());
+    assert_eq!(peppers["amount"], "3 peppers");
+    assert_eq!(peppers["recipes"], json!(["Fajitas", "Rajas"]));
+
+    // A tick on it covers both kinds, as their own lines show once the pepper is no longer bought as one.
+    assert!(ticked(&app.tick(&pepper.to_string(), true).await, "Pepper"));
+    buy_as_one(false).await.unwrap();
+    let list = app.list().await;
+    assert_eq!(names(&list), ["Bell Pepper", "Poblano Pepper"]);
+    assert!(ticked(&list, "Bell Pepper"));
+    assert!(ticked(&list, "Poblano Pepper"));
+}
+
+#[tokio::test]
 async fn a_tick_sent_for_a_line_that_has_merged_or_split_lands_on_the_lines_covering_it() {
     let app = test_app!(Kitchen::new());
     let onion = app.food("Onion", json!({"count_unit": "onion"})).await;
