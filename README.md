@@ -57,7 +57,7 @@ docker compose -f compose.dev.yaml run --rm rust cargo test
 ```
 
 The Rust crates' documentation, built from `main`, is on GitLab Pages at
-<https://personal.pages.pauldrakehughes.com/mise/>. To build it locally: `cargo doc --workspace --no-deps --open`.
+<https://personal.pages.gitlab.pauldrakehughes.com/mise/>. To build it locally: `cargo doc --workspace --no-deps --open`.
 
 ## Layout
 

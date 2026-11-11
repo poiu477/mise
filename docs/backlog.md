@@ -126,9 +126,10 @@ Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" 
 The doc check runs in CI (`rust docs`, and on the mirror) and in `./check`, and the `pages` job on `main` puts the
 docs in its `public/` artifact, opening at `mise_core`. What's left is publishing them.
 
-- Enable GitLab Pages on the server, with its domain, and on the project (its Pages access is "private" today, so
-  only project members could read them; "everyone" makes them public). Then fix the Pages address in `README.md` if
-  it isn't `https://personal.pages.pauldrakehughes.com/mise/`.
+- Enable GitLab Pages on the server with the domain `pages.gitlab.pauldrakehughes.com`, and on the project (its
+  Pages access is "private" today, so only project members could read them; "everyone" makes them public). Turn off
+  the project's "Use unique domain" so the site keeps the address `README.md` links to,
+  `https://personal.pages.gitlab.pauldrakehughes.com/mise/`.
 - **Touches:** GitLab's settings, `README.md`.
 - **Needs:** **Paul**.
 - **Done when:** after a pipeline on `main`, the README's link serves `mise_core`'s documentation.
