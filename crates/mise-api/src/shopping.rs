@@ -1,6 +1,6 @@
 //! The shopping list: worked out from the week's plan each time, with what people ticked, removed and added on top.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use axum::{Extension, Json, extract::State};
 use chrono::NaiveDate;
@@ -304,8 +304,7 @@ async fn plan_lines(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult
             .fetch_all(&s.pool)
             .await?;
 
-    // Every food the plan uses, in the plan's order, with what it needs; staples are left off before lines are
-    // gathered, so a food always on hand never pulls its kinds onto a line of its own.
+    // Every food the plan uses, in the plan's order, with what it needs.
     struct Use {
         pantry: bool,
         needs: Vec<Quantity>,
@@ -349,22 +348,32 @@ async fn plan_lines(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult
         }
     }
 
+    // A line whose food the household always has is left off whole, kinds and all: "Always have" on the onion line
+    // sends the onion. A kind that is a staple itself leaves only its own part off. The rest is gathered again
+    // without them.
+    let matched: Vec<Uuid> = order
+        .iter()
+        .filter_map(|k| Uuid::parse_str(k).ok())
+        .filter(|f| foods.contains_key(f))
+        .collect();
     let mut staples = Vec::new();
-    let mut matched: Vec<Uuid> = Vec::new();
-    for key in &order {
-        let Ok(id) = Uuid::parse_str(key) else {
-            continue;
-        };
-        if !foods.contains_key(&id) {
-            continue;
-        }
-        if staple_ids.contains(&id) {
-            staples.push((id, foods[&id].name.clone()));
-        } else {
-            matched.push(id);
+    let mut left_off: HashSet<Uuid> = HashSet::new();
+    for g in shopping::gather(&matched, &tree) {
+        if staple_ids.contains(&g.line) {
+            staples.push((g.line, foods[&g.line].name.clone()));
+            left_off.extend(g.foods);
         }
     }
-    let gathered: HashMap<Uuid, shopping::Gathered> = shopping::gather(&matched, &tree)
+    for f in &matched {
+        if staple_ids.contains(f) && left_off.insert(*f) {
+            staples.push((*f, foods[f].name.clone()));
+        }
+    }
+    let bought: Vec<Uuid> = matched
+        .into_iter()
+        .filter(|f| !left_off.contains(f))
+        .collect();
+    let gathered: HashMap<Uuid, shopping::Gathered> = shopping::gather(&bought, &tree)
         .into_iter()
         .map(|g| (g.foods[0], g))
         .collect();
@@ -392,10 +401,6 @@ async fn plan_lines(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult
         let Some(g) = gathered.get(&food) else {
             continue;
         };
-        if staple_ids.contains(&g.line) {
-            staples.push((g.line, foods[&g.line].name.clone()));
-            continue;
-        }
         let mut line = Line {
             key: g.line.to_string(),
             food_id: Some(g.line),

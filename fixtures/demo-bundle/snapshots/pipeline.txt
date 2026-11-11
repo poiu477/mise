@@ -78,6 +78,7 @@ steps: 18
 foods: 26
 food_aliases: 26
 food_relations: 0
+food_measures: 3
 dishes: 4
 dish_options: 1
 variant_attributes: 15
@@ -97,14 +98,14 @@ none
 - Chicken Stock Concentrate {"count_size":"2 tsp","count_unit":"packet","store_section":"Sauces & Condiments"}
 - Crushed Tomatoes {"store_section":"Canned & Jarred"}
 - Flour Tortillas {"count_unit":"tortilla","store_section":"Bakery"}
-- Garlic {"store_section":"Produce"}
+- Garlic {"store_section":"Produce"} [one clove, 4.9 ml]
 - Jasmine Rice {"store_section":"Pasta & Grains"}
 - Lemon {"count_unit":"lemon","store_section":"Produce"}
 - Lime {"count_unit":"lime","store_section":"Produce"}
 - Monterey Jack Cheese {"store_section":"Dairy & Eggs"}
 - Olive Oil
-- Onion {"count_unit":"onion","store_section":"Produce"}
-- Parmesan {"store_section":"Dairy & Eggs"}
+- Onion {"count_unit":"onion","store_section":"Produce"} [one onion, 236.6 ml]
+- Parmesan {"store_section":"Dairy & Eggs"} [236.6 ml weighs 85.0 g]
 - Parsley {"store_section":"Produce"}
 - Red Pepper Flakes {"store_section":"Spices & Seasonings"}
 - Salt

@@ -40,7 +40,7 @@ const UPDATE: &str = "MISE_UPDATE_SNAPSHOTS";
 const SERVINGS: std::ops::RangeInclusive<u32> = 1..=6;
 
 /// The tables the pipeline fills, counted in `pipeline.txt`.
-const TABLES: [&str; 14] = [
+const TABLES: [&str; 15] = [
     "sources",
     "source_records",
     "variants",
@@ -51,6 +51,7 @@ const TABLES: [&str; 14] = [
     "foods",
     "food_aliases",
     "food_relations",
+    "food_measures",
     "dishes",
     "dish_options",
     "variant_attributes",
@@ -209,16 +210,23 @@ async fn review_items(pool: &PgPool) -> String {
     out
 }
 
-/// Every food by name, with its parent and properties, which matching and curation set.
+/// Every food by name, with its parent, properties and measures, which matching and curation set.
 async fn food_tree(pool: &PgPool) -> String {
-    let rows: Vec<(String, Option<String>, serde_json::Value)> = sqlx::query_as(
-        "SELECT f.name, p.name, f.props FROM foods f LEFT JOIN foods p ON p.id = f.parent_id ORDER BY f.name",
+    let rows: Vec<(String, Option<String>, serde_json::Value, Option<String>)> = sqlx::query_as(
+        "SELECT f.name, p.name, f.props,
+                (SELECT string_agg(CASE m.kind WHEN 'density' THEN format('%s ml weighs %s g', round(m.ml, 1), round(m.grams, 1))
+                                    ELSE concat_ws(', ', format('one %s', m.item),
+                                                   CASE WHEN m.ml IS NOT NULL THEN format('%s ml', round(m.ml, 1)) END,
+                                                   CASE WHEN m.grams IS NOT NULL THEN format('%s g', round(m.grams, 1)) END) END,
+                                   '; ' ORDER BY m.kind, m.item)
+                 FROM food_measures m WHERE m.food_id = f.id)
+         FROM foods f LEFT JOIN foods p ON p.id = f.parent_id ORDER BY f.name",
     )
     .fetch_all(pool)
     .await
     .unwrap();
     let mut out = String::from("\n## Foods\n\n");
-    for (name, parent, props) in rows {
+    for (name, parent, props, measures) in rows {
         out.push_str("- ");
         out.push_str(&name);
         if let Some(parent) = parent {
@@ -227,6 +235,9 @@ async fn food_tree(pool: &PgPool) -> String {
         // jsonb comes back with its keys sorted, so this is stable.
         if props.as_object().is_some_and(|p| !p.is_empty()) {
             write!(out, " {}", redact_ids(&props.to_string())).unwrap();
+        }
+        if let Some(measures) = measures {
+            write!(out, " [{measures}]").unwrap();
         }
         out.push('\n');
     }
