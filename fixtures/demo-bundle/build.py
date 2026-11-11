@@ -78,6 +78,8 @@ chicken = recipe(
     "PT30M",
 )
 
+# The tacos ask for any onion, chopped, by the cup, where the pasta asks for a yellow onion by count: on a week's
+# list the two share one line, "1½ onions", through the food tree and the size of one onion (curation.json).
 tacos_v1 = recipe(
     "demo-bean-tacos-1", "Black Bean Tacos", "with Lime Crema",
     "Smoky beans, crisp onion and a tangy lime crema, ready in twenty minutes.",
@@ -85,7 +87,7 @@ tacos_v1 = recipe(
     [
         ("tortillas", "Flour Tortillas", True, {2: (6, "unit"), 4: (12, "unit")}),
         ("beans", "Black Beans", True, {2: (1, "can"), 4: (2, "can")}),
-        ("onion", "Yellow Onion", True, {2: (0.5, "unit"), 4: (1, "unit")}),
+        ("onion", "Onion", True, {2: (0.5, "cup"), 4: (1, "cup")}),
         ("cheese", "Cheddar Cheese", True, {2: (0.5, "cup"), 4: (1, "cup")}),
         ("lime", "Lime", True, {2: (1, "unit"), 4: (1, "unit")}),
         ("crema", "Sour Cream", True, {2: (2, "tablespoon"), 4: (4, "tablespoon")}),
@@ -108,7 +110,7 @@ tacos_v2 = recipe(
     [
         ("tortillas", "Flour Tortillas", True, {2: (6, "unit"), 4: (12, "unit")}),
         ("beans", "Black Beans", True, {2: (1, "can"), 4: (2, "can")}),
-        ("onion", "Yellow Onion", True, {2: (0.5, "unit"), 4: (1, "unit")}),
+        ("onion", "Onion", True, {2: (0.5, "cup"), 4: (1, "cup")}),
         ("cheese", "Monterey Jack Cheese", True, {2: (0.5, "cup"), 4: (1, "cup")}),
         ("lime", "Lime", True, {2: (1, "unit"), 4: (2, "unit")}),
         ("crema", "Sour Cream", True, {2: (2, "tablespoon"), 4: (4, "tablespoon")}),

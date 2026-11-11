@@ -1,11 +1,14 @@
 //! Hand edits to the food model: add foods and brands, set parents, add aliases, merge duplicates, set
-//! properties. Every food an edit touches becomes `origin = 'user'`, so re-running matching keeps it.
+//! properties, and record what a food's amounts convert by (its density, the size of one item). Every food an edit
+//! touches becomes `origin = 'user'`, so re-running matching keeps it.
 //!
 //! The same operations run one at a time from the CLI or as a list from a JSON file, so curation can be
 //! replayed after rebuilding a database.
 
 use anyhow::{Context, Result, bail};
 use mise_core::food_names::singular_key;
+use mise_core::quantity::{Family, Quantity, Unit};
+use mise_core::shopping;
 use mise_core::text::slugify;
 use serde::Deserialize;
 use serde_json::Value;
@@ -73,6 +76,27 @@ pub enum Op {
         key: String,
         /// Its new value, any JSON: "Dairy".
         value: Value,
+    },
+    /// What a volume of the food weighs, so the shopping list can add cups and ounces of it up as one weight:
+    /// `{"op": "density", "food": "Parmesan", "volume": "1 cup", "weight": "3 oz"}`. Replaces any set before.
+    Density {
+        /// The food: "Parmesan".
+        food: String,
+        /// A volume of it: "1 cup".
+        volume: String,
+        /// What that volume weighs: "3 oz".
+        weight: String,
+    },
+    /// How much one item of the food is, so the shopping list can add counts and measures of it up:
+    /// `{"op": "item_size", "food": "Garlic", "item": "clove", "size": "1 tsp"}`. A volume and a weight can both be
+    /// given, in two ops; each replaces only its own kind.
+    ItemSize {
+        /// The food: "Garlic".
+        food: String,
+        /// The word recipes count it in: "clove" (plurals are folded).
+        item: String,
+        /// One item's volume or weight: "1 tsp", "8 oz".
+        size: String,
     },
 }
 
@@ -201,6 +225,9 @@ async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<String>
                 "UPDATE foods SET parent_id = (SELECT parent_id FROM foods WHERE id = $1) WHERE id = $2 AND parent_id = $1",
                 "UPDATE foods SET parent_id = $2 WHERE parent_id = $1 AND id <> $2",
                 "UPDATE food_facts SET food_id = $2 WHERE food_id = $1",
+                // `into`'s own measures win; `from`'s fill in what it lacks and the rest go with it.
+                "UPDATE food_measures m SET food_id = $2 WHERE m.food_id = $1
+                   AND NOT EXISTS (SELECT 1 FROM food_measures o WHERE o.food_id = $2 AND o.kind = m.kind AND o.item = m.item)",
                 "INSERT INTO food_aliases (food_id, alias, origin) SELECT $2, alias, 'user' FROM food_aliases WHERE food_id = $1 ON CONFLICT DO NOTHING",
                 "UPDATE food_relations SET from_food = $2 WHERE from_food = $1 AND to_food <> $2",
                 "UPDATE food_relations SET to_food = $2 WHERE to_food = $1 AND from_food <> $2",
@@ -246,7 +273,81 @@ async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<String>
             adopt(tx, id).await?;
             Ok(format!("{food}: {key} = {value}"))
         }
+        Op::Density {
+            food,
+            volume,
+            weight,
+        } => {
+            let id = find(tx, food).await?;
+            let ml = parse_size(volume, Family::Volume)?
+                .in_unit(&Unit::Ml)
+                .unwrap_or_default();
+            let grams = parse_size(weight, Family::Weight)?
+                .in_unit(&Unit::G)
+                .unwrap_or_default();
+            sqlx::query(
+                "INSERT INTO food_measures (id, food_id, kind, item, ml, grams) VALUES ($1, $2, 'density', '', $3::float8::numeric, $4::float8::numeric)
+                 ON CONFLICT (food_id, kind, item) DO UPDATE SET ml = excluded.ml, grams = excluded.grams",
+            )
+            .bind(Uuid::now_v7())
+            .bind(id)
+            .bind(ml)
+            .bind(grams)
+            .execute(&mut **tx)
+            .await?;
+            adopt(tx, id).await?;
+            Ok(format!("{food}: {volume} weighs {weight}"))
+        }
+        Op::ItemSize { food, item, size } => {
+            let id = find(tx, food).await?;
+            let word = item_word(item)?;
+            let q = shopping::parse_size(size).with_context(|| {
+                format!("'{size}' isn't a volume or a weight, such as \"1 tsp\" or \"8 oz\"")
+            })?;
+            let (ml, grams) = match q.unit.family() {
+                Family::Volume => (q.in_unit(&Unit::Ml), None),
+                _ => (None, q.in_unit(&Unit::G)),
+            };
+            sqlx::query(
+                "INSERT INTO food_measures (id, food_id, kind, item, ml, grams) VALUES ($1, $2, 'item', $3, $4::float8::numeric, $5::float8::numeric)
+                 ON CONFLICT (food_id, kind, item)
+                 DO UPDATE SET ml = coalesce(excluded.ml, food_measures.ml), grams = coalesce(excluded.grams, food_measures.grams)",
+            )
+            .bind(Uuid::now_v7())
+            .bind(id)
+            .bind(&word)
+            .bind(ml)
+            .bind(grams)
+            .execute(&mut **tx)
+            .await?;
+            adopt(tx, id).await?;
+            Ok(format!("{food}: one {word} is {size}"))
+        }
     }
+}
+
+/// A size of the kind asked for, or an error that says what was expected.
+fn parse_size(text: &str, family: Family) -> Result<Quantity> {
+    let word = if family == Family::Volume {
+        "volume, such as \"1 cup\""
+    } else {
+        "weight, such as \"3 oz\""
+    };
+    shopping::parse_size(text)
+        .filter(|q| q.unit.family() == family)
+        .with_context(|| format!("'{text}' isn't a {word}"))
+}
+
+/// The singular word an item is counted in: "Cloves" is "clove".
+fn item_word(item: &str) -> Result<String> {
+    let w = item.trim().to_lowercase();
+    if w.is_empty() || w.chars().count() > 50 {
+        bail!("an item is a word of 1 to 50 characters, such as \"clove\"");
+    }
+    Ok(match Unit::parse(&w) {
+        Some(Unit::Count(noun)) if !noun.is_empty() => noun,
+        _ => singular_key(&w),
+    })
 }
 
 /// A food by name, alias or slug.

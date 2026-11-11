@@ -172,5 +172,35 @@
     "food": "Chicken Stock Concentrate",
     "key": "count_size",
     "value": "2 tsp"
+  },
+  {
+    "op": "set",
+    "food": "Onion",
+    "key": "store_section",
+    "value": "Produce"
+  },
+  {
+    "op": "set",
+    "food": "Onion",
+    "key": "count_unit",
+    "value": "onion"
+  },
+  {
+    "op": "item_size",
+    "food": "Onion",
+    "item": "onion",
+    "size": "1 cup"
+  },
+  {
+    "op": "item_size",
+    "food": "Garlic",
+    "item": "clove",
+    "size": "1 tsp"
+  },
+  {
+    "op": "density",
+    "food": "Parmesan",
+    "volume": "1 cup",
+    "weight": "3 oz"
   }
 ]
