@@ -11,36 +11,11 @@ Each task gives:
 - **Needs:** tasks to finish first, or a decision or action only Paul, the maintainer, can take (**Paul**).
 
 Take tasks from **Ready** in the order listed, among those whose "Needs" are met: the order puts first what most
-other tasks wait on (T19 holds up T7, T22, T23 and T32, and through them most of Phase 4). A task with an open merge
-request (a draft counts) is taken.
+other tasks wait on. A task with an open merge request (a draft counts) is taken.
 The merge request that finishes a task deletes it here and adds a line under "Where things stand" or "Decisions" in
 status.md if it changed either.
 
 ## Ready
-
-### T19 · The API under `/api/v1`, with one error shape
-
-Cheapest now, while the web app is the API's only caller (see Decisions, 2026-11-10).
-
-- Serve every API route under `/api/v1` (`/api/v1/dishes`, `/api/v1/openapi.json` and so on), and point the web app,
-  its service worker (`web/public/sw.js`), the Dockerfile's health check, `check-openapi.mjs` and the docs at the new
-  paths.
-- The old `/api/...` paths keep answering for one release, so a phone still running the cached web app, or with
-  changes queued offline, keeps working; they answer exactly as before plus a `Deprecation` header. Write in
-  `docs/deploy.md` when they go (the release after the one that adds `/api/v1`). Leave `/api/health` as a permanent
-  alias: proxies and monitors use it.
-- The OIDC start and callback routes are browser redirects, not API calls: they keep their paths, so no sign-in
-  provider needs its redirect address changed.
-- Every error, including a refused extractor (bad JSON, a bad path or query) and the catch-all 404, answers with
-  `ErrorBody`: `error`, the message shown today, plus `code`, a stable snake_case name (`not_found`,
-  `bad_request`, `unauthorized`, `bad_credentials`, `forbidden`, `conflict`, `account_changed`,
-  `too_many_requests`, `internal`). The web app reads `code` where it now matches on status or message text.
-- **Touches:** `crates/mise-api/src/` (routes, `error.rs`, the paths in `#[utoipa::path]`), `web/src/`,
-  `web/public/sw.js`, `web/scripts/check-openapi.mjs`, `Dockerfile`, `docs/`.
-- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T6 and T9 edit it too).
-- **Done when:** the API tests call `/api/v1` paths; one test asserts each old path still answers the same as its new
-  one and carries `Deprecation`; one test checks that each kind of error, a refused extractor included, has both
-  `error` and `code`; the browser journeys pass, the offline one included.
 
 ### T6 · Security headers and a written security stance
 
@@ -52,7 +27,7 @@ Cheapest now, while the web app is the API's only caller (see Decisions, 2026-11
   if one turns out unprotected, fix it (for example by requiring a custom header) rather than describe a protection
   that isn't there. Include login throttling.
 - **Touches:** the router setup in `crates/mise-api/src/lib.rs`, `SECURITY.md`, `docs/architecture.md`.
-- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T9 and T19 edit it too).
+- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T9 edits it too).
 - **Done when:** an API test checks each header on a page and an API response; an API test shows a cross-site
   style request (no JSON content type, no custom header) to sign-out and to a DELETE route is refused or harmless,
   as the written stance says; the browser journeys pass (they would catch a policy that breaks the app).
@@ -66,7 +41,6 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
   that produce each documented status and fails on a status the document doesn't list.
 - **Touches:** `crates/mise-api/src/` (annotations only), a new test in `crates/mise-api/tests/`,
   `web/src/api/schema.d.ts` (regenerated).
-- **Needs:** T19 (it moves every path these annotations name).
 - **Done when:** the new test passes; `web/scripts/check-openapi.mjs` still passes.
 
 ### T9 · Observability
@@ -74,7 +48,7 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
 - An option for JSON logs, a request id on every log line (and in the response), a readiness check that the
   database answers (next to the existing health check), and basic metrics (request counts and durations by route).
 - **Touches:** `crates/mise-api/src/main.rs`, `lib.rs`, `docs/deploy.md`.
-- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T6 and T19 edit it too).
+- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T6 edits it too).
 - **Done when:** API tests cover the readiness check and the request id header; deploy.md says how to turn JSON logs
   on.
 
@@ -105,16 +79,16 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
 
 ### T17 · Published Rust documentation
 
-- A CI job that runs `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS="-D warnings"` on every merge request
-  (broken intra-doc links and bad doc markup fail it), and on `main` publishes the result to GitLab Pages (a `pages`
-  job). Link it from the README.
-- Run the same `cargo doc` check from `./check` (T1), so a local run catches what this job would.
-- **Touches:** `.gitlab-ci.yml`, `.github/workflows/ci.yml` (the same check on the mirror, without publishing),
-  `check`, `README.md`.
-- **Needs:** **Paul** to make sure GitLab Pages is enabled on the server and the
-  project.
-- **Done when:** the job passes, fails on a deliberately broken intra-doc link (try it, then revert), and the Pages
-  URL serves `mise_core`'s documentation.
+The doc check runs in CI (`rust docs`, and on the mirror) and in `./check`, and the `pages` job on `main` puts the
+docs in its `public/` artifact, opening at `mise_core`. GitLab Pages is on, at `pages.pauldrakehughes.com` (a sibling
+of the GitLab domain, not under it, as GitLab advises), behind Caddy's wildcard certificate; the project's Pages are
+public and its unique domain is off, so the site is `https://personal.pages.pauldrakehughes.com/mise/`, the address
+`README.md` links to. What's left is seeing the first publish.
+
+- **Touches:** this entry.
+- **Needs:** the `pages` job's first run on `main`.
+- **Done when:** after a pipeline on `main`, the README's link serves `mise_core`'s documentation; then delete this
+  entry.
 
 ### T22 · Recipes that belong to a household
 
@@ -128,7 +102,6 @@ account. The schema already has `user` and `web` sources and `variants.parent_va
 - **Touches:** a new migration, `crates/mise-api/src/` (dishes, variants, plan, shopping queries),
   `crates/mise-ingest/src/dishes.rs` (grouping considers ownership: one household's version never joins a dish that
   only another household can see).
-- **Needs:** T19.
 - **Done when:** API tests show a version owned by one household is invisible to another in search, the dish page,
   a direct fetch by id, and when added to a plan by id; the pipeline snapshot test still passes unchanged.
 
@@ -141,7 +114,6 @@ The Echo Show's browser can't sign in comfortably or send headers, so kitchen mo
   photos, and nothing else: no shopping list, accounts, names or emails, and no changes. Tokens are listed and
   revoked like API tokens.
 - **Touches:** `crates/mise-api/src/auth/`, a new migration, `web/src/pages/AccountPage.tsx`.
-- **Needs:** T19.
 - **Done when:** API tests show a kitchen session can read each allowed route and is refused every other one,
   that `/api/v1/me` reveals no personal data to it, and that a revoked token stops working at once.
 
@@ -239,7 +211,6 @@ commands and the gate report.
   go in `dish_decisions`), so a re-run keeps it; `mise food export` and `mise dish export` write them back out as
   curation files.
 - **Touches:** `crates/mise-api/src/` (a new module), `crates/mise-cli/src/` (the exports), `web/src/`.
-- **Needs:** T19.
 - **Done when:** API tests decide one item of each kind and show a re-run of the stage keeps the decision; the
   exports round-trip through `apply`; a browser journey accepts a food match.
 

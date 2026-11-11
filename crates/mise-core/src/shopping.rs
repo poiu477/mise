@@ -1,5 +1,5 @@
 //! The shopping list: what several recipes need of one food, added up and worded for buying. Kinds of one food
-//! can share a line ([`line_foods`]), amounts in different units add up where the food says how they convert
+//! can share a line ([`line_food`]), amounts in different units add up where the food says how they convert
 //! ([`Measures`]), and ticks are kept per food so a line that merges or splits keeps them ([`foods_to_mark`]).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};

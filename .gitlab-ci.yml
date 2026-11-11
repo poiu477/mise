@@ -1,7 +1,7 @@
-# CI for every merge request and every push to main: formatting, lints, tests, the web build, dependency checks,
-# the Docker image and Rust SAST. A merge request merges only when all of it passes. The steps are the ones ./check
-# runs locally, with the same commands and flags; .github/workflows/ci.yml runs them again on the GitHub mirror
-# after each push to main. Change all three together.
+# CI for every merge request and every push to main: formatting, lints, tests, the Rust docs (published to GitLab
+# Pages from main), the web build, dependency checks, the Docker image and Rust SAST. A merge request merges only when
+# all of it passes. The steps are the ones ./check runs locally, with the same commands and flags;
+# .github/workflows/ci.yml runs them again on the GitHub mirror after each push to main. Change all three together.
 #
 # The other security scans (GitLab Advanced SAST, dependency scanning, secret detection) come from the project's
 # security configuration profiles (Secure, Security configuration), not from this file, and run in the same
@@ -105,6 +105,59 @@ rust:
     - cargo build --locked -p mise-cli -p mise-api
   artifacts:
     paths: [web/openapi.json, target/debug/mise, target/debug/mise-server]
+    expire_in: 1 day
+
+# The Rust documentation, with warnings as errors, so a broken intra-doc link or bad doc markup fails it. On a merge
+# request (and a tag) `rust docs` only checks it; on main `pages` builds the same thing and publishes it to GitLab
+# Pages, so main builds it once. Both read the rust job's caches without writing them back.
+.rust docs:
+  extends: .rust
+  stage: test
+  needs: []
+  cache:
+    - <<: *cargo-home-cache
+      policy: pull
+    - key:
+        prefix: target
+        files: [rust-toolchain.toml]
+      paths: [target/]
+      policy: pull
+  variables:
+    RUSTDOCFLAGS: -D warnings
+  script:
+    - cargo doc --workspace --no-deps --locked
+
+rust docs:
+  extends: .rust docs
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
+    - when: on_success
+
+pages:
+  extends: .rust docs
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - !reference [.rust docs, script]
+    # rustdoc makes no page at the root without nightly's --enable-index-page; this one opens mise-core, whose
+    # sidebar lists the other crates.
+    - cp -r target/doc public
+    - |
+      cat > public/index.html <<'EOF'
+      <!doctype html>
+      <meta charset="utf-8">
+      <title>mise: Rust documentation</title>
+      <meta http-equiv="refresh" content="0; url=mise_core/index.html">
+      <link rel="canonical" href="mise_core/index.html">
+      <p><a href="mise_core/index.html">mise-core's documentation</a></p>
+      EOF
+  artifacts:
+    paths: [public]
     expire_in: 1 day
 
 api types:

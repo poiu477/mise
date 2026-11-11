@@ -84,15 +84,20 @@ whose versions all joined another. A live dish's slug always wins over a retired
 
 ## The API (`mise-api`)
 
-`lib.rs` builds the router; every route sits behind `auth::require_auth` except health, the OpenAPI document and
-sign-in. A session cookie (`mise_session`) or a bearer token (`mise_…`, read or read-write) identifies a
-`CurrentUser` with their `household_id`, and every planning query is scoped by it. The web app also sends
-`X-Mise-Account` with the account it is working as; when that isn't the account signed in (someone else signed in
-since, in another tab, with the shared cookie) the request is refused with 412, so queued work never lands in
-another household, and the app re-checks who is signed in. Handlers return `ApiResult<T>`;
-`error.rs` maps errors to JSON `{ "error": "…" }` with the right status. `extract.rs` wraps axum's extractors so bad
-input reads as a 400 with a plain message. Endpoints that change a plan or a list answer with the whole plan or list,
-so the client never has to merge.
+`lib.rs` builds the router. Every route is served under `/api/v1`; the same routes answer under the old `/api` for
+one more release, with a `Deprecation` header and a `Link` to the new address (`mark_deprecated`), except
+`/api/health` and single sign-on's two redirects, which keep their addresses for good. Every route sits behind
+`auth::require_auth` except health, the OpenAPI document and sign-in. A session cookie (`mise_session`) or a bearer
+token (`mise_…`, read or read-write) identifies a `CurrentUser` with their `household_id`, and every planning query is
+scoped by it. The web app also sends `X-Mise-Account` with the account it is working as; when that isn't the account
+signed in (someone else signed in since, in another tab, with the shared cookie) the request is refused with 412, so
+queued work never lands in another household, and the app re-checks who is signed in. Handlers return
+`ApiResult<T>`; `error.rs` maps errors to the right status and one JSON body, `{ "error": "…", "code": "…" }`: a
+sentence to show people, and a stable name for programs (`not_found`, `bad_request`, `unauthorized`,
+`bad_credentials`, `forbidden`, `method_not_allowed`, `conflict`, `account_changed`, `payload_too_large`,
+`too_many_requests`, `internal`). `extract.rs` wraps axum's extractors so bad input answers in that shape too, and
+the router does the same for an unknown address and a method a route doesn't take. Endpoints that change a plan or a
+list answer with the whole plan or list, so the client never has to merge.
 
 The shopping list is never stored: `shopping::build` works it out from the week's plan on each request and lays the
 stored marks, extras, staples and unit choices on top. Lines are grouped by food, and kinds of a food join its line
@@ -105,18 +110,21 @@ every food on the lines that now cover it.
 ## The web app (`web/`)
 
 React 19 with React Router, Vite and TypeScript. `api/client.ts` is an `openapi-fetch` client typed from the
-generated `api/schema.d.ts`; pages load through TanStack Query (`api/query.ts`), which caches answers per page,
-reloads them when a page comes back into view and keeps one account's data apart from another's. `session.tsx` knows
-who is signed in (or, offline, who last was); `components/Layout.tsx` gates pages on it. Pages: search, dish
-(options, servings, add to plan), recipe card (one version and serving count laid out to print on a page), plan,
-shopping, account, sign-in and first-run setup. `choose.ts` holds which version and serving count a dish's address
-opens on, for the dish page and its card alike, and `recipe.ts` words a version's time, difficulty and allergens for
-both.
+generated `api/schema.d.ts`; it acts on an error's `code`, never its status or wording (`unauthorized` signs the page
+out, `account_changed` re-checks who is signed in). Pages load through TanStack Query (`api/query.ts`), which caches
+answers per page, reloads them when a page comes back into view and keeps one account's data apart from another's.
+`session.tsx` knows who is signed in (or, offline, who last was); `components/Layout.tsx` gates pages on it. Pages:
+search, dish (options, servings, add to plan), recipe card (one version and serving count laid out to print on a
+page), plan, shopping, account, sign-in and first-run setup. `choose.ts` holds which version and serving count a
+dish's address opens on, for the dish page and its card alike, and `recipe.ts` words a version's time, difficulty and
+allergens for both.
 
 Offline: `public/sw.js` keeps the app's files and recipe data (network first, cache as fallback; photos cache first)
-and never caches account data. The shopping list keeps its own copy in `offline.ts`: each week's list as last seen,
-plus ticks and hand-added items made without a connection, sent in order once the server answers. Everything kept on
-the device is per account and cleared on sign-out. Service workers need HTTPS on a phone (or localhost).
+and never caches account data. It reads the API's old and new addresses alike, so a page still running the app from
+before the move to `/api/v1` keeps working through it. The shopping list keeps its own copy in `offline.ts`: each
+week's list as last seen, plus ticks and hand-added items made without a connection, sent in order once the server
+answers. Everything kept on the device is per account and cleared on sign-out. Service workers need HTTPS on a phone
+(or localhost).
 
 ## Deployment
 

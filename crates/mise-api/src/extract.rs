@@ -1,7 +1,10 @@
 //! Path and query extractors that reject bad input with the API's JSON errors (axum's own answer in plain
 //! text), and refuse NUL characters, which Postgres cannot store or compare.
 
-use axum::{extract::FromRequestParts, http::request::Parts};
+use axum::{
+    extract::FromRequestParts,
+    http::{StatusCode, request::Parts},
+};
 use serde::de::DeserializeOwned;
 
 use crate::error::ApiError;
@@ -45,7 +48,8 @@ impl<T: DeserializeOwned + Send, S: Send + Sync> FromRequestParts<S> for Path<T>
 }
 
 /// A JSON request body. Requiring `Content-Type: application/json` is also what keeps other sites from
-/// submitting forms to the API with a signed-in visitor's cookie.
+/// submitting forms to the API with a signed-in visitor's cookie. A body over axum's limit (2 MB) is refused as
+/// too large; anything else wrong with it, as a bad request.
 pub struct JsonBody<T>(pub T);
 
 impl<T: DeserializeOwned, S: Send + Sync> axum::extract::FromRequest<S> for JsonBody<T> {
@@ -55,6 +59,9 @@ impl<T: DeserializeOwned, S: Send + Sync> axum::extract::FromRequest<S> for Json
         axum::Json::<T>::from_request(req, state)
             .await
             .map(|j| JsonBody(j.0))
-            .map_err(|e| ApiError::BadRequest(e.body_text()))
+            .map_err(|e| match e.status() {
+                StatusCode::PAYLOAD_TOO_LARGE => ApiError::PayloadTooLarge,
+                _ => ApiError::BadRequest(e.body_text()),
+            })
     }
 }

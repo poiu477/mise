@@ -9,7 +9,7 @@ both in the same merge request as the work.
 | Phase | State | What exists |
 | --- | --- | --- |
 | 1 Data core | Done; its gate (500 full-archive dishes checked by hand) was waived when the hand-trimmed launch seed took the full archive's place (see Decisions) | Seed bundle format and importer; food matching, tree and curation files; dish grouping with drift splitting, protein twins and recorded decisions; options; content-addressed media with web-size copies; grouping gate report |
-| 2 Browse and cook | Done (gate passed on 60 seed recipes, 2026-11-01) | REST API with OpenAPI; web app (PWA) with search, dish pages, option toggles, any serving count; step text rewritten for the chosen servings; local accounts, households, OIDC single sign-on, sessions, API tokens; Docker Compose stack with nightly backups, and HTTPS behind an existing proxy or through the stack's own Caddy (the `https` profile) |
+| 2 Browse and cook | Done (gate passed on 60 seed recipes, 2026-11-01) | REST API under `/api/v1` with OpenAPI, one error body (`error` and a stable `code`), and the old `/api` addresses answering, deprecated, for one more release; web app (PWA) with search, dish pages, option toggles, any serving count; step text rewritten for the chosen servings; local accounts, households, OIDC single sign-on, sessions, API tokens; Docker Compose stack with nightly backups, and HTTPS behind an existing proxy or through the stack's own Caddy (the `https` profile) |
 | 3 Plan and shop | Core done (gate passed in use, 2026-11-03) | Weekly household plan; shopping list worked out from it, exact totals by store section, kinds of one food on one line and amounts added up across units where the food's density or item size converts them, household and per-food weight units, pantry staples, hand-added items, ticks, printing, works offline on a phone |
 | 4 Kitchen and imports | Under way, as tasks T22 to T32 in the backlog; gate half two (20 sample pages read to their records, T25) passes | Reading schema.org Recipe data (JSON-LD, microdata as a fallback) from a page or JSON file into bundle-shaped records, for import from a link (T26) and from files (T27); printable recipe cards: any version at any serving count on one page, printed or saved as PDF from the browser |
 | 5 Optional extras | Not started | |
@@ -28,7 +28,8 @@ What a reviewer can rely on today:
 - **CI** (`.gitlab-ci.yml` on every merge request; `.github/workflows/ci.yml`, actions pinned to SHAs, again on the
   mirror): rustfmt, clippy with warnings as errors, Rust tests against a Postgres service (API tests fail rather than
   skip when it's missing), the OpenAPI document checked and the web types compared with it, web format, lint, tests and
-  build, `npm audit` of shipped packages, `cargo deny`, browser journeys, security scans, and the Docker image built and the
+  build, `npm audit` of shipped packages, `cargo deny`, `cargo doc` with warnings as errors, browser journeys, security
+  scans, and the Docker image built and the
   stack run with its own Caddy, checked over HTTPS (redirect, certificate, Secure session cookie); on merge requests
   only when the image's build inputs or the stack change.
 - **Security:** GitLab Advanced SAST, dependency scanning and secret detection (the project's security configuration
@@ -40,7 +41,9 @@ What a reviewer can rely on today:
   pre-commit hook (`.githooks/`, opt-in) runs the formatting and lints.
 - **Tests:** unit and fuzz tests in `mise-core`, and doc examples that run as tests for its rounding rules; API tests
   for sign-in, plan and shopping, and for search, dish pages, options, versions at published and scaled serving counts,
-  photos and signed-out requests on the demo bundle (loaded through `mise-ingest`), sharing one harness
+  photos and signed-out requests on the demo bundle (loaded through `mise-ingest`), for every documented route's
+  old `/api` address answering as its `/api/v1` one, marked deprecated, and for every kind of error carrying `error`
+  and `code`, sharing one harness
   (`crates/mise-api/tests/common`) that gives each test its own database and media folder and drops them even when the
   test fails; a pipeline snapshot test (`crates/mise-cli/tests/pipeline_snapshot.rs`) that runs the demo bundle
   through every import stage and compares each stage's report, the food tree and every dish page at 1 to 6 servings
@@ -61,7 +64,9 @@ What a reviewer can rely on today:
 - **Reviews:** Mira (`@mira`), the maintainer's self-hosted AI reviewer, reviews every merge request. CodeRabbit
   also reviewed GitHub pull requests until the move to GitLab.
 - **Rust docs:** every public item in `mise-core`, `mise-db` and `mise-ingest` has a doc comment; `missing_docs` is on
-  in each, and clippy's `-D warnings` fails a missing one. `mise-api` follows in T16.
+  in each, and clippy's `-D warnings` fails a missing one. `mise-api` follows in T16. `cargo doc` runs with warnings
+  as errors in CI (`rust docs`, and on the mirror) and in `./check`, so a broken intra-doc link fails; on `main` the
+  `pages` job publishes the docs to GitLab Pages, at <https://personal.pages.pauldrakehughes.com/mise/>.
 - **Web app:** pages load server data through TanStack Query; ESLint's React hooks rules run as errors, including
   `set-state-in-effect`, and `jsdoc/require-jsdoc` fails any export in `web/src` without a doc comment.
 - **Decisions:** architecture decision records in [`docs/adr/`](adr/README.md), each with the alternatives weighed.
@@ -118,6 +123,7 @@ What a reviewer can rely on today:
 | 2026-11-10 | Web pages are parsed with html5ever into a small DOM of mise's own (`mise_ingest::schema_org`), not `scraper` (its CSS crates are MPL-2.0) or html5ever's test-only `rcdom`. A page nesting elements past 512, where browsers stop nesting, is refused: html5ever's work grows with the square of the depth |
 | 2026-11-10 | A dish option lists the choices most versions offer first; on a tie, the dish's default, then the option's reading order (Regular before Double protein; Standard, v2, v3; proteins alphabetically, then No meat). Versions are numbered by how many versions share them, then by label, so a re-run of `derive-options` changes nothing |
 | 2026-11-10 | Recipe cards print through the browser from a print stylesheet, not Typst: the print dialog makes the PDF, a journey checks the page count, and the server needs no PDF engine. Typst stays an option for things the browser can't do, such as a book of many cards |
+| 2026-11-10 | The old `/api` addresses carry `Deprecation: @1794268800` (RFC 9745's form, a date: 2026-11-10, when `/api/v1` came; the drafts' `true` didn't make the RFC) and `Link: <...>; rel="successor-version"` to the new address. Error codes add `method_not_allowed` (axum's 405, which had no body) and `payload_too_large` (a JSON body over 2 MB) to the nine named in T19, so no error answers outside the one shape. The web app acts on `code`, never on a status or a message |
 | 2026-11-10 | Kinds of a food share one shopping line only while a recipe in the week asks for the food itself (any onion is covered by the yellow onion another recipe wants), or when curation marks the food `shop_as_one`; never through a category. One kind alone keeps its own name, and two kinds alone stay apart: a recipe that asks for red onion wants red |
 | 2026-11-10 | Shopping amounts convert only to add up: a line with one kind of amount reads as written. Otherwise everything goes into the line's count when all of it converts ("1½ onions"), else counted items fold into the measure there is of them, and volume with weight becomes one weight by density. A count with no size per item stays its own part; a density never sizes a clove. Densities and item sizes are rows in `food_measures`, set by curation |
 | 2026-11-10 | Shopping ticks stay per food, as `shopping_marks` already kept them, not per line: a merged line shows ticked only when every food on it is; ticking it ticks them all; a tick sent for a line that has since merged or split lands on the lines covering that food now; a split keeps each part's tick. "Always have" on a merged line leaves the whole line off |

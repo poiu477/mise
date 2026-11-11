@@ -2,12 +2,13 @@
 import createClient from "openapi-fetch";
 import type { components, paths } from "./schema";
 
-/** The typed client for mise's API: `api.GET("/api/dishes/{slug}", …)` and so on, sent with the session cookie. */
+/** The typed client for mise's API: `api.GET("/api/v1/dishes/{slug}", …)` and so on, sent with the session
+ * cookie. */
 export const api = createClient<paths>({ baseUrl: "", credentials: "same-origin" });
 
 let onUnauthorized: (() => void) | null = null;
-/** Calls `f` when the session ends while the app is open (it expired, or signed out elsewhere): any 401 outside
- * sign-in itself. */
+/** Calls `f` when the session ends while the app is open (it expired, or signed out elsewhere): any answer of
+ * `unauthorized`. */
 export const whenUnauthorized = (f: () => void) => {
   onUnauthorized = f;
 };
@@ -25,7 +26,7 @@ export const whenAccountChanged = (f: () => void) => {
   onAccountChanged = f;
 };
 /** Whether a request only asks who is signed in, or signs in, so goes without the account. */
-const asks = (path: string) => path === "/api/me" || path.startsWith("/api/auth/");
+const asks = (path: string) => path === "/api/v1/me" || path.startsWith("/api/v1/auth/");
 
 api.use({
   onRequest({ request }) {
@@ -33,13 +34,32 @@ api.use({
       request.headers.set("x-mise-account", account);
     return request;
   },
-  onResponse({ response }) {
-    const path = new URL(response.url).pathname;
-    if (response.status === 401 && !path.startsWith("/api/auth/")) onUnauthorized?.();
-    if (response.status === 412) onAccountChanged?.();
+  async onResponse({ response }) {
+    if (response.ok) return response;
+    const code = errorCode(
+      await response
+        .clone()
+        .json()
+        .catch(() => null),
+    );
+    // A wrong password is `bad_credentials`, so only an ended session reads as signed out.
+    if (code === "unauthorized") onUnauthorized?.();
+    if (code === "account_changed") onAccountChanged?.();
     return response;
   },
 });
+
+/** What kind of error the API answered with ("not_found", "account_changed"): stable, unlike its wording. */
+export type ErrorCode = components["schemas"]["ErrorCode"];
+
+/** The `code` of an error the API answered with; null for anything else, such as a proxy's own error page. */
+export function errorCode(error: unknown): ErrorCode | null {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = (error as { code: unknown }).code;
+    if (typeof code === "string") return code as ErrorCode;
+  }
+  return null;
+}
 
 /** The API's error message as a sentence, for showing to people: "enter between 1 and 200 characters" reads
  * "Enter between 1 and 200 characters.". Anything else reads as `fallback`. */

@@ -16,7 +16,8 @@ export function PlanPage() {
   const key = ["plan", useAccount(), week];
   const planQuery = useQuery({
     queryKey: key,
-    queryFn: ({ signal }) => answer(api.GET("/api/plan", { params: { query: { week } }, signal })),
+    queryFn: ({ signal }) =>
+      answer(api.GET("/api/v1/plan", { params: { query: { week } }, signal })),
   });
   const plan = planQuery.data ?? null;
   // A change that didn't go through, shown with the week it was made in.
@@ -49,16 +50,19 @@ export function PlanPage() {
   /** Adds a dish at its usual version: 2 servings if it was published for 2, else its first published size. */
   const add = (d: DishSummary) => {
     const variant_id = d.default_variant;
-    if (variant_id) run(() => api.POST("/api/plan/entries", { body: { week, variant_id } }));
+    if (variant_id) run(() => api.POST("/api/v1/plan/entries", { body: { week, variant_id } }));
   };
   /** Changes how many servings of one dish are planned. */
   const setServings = (e: PlanEntry, servings: number) =>
     run(() =>
-      api.PATCH("/api/plan/entries/{id}", { params: { path: { id: e.id } }, body: { servings } }),
+      api.PATCH("/api/v1/plan/entries/{id}", {
+        params: { path: { id: e.id } },
+        body: { servings },
+      }),
     );
   /** Takes a dish off the plan. */
   const remove = (e: PlanEntry) =>
-    run(() => api.DELETE("/api/plan/entries/{id}", { params: { path: { id: e.id } } }));
+    run(() => api.DELETE("/api/v1/plan/entries/{id}", { params: { path: { id: e.id } } }));
 
   const count = plan?.entries.length ?? 0;
   return (
@@ -155,7 +159,7 @@ function AddDishes({ onAdd }: { onAdd: (d: DishSummary) => void }) {
     queryKey: ["suggestions", asked],
     queryFn: ({ signal }) =>
       answer(
-        api.GET("/api/dishes", {
+        api.GET("/api/v1/dishes", {
           params: { query: { q: asked || undefined, type: "recipe", limit: SUGGESTIONS } },
           signal,
         }),

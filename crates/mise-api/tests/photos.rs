@@ -99,7 +99,7 @@ impl Kitchen {
 
     /// The photo's media id, as the dish's search result links it.
     async fn photo_id(&self) -> Uuid {
-        let page = self.get("/api/dishes?q=tacos").await;
+        let page = self.get("/api/v1/dishes?q=tacos").await;
         let id = page["items"][0]["image"]["id"]
             .as_str()
             .expect("the tacos have a photo");
@@ -153,12 +153,12 @@ async fn a_photo_is_linked_from_search_the_dish_and_the_version() {
     let id = kitchen.photo_id().await;
     let links = json!({
         "id": id,
-        "small": format!("/api/media/{id}/400"),
-        "large": format!("/api/media/{id}/1200"),
-        "original": format!("/api/media/{id}/original"),
+        "small": format!("/api/v1/media/{id}/400"),
+        "large": format!("/api/v1/media/{id}/1200"),
+        "original": format!("/api/v1/media/{id}/original"),
     });
 
-    let page = kitchen.get("/api/dishes").await;
+    let page = kitchen.get("/api/v1/dishes").await;
     for item in page["items"].as_array().unwrap() {
         let expected = if item["slug"] == DISH {
             &links
@@ -168,7 +168,7 @@ async fn a_photo_is_linked_from_search_the_dish_and_the_version() {
         assert_eq!(&item["image"], expected, "{}", item["title"]);
     }
 
-    let dish = kitchen.get(&format!("/api/dishes/{DISH}")).await;
+    let dish = kitchen.get(&format!("/api/v1/dishes/{DISH}")).await;
     assert_eq!(dish["variants"][0]["id"], dish["default_variant"]);
     assert_eq!(dish["variants"][0]["image"], links);
     assert_eq!(
@@ -180,7 +180,9 @@ async fn a_photo_is_linked_from_search_the_dish_and_the_version() {
     let version_id = dish["default_variant"].as_str().unwrap();
     for servings in ["2", "3"] {
         let version = kitchen
-            .get(&format!("/api/variants/{version_id}?servings={servings}"))
+            .get(&format!(
+                "/api/v1/variants/{version_id}?servings={servings}"
+            ))
             .await;
         assert_eq!(version["image"], links, "{servings} servings");
     }
@@ -191,17 +193,17 @@ async fn a_photo_is_served_at_each_size() {
     let kitchen = test_app!(Kitchen::new(true));
     let id = kitchen.photo_id().await;
 
-    let small = kitchen.fetch(&format!("/api/media/{id}/400")).await;
+    let small = kitchen.fetch(&format!("/api/v1/media/{id}/400")).await;
     assert_eq!(small.status, StatusCode::OK);
     assert_eq!(small.content_type(), "image/jpeg");
     assert_eq!(small.dimensions(), (400, 300));
 
     // The photo already fits the large size, so it is never made bigger.
-    let large = kitchen.fetch(&format!("/api/media/{id}/1200")).await;
+    let large = kitchen.fetch(&format!("/api/v1/media/{id}/1200")).await;
     assert_eq!(large.status, StatusCode::OK);
     assert_eq!(large.dimensions(), (WIDTH, HEIGHT));
 
-    let original = kitchen.fetch(&format!("/api/media/{id}/original")).await;
+    let original = kitchen.fetch(&format!("/api/v1/media/{id}/original")).await;
     assert_eq!(original.status, StatusCode::OK);
     assert_eq!(original.content_type(), "image/png");
     assert_eq!(
@@ -223,7 +225,7 @@ async fn a_size_not_made_yet_falls_back_to_the_original() {
     let kitchen = test_app!(Kitchen::new(false));
     let id = kitchen.photo_id().await;
     for size in ["400", "1200"] {
-        let photo = kitchen.fetch(&format!("/api/media/{id}/{size}")).await;
+        let photo = kitchen.fetch(&format!("/api/v1/media/{id}/{size}")).await;
         assert_eq!(photo.status, StatusCode::OK, "{size}");
         assert_eq!(photo.content_type(), "image/png", "{size}");
         assert_eq!(photo.body, kitchen.photo, "{size}");
@@ -234,7 +236,7 @@ async fn a_size_not_made_yet_falls_back_to_the_original() {
 async fn a_photo_that_does_not_exist_is_not_found() {
     let kitchen = test_app!(Kitchen::new(true));
     let unknown = kitchen
-        .fetch(&format!("/api/media/{}/original", Uuid::now_v7()))
+        .fetch(&format!("/api/v1/media/{}/original", Uuid::now_v7()))
         .await;
     assert_eq!(unknown.status, StatusCode::NOT_FOUND);
     assert!(unknown.error().is_string());
@@ -243,7 +245,7 @@ async fn a_photo_that_does_not_exist_is_not_found() {
     let id = kitchen.photo_id().await;
     empty_files(&kitchen.app.media_root);
     for size in ["400", "1200", "original"] {
-        let gone = kitchen.fetch(&format!("/api/media/{id}/{size}")).await;
+        let gone = kitchen.fetch(&format!("/api/v1/media/{id}/{size}")).await;
         assert_eq!(gone.status, StatusCode::NOT_FOUND, "{size}");
         assert!(gone.error().is_string(), "{size}");
     }
@@ -254,11 +256,11 @@ async fn a_size_that_is_never_made_is_refused() {
     let kitchen = test_app!(Kitchen::new(true));
     let id = kitchen.photo_id().await;
     for size in ["800", "small", "0"] {
-        let photo = kitchen.fetch(&format!("/api/media/{id}/{size}")).await;
+        let photo = kitchen.fetch(&format!("/api/v1/media/{id}/{size}")).await;
         assert_eq!(photo.status, StatusCode::BAD_REQUEST, "{size}");
         assert_eq!(photo.error(), "size must be 400, 1200 or original");
     }
-    let bad_id = kitchen.fetch("/api/media/not-a-uuid/400").await;
+    let bad_id = kitchen.fetch("/api/v1/media/not-a-uuid/400").await;
     assert_eq!(bad_id.status, StatusCode::BAD_REQUEST);
 }
 
@@ -268,7 +270,7 @@ async fn photos_need_a_signed_in_person() {
     let id = kitchen.photo_id().await;
     for size in ["400", "1200", "original"] {
         let photo = kitchen
-            .fetch_as(&format!("/api/media/{id}/{size}"), As::Nobody)
+            .fetch_as(&format!("/api/v1/media/{id}/{size}"), As::Nobody)
             .await;
         assert_eq!(photo.status, StatusCode::UNAUTHORIZED, "{size}");
         assert!(

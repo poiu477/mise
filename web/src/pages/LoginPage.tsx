@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
-import { api, errorText } from "../api/client";
+import { api, errorCode, errorText } from "../api/client";
 import { startSignIn } from "../offline";
 import { useSession } from "../session";
 
@@ -21,12 +21,14 @@ export function LoginPage() {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const { error, response } = await api.POST("/api/auth/login", { body: { username, password } });
+    const { error, response } = await api.POST("/api/v1/auth/login", {
+      body: { username, password },
+    });
     setBusy(false);
     if (error) {
       const wait = response.headers.get("retry-after");
       setError(
-        response.status === 429 && wait
+        errorCode(error) === "too_many_requests" && wait
           ? `Too many attempts. Try again in ${wait} seconds.`
           : errorText(error),
       );

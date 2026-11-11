@@ -1,6 +1,6 @@
 # Signing in
 
-Every page and API route except `/api/health` needs a signed-in account. A fresh install opens on a welcome page
+Every page and API route except the health check (`/api/v1/health`) needs a signed-in account. A fresh install opens on a welcome page
 where the first visitor creates the admin account and the first household; after that, admins add people from
 **Account → People**, or from the server with `mise user`.
 

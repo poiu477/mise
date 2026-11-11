@@ -1,5 +1,6 @@
-//! The mise REST API. One router backs the web app, kitchen mode and integrations; the OpenAPI document at
-//! `/api/openapi.json` describes it.
+//! The mise REST API, served under `/api/v1`. One router backs the web app, kitchen mode and integrations; the
+//! OpenAPI document at `/api/v1/openapi.json` describes it. The old `/api` addresses answer too, for one more
+//! release, marked deprecated.
 
 pub mod auth;
 pub mod dishes;
@@ -13,9 +14,14 @@ pub mod variants;
 use std::path::{Path, PathBuf};
 
 use axum::{
-    Json, Router, middleware,
+    Json, Router,
+    extract::Request,
+    http::{HeaderName, HeaderValue, Uri, header},
+    middleware::{self, Next},
+    response::Response,
     routing::{any, delete, get, patch, post, put},
 };
+use error::ApiError;
 use sqlx::PgPool;
 use tower_http::{
     compression::CompressionLayer,
@@ -84,8 +90,8 @@ pub struct Health {
     pub version: &'static str,
 }
 
-/// Liveness and version.
-#[utoipa::path(get, path = "/api/health", operation_id = "health", responses((status = 200, description = "The server is up", body = Health)))]
+/// Liveness and version. `/api/health` answers too, for good: proxies and monitors check it.
+#[utoipa::path(get, path = "/api/v1/health", operation_id = "health", responses((status = 200, description = "The server is up", body = Health)))]
 pub async fn health() -> Json<Health> {
     Json(Health {
         status: "ok",
@@ -97,69 +103,135 @@ async fn openapi() -> Json<utoipa::openapi::OpenApi> {
     Json(ApiDoc::openapi())
 }
 
-/// The API, and the built web app in `web_dir` for every other path when given.
-pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
-    let mut app = Router::new()
-        .route("/api/health", get(health))
-        .route("/api/auth/config", get(auth::routes::config))
-        .route("/api/auth/setup", post(auth::routes::setup))
-        .route("/api/auth/login", post(auth::routes::login))
-        .route("/api/auth/logout", post(auth::routes::logout))
-        .route("/api/auth/oidc/start", get(auth::oidc::start))
-        .route("/api/auth/oidc/callback", get(auth::oidc::callback))
-        .route("/api/me", get(auth::routes::me))
-        .route("/api/me/password", post(auth::routes::change_password))
+/// Where the API is served: `/api/v1/dishes`, `/api/v1/openapi.json` and so on.
+pub const API: &str = "/api/v1";
+
+/// Where the API was served before `/api/v1`. Its addresses answer as before, marked deprecated, for one more
+/// release (docs/deploy.md says which), so a phone still running the web app it cached keeps working.
+pub const OLD_API: &str = "/api";
+
+/// Addresses under `/api` that stay as they are, never deprecated: the health check, which proxies and monitors
+/// call, and single sign-on's browser redirects, which a sign-in provider has on record.
+pub const PERMANENT: &[&str] = &[
+    "/api/health",
+    "/api/auth/oidc/start",
+    "/api/auth/oidc/callback",
+];
+
+/// When the old addresses were deprecated, as RFC 9745 writes it: a Structured Fields date, `@` and a Unix time
+/// (the drafts' `true` isn't in the RFC). 2026-11-10 is the day `/api/v1` was decided and built: a date in the past
+/// tells a client the old address is deprecated already. The release that drops it is in docs/deploy.md.
+pub const DEPRECATED_SINCE: &str = "@1794268800";
+
+/// The part of `path` after the API's address, new or old: "/dishes" for "/api/v1/dishes" and "/api/dishes",
+/// "" for "/api"; None outside the API (the web app).
+pub fn api_path(path: &str) -> Option<&str> {
+    [API, OLD_API].into_iter().find_map(|prefix| {
+        path.strip_prefix(prefix)
+            .filter(|rest| rest.is_empty() || rest.starts_with('/'))
+    })
+}
+
+/// The `/api/v1` address that replaces an old `/api` one, query included; None for every other address.
+fn successor(uri: &Uri) -> Option<String> {
+    let path = uri.path();
+    let rest = path
+        .strip_prefix(OLD_API)
+        .filter(|rest| rest.is_empty() || rest.starts_with('/'))?;
+    if rest == "/v1" || rest.starts_with("/v1/") || PERMANENT.contains(&path) {
+        return None;
+    }
+    let query = uri.query().map(|q| format!("?{q}")).unwrap_or_default();
+    Some(format!("{API}{rest}{query}"))
+}
+
+/// Marks every answer from an old `/api` address deprecated (RFC 9745), with a link to the address that replaces
+/// it (`rel="successor-version"`, RFC 5829). The answer is otherwise exactly the new address's.
+async fn mark_deprecated(req: Request, next: Next) -> Response {
+    let successor = successor(req.uri());
+    let mut res = next.run(req).await;
+    if let Some(link) = successor
+        .and_then(|s| HeaderValue::from_str(&format!("<{s}>; rel=\"successor-version\"")).ok())
+    {
+        let headers = res.headers_mut();
+        headers.insert(
+            HeaderName::from_static("deprecation"),
+            HeaderValue::from_static(DEPRECATED_SINCE),
+        );
+        headers.insert(header::LINK, link);
+    }
+    res
+}
+
+/// Every API route, relative to the API's address. Single sign-on's redirects aren't here: they keep their
+/// addresses (see `PERMANENT`).
+fn api_routes() -> Router<AppState> {
+    Router::new()
+        .route("/health", get(health))
+        .route("/auth/config", get(auth::routes::config))
+        .route("/auth/setup", post(auth::routes::setup))
+        .route("/auth/login", post(auth::routes::login))
+        .route("/auth/logout", post(auth::routes::logout))
+        .route("/me", get(auth::routes::me))
+        .route("/me/password", post(auth::routes::change_password))
         .route(
-            "/api/me/tokens",
+            "/me/tokens",
             get(auth::routes::list_tokens).post(auth::routes::create_token),
         )
-        .route("/api/me/tokens/{id}", delete(auth::routes::delete_token))
+        .route("/me/tokens/{id}", delete(auth::routes::delete_token))
         .route(
-            "/api/users",
+            "/users",
             get(auth::routes::list_users).post(auth::routes::create_user),
         )
-        .route("/api/users/{id}", patch(auth::routes::update_user))
+        .route("/users/{id}", patch(auth::routes::update_user))
         .route(
-            "/api/households",
+            "/households",
             get(auth::routes::list_households).post(auth::routes::create_household),
         )
-        .route("/api/openapi.json", get(openapi))
-        .route("/api/dishes", get(dishes::list))
-        .route("/api/dishes/{slug}", get(dishes::get))
-        .route("/api/variants/{id}", get(variants::get))
-        .route("/api/media/{id}/{size}", get(media::get))
-        .route("/api/plan", get(plan::get))
-        .route("/api/plan/entries", post(plan::add))
+        .route("/openapi.json", get(openapi))
+        .route("/dishes", get(dishes::list))
+        .route("/dishes/{slug}", get(dishes::get))
+        .route("/variants/{id}", get(variants::get))
+        .route("/media/{id}/{size}", get(media::get))
+        .route("/plan", get(plan::get))
+        .route("/plan/entries", post(plan::add))
         .route(
-            "/api/plan/entries/{id}",
+            "/plan/entries/{id}",
             patch(plan::update).delete(plan::remove),
         )
-        .route("/api/shopping", get(shopping::get))
-        .route("/api/shopping/marks", put(shopping::mark))
+        .route("/shopping", get(shopping::get))
+        .route("/shopping/marks", put(shopping::mark))
         .route(
-            "/api/shopping/settings",
+            "/shopping/settings",
             get(shopping::settings).put(shopping::update_settings),
         )
+        .route("/shopping/food-weights", put(shopping::set_food_weights))
+        .route("/shopping/extras", post(shopping::add_extra))
         .route(
-            "/api/shopping/food-weights",
-            put(shopping::set_food_weights),
-        )
-        .route("/api/shopping/extras", post(shopping::add_extra))
-        .route(
-            "/api/shopping/extras/{id}",
+            "/shopping/extras/{id}",
             patch(shopping::update_extra).delete(shopping::remove_extra),
         )
-        .route("/api/pantry-staples", post(shopping::add_staple))
-        .route(
-            "/api/pantry-staples/{food_id}",
-            delete(shopping::remove_staple),
-        )
-        .route("/api", any(|| async { error::ApiError::NotFound }))
-        .route("/api/{*rest}", any(|| async { error::ApiError::NotFound }))
+        .route("/pantry-staples", post(shopping::add_staple))
+        .route("/pantry-staples/{food_id}", delete(shopping::remove_staple))
+}
+
+/// The API, and the built web app in `web_dir` for every other path when given.
+pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
+    let api = api_routes();
+    let mut app = Router::new()
+        .nest(API, api.clone())
+        .nest(OLD_API, api)
+        .route("/api/auth/oidc/start", get(auth::oidc::start))
+        .route("/api/auth/oidc/callback", get(auth::oidc::callback))
+        .route("/api", any(|| async { ApiError::NotFound }))
+        .route("/api/{*rest}", any(|| async { ApiError::NotFound }))
+        // axum's own 405 has no body; this one says so in the API's error shape. The Allow header stays.
+        .method_not_allowed_fallback(|| async { ApiError::MethodNotAllowed })
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_auth,
         ))
+        .layer(middleware::from_fn(mark_deprecated))
         .with_state(state);
     if let Some(dir) = web_dir {
         app = app.fallback_service(web_app(dir));

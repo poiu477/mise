@@ -24,7 +24,7 @@ export function SetupPage() {
     if (form.password !== form.confirm) return setError("The passwords don't match.");
     setBusy(true);
     setError("");
-    const { error } = await api.POST("/api/auth/setup", {
+    const { error } = await api.POST("/api/v1/auth/setup", {
       body: {
         username: form.username,
         password: form.password,

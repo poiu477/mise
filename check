@@ -2,18 +2,19 @@
 # Runs CI's build, lint and test steps (.github/workflows/ci.yml) with CI's commands and flags, in CI's order, and
 # stops at the first failure, naming it.
 #
-#   ./check          formatting, lints, tests, the API document check, then the web app's format, lint, tests, build
+#   ./check          formatting, lints, tests, the Rust docs, the API document check, then the web app's format, lint,
+#                    tests, build
 #   ./check --e2e    all of that, then the browser journeys
 #   ./check --fast   formatting and lints only (what .githooks/pre-commit runs)
 #
 # The Rust tests need Postgres (DATABASE_URL, from the environment or .env; see docs/development.md). Locally the API
 # tests skip when it is missing; here, as in CI, that is a failure.
 #
-# CI-only, never run here: `cargo deny`, `npm audit` and the Docker image build.
+# CI-only, never run here: `cargo deny`, `npm audit`, the Docker image build and publishing the docs to GitLab Pages.
 set -euo pipefail
 
 usage() {
-  sed -n '2,12s/^# \{0,1\}//p' "$0"
+  sed -n '2,13s/^# \{0,1\}//p' "$0"
 }
 
 fast=false
@@ -103,6 +104,10 @@ step "Rust tests"
 # CI set, as in CI, for every test step: the API tests fail, rather than skip, when the database is missing or
 # unreachable, and Vitest and Playwright refuse a focused test (.only) instead of quietly running just that one.
 CI="${CI:-true}" cargo test --workspace --locked
+
+step "Rust docs"
+# As CI's `rust docs` job: a broken intra-doc link or bad doc markup fails it.
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
 
 web_packages
 step "API document is valid and the web types match it"

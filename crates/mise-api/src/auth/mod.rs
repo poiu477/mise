@@ -1,4 +1,4 @@
-//! Accounts and sign-in. Every /api route except health and sign-in itself needs a signed-in user: a browser
+//! Accounts and sign-in. Every API route except health and sign-in itself needs a signed-in user: a browser
 //! session (an HttpOnly cookie) or a personal API token (`Authorization: Bearer mise_…`). Passwords are
 //! argon2id; sessions and tokens are random 256-bit values stored only as SHA-256 hashes.
 
@@ -30,15 +30,16 @@ use crate::{AppState, error::ApiError};
 pub const SESSION_COOKIE: &str = "mise_session";
 pub const TOKEN_PREFIX: &str = "mise_";
 
-/// Routes anyone may call: health, and what signing in needs.
+/// Routes anyone may call, after the API's address (`/api/v1` or the old `/api`): health, and what signing in
+/// needs. Single sign-on's redirects sit at `/api/auth/oidc/…` only, so they read the same under either.
 const PUBLIC: &[&str] = &[
-    "/api/health",
-    "/api/openapi.json",
-    "/api/auth/config",
-    "/api/auth/setup",
-    "/api/auth/login",
-    "/api/auth/oidc/start",
-    "/api/auth/oidc/callback",
+    "/health",
+    "/openapi.json",
+    "/auth/config",
+    "/auth/setup",
+    "/auth/login",
+    "/auth/oidc/start",
+    "/auth/oidc/callback",
 ];
 
 /// Sign-in settings (AUTH_MODES, OIDC_*, PUBLIC_BASE_URL, SESSION_DAYS).
@@ -359,7 +360,7 @@ async fn from_token(pool: &PgPool, token: &str) -> Result<Option<CurrentUser>, A
 /// tab, with the shared cookie. Scripts and integrations can leave it out.
 pub const ACCOUNT_HEADER: &str = "x-mise-account";
 
-/// Resolve the caller and refuse what they may not do. Paths outside /api (the web app) and the public
+/// Resolve the caller and refuse what they may not do. Paths outside the API (the web app) and the public
 /// routes pass through untouched.
 pub async fn require_auth(
     State(s): State<AppState>,
@@ -367,8 +368,7 @@ pub async fn require_auth(
     mut req: Request,
     next: Next,
 ) -> Response {
-    let path = req.uri().path();
-    if !(path == "/api" || path.starts_with("/api/")) || PUBLIC.contains(&path) {
+    if crate::api_path(req.uri().path()).is_none_or(|rest| PUBLIC.contains(&rest)) {
         return next.run(req).await;
     }
     let bearer = req

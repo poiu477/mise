@@ -34,5 +34,5 @@ ENV MISE_BIND=0.0.0.0:8080 \
 USER mise
 WORKDIR /app
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD curl -fsS http://127.0.0.1:8080/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD curl -fsS http://127.0.0.1:8080/api/v1/health || exit 1
 CMD ["mise-server"]

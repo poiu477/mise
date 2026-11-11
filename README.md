@@ -39,7 +39,7 @@ cargo build --release -p mise-cli -p mise-api
 ./target/release/mise group-dishes
 ./target/release/mise derive-options
 ./target/release/mise parse-steps
-./target/release/mise-server           # API on :8080; OpenAPI at /api/openapi.json
+./target/release/mise-server           # API on :8080; OpenAPI at /api/v1/openapi.json
 ```
 
 The web app lives in `web/` (React, Vite, TypeScript). `npm run dev` serves it on :5173 with `/api` forwarded to the
@@ -55,6 +55,9 @@ Linux builds (matching the production container) run in Docker:
 ```bash
 docker compose -f compose.dev.yaml run --rm rust cargo test
 ```
+
+The Rust crates' documentation, built from `main`, is on GitLab Pages at
+<https://personal.pages.pauldrakehughes.com/mise/>. To build it locally: `cargo doc --workspace --no-deps --open`.
 
 ## Layout
 
