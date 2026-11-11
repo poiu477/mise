@@ -28,7 +28,8 @@ What a reviewer can rely on today:
 - **CI** (`.gitlab-ci.yml` on every merge request; `.github/workflows/ci.yml`, actions pinned to SHAs, again on the
   mirror): rustfmt, clippy with warnings as errors, Rust tests against a Postgres service (API tests fail rather than
   skip when it's missing), the OpenAPI document checked and the web types compared with it, web format, lint, tests and
-  build, `npm audit` of shipped packages, `cargo deny`, browser journeys, security scans, and the Docker image built and the
+  build, `npm audit` of shipped packages, `cargo deny`, `cargo doc` with warnings as errors, browser journeys, security
+  scans, and the Docker image built and the
   stack run with its own Caddy, checked over HTTPS (redirect, certificate, Secure session cookie); on merge requests
   only when the image's build inputs or the stack change.
 - **Security:** GitLab Advanced SAST, dependency scanning and secret detection (the project's security configuration
@@ -63,7 +64,9 @@ What a reviewer can rely on today:
 - **Reviews:** Mira (`@mira`), the maintainer's self-hosted AI reviewer, reviews every merge request. CodeRabbit
   also reviewed GitHub pull requests until the move to GitLab.
 - **Rust docs:** every public item in `mise-core`, `mise-db` and `mise-ingest` has a doc comment; `missing_docs` is on
-  in each, and clippy's `-D warnings` fails a missing one. `mise-api` follows in T16.
+  in each, and clippy's `-D warnings` fails a missing one. `mise-api` follows in T16. `cargo doc` runs with warnings
+  as errors in CI (`rust docs`, and on the mirror) and in `./check`, so a broken intra-doc link fails; on `main` the
+  `pages` job publishes the docs to GitLab Pages, at <https://personal.pages.pauldrakehughes.com/mise/>.
 - **Web app:** pages load server data through TanStack Query; ESLint's React hooks rules run as errors, including
   `set-state-in-effect`, and `jsdoc/require-jsdoc` fails any export in `web/src` without a doc comment.
 - **Decisions:** architecture decision records in [`docs/adr/`](adr/README.md), each with the alternatives weighed.

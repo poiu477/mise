@@ -97,16 +97,16 @@ Onion and Yellow Onion are two lines on the list today, and "1 TBSP + 2 cloves" 
 
 ### T17 · Published Rust documentation
 
-- A CI job that runs `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS="-D warnings"` on every merge request
-  (broken intra-doc links and bad doc markup fail it), and on `main` publishes the result to GitLab Pages (a `pages`
-  job). Link it from the README.
-- Run the same `cargo doc` check from `./check` (T1), so a local run catches what this job would.
-- **Touches:** `.gitlab-ci.yml`, `.github/workflows/ci.yml` (the same check on the mirror, without publishing),
-  `check`, `README.md`.
-- **Needs:** **Paul** to make sure GitLab Pages is enabled on the server and the
-  project.
-- **Done when:** the job passes, fails on a deliberately broken intra-doc link (try it, then revert), and the Pages
-  URL serves `mise_core`'s documentation.
+The doc check runs in CI (`rust docs`, and on the mirror) and in `./check`, and the `pages` job on `main` puts the
+docs in its `public/` artifact, opening at `mise_core`. GitLab Pages is on, at `pages.pauldrakehughes.com` (a sibling
+of the GitLab domain, not under it, as GitLab advises), behind Caddy's wildcard certificate; the project's Pages are
+public and its unique domain is off, so the site is `https://personal.pages.pauldrakehughes.com/mise/`, the address
+`README.md` links to. What's left is seeing the first publish.
+
+- **Touches:** this entry.
+- **Needs:** the `pages` job's first run on `main`.
+- **Done when:** after a pipeline on `main`, the README's link serves `mise_core`'s documentation; then delete this
+  entry.
 
 ### T22 · Recipes that belong to a household
 

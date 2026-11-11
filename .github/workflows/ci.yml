@@ -1,5 +1,6 @@
-# The GitHub mirror's CI: the same formatting, lints, tests, web build, dependency checks and Docker image as
-# .gitlab-ci.yml, which gates merges on GitLab. It runs again here after each push to main as a second opinion.
+# The GitHub mirror's CI: the same formatting, lints, tests, Rust docs check, web build, dependency checks and Docker
+# image as .gitlab-ci.yml, which gates merges on GitLab and publishes the docs. It runs again here after each push to
+# main as a second opinion.
 # Actions are pinned to full commit SHAs (Renovate keeps them current), and checkout leaves no credentials behind
 # for later steps.
 name: CI
@@ -66,6 +67,22 @@ jobs:
           npx openapi-typescript openapi.json -o src/api/schema.d.ts
           git diff --exit-code -- src/api/schema.d.ts \
             || { echo "::error::web/src/api/schema.d.ts is out of date: run 'npm run api' in web/"; exit 1; }
+
+  docs:
+    # Checked only: GitLab Pages publishes them, from .gitlab-ci.yml.
+    name: Rust docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust toolchain (rust-toolchain.toml)
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Documentation, with warnings as errors
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --locked
 
   web:
     name: Web
