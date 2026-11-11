@@ -64,7 +64,7 @@ type SummaryRow = (
 );
 
 /// Search and browse dishes.
-#[utoipa::path(get, path = "/api/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams), responses((status = 200, description = "Matching dishes, a page at a time", body = DishPage)))]
+#[utoipa::path(get, path = "/api/v1/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams), responses((status = 200, description = "Matching dishes, a page at a time", body = DishPage)))]
 pub async fn list(
     State(s): State<AppState>,
     Query(p): Query<ListParams>,
@@ -173,7 +173,7 @@ type DishRow = (Uuid, String, String, Option<String>, String, Option<Uuid>);
 
 /// A dish with its options and versions, by its slug or one it used to have (its `slug` is always the current one).
 #[utoipa::path(
-    get, path = "/api/dishes/{slug}", operation_id = "get_dish", tag = "dishes",
+    get, path = "/api/v1/dishes/{slug}", operation_id = "get_dish", tag = "dishes",
     params(("slug" = String, Path, description = "The dish's slug, or one it had before it was renamed")),
     responses((status = 200, description = "The dish with its versions and options", body = Dish), (status = 404, description = "No such dish", body = crate::error::ErrorBody))
 )]

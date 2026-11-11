@@ -80,7 +80,8 @@ fn http() -> anyhow::Result<openidconnect::reqwest::Client> {
         .context("building the HTTP client")
 }
 
-/// Where the provider sends people back: PUBLIC_BASE_URL when set, else the address this request came to.
+/// Where the provider sends people back: PUBLIC_BASE_URL when set, else the address this request came to. The
+/// path stays `/api/auth/oidc/callback`, outside `/api/v1`: providers have it on record as the redirect address.
 fn redirect_url(s: &AppState, headers: &HeaderMap) -> anyhow::Result<RedirectUrl> {
     let base = match &s.auth.config.public_base_url {
         Some(u) => u.as_str().trim_end_matches('/').to_string(),

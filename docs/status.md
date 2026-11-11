@@ -9,7 +9,7 @@ both in the same merge request as the work.
 | Phase | State | What exists |
 | --- | --- | --- |
 | 1 Data core | Done; its gate (500 full-archive dishes checked by hand) was waived when the hand-trimmed launch seed took the full archive's place (see Decisions) | Seed bundle format and importer; food matching, tree and curation files; dish grouping with drift splitting, protein twins and recorded decisions; options; content-addressed media with web-size copies; grouping gate report |
-| 2 Browse and cook | Done (gate passed on 60 seed recipes, 2026-11-01) | REST API with OpenAPI; web app (PWA) with search, dish pages, option toggles, any serving count; step text rewritten for the chosen servings; local accounts, households, OIDC single sign-on, sessions, API tokens; Docker Compose stack with nightly backups, and HTTPS behind an existing proxy or through the stack's own Caddy (the `https` profile) |
+| 2 Browse and cook | Done (gate passed on 60 seed recipes, 2026-11-01) | REST API under `/api/v1` with OpenAPI, one error body (`error` and a stable `code`), and the old `/api` addresses answering, deprecated, for one more release; web app (PWA) with search, dish pages, option toggles, any serving count; step text rewritten for the chosen servings; local accounts, households, OIDC single sign-on, sessions, API tokens; Docker Compose stack with nightly backups, and HTTPS behind an existing proxy or through the stack's own Caddy (the `https` profile) |
 | 3 Plan and shop | Core done (gate passed in use, 2026-11-03) | Weekly household plan; shopping list worked out from it, exact totals by store section, household and per-food weight units, pantry staples, hand-added items, ticks, printing, works offline on a phone |
 | 4 Kitchen and imports | Under way, as tasks T22 to T32 in the backlog; gate half two (20 sample pages read to their records, T25) passes | Reading schema.org Recipe data (JSON-LD, microdata as a fallback) from a page or JSON file into bundle-shaped records, for import from a link (T26) and from files (T27); printable recipe cards: any version at any serving count on one page, printed or saved as PDF from the browser |
 | 5 Optional extras | Not started | |
@@ -40,7 +40,9 @@ What a reviewer can rely on today:
   pre-commit hook (`.githooks/`, opt-in) runs the formatting and lints.
 - **Tests:** unit and fuzz tests in `mise-core`, and doc examples that run as tests for its rounding rules; API tests
   for sign-in, plan and shopping, and for search, dish pages, options, versions at published and scaled serving counts,
-  photos and signed-out requests on the demo bundle (loaded through `mise-ingest`), sharing one harness
+  photos and signed-out requests on the demo bundle (loaded through `mise-ingest`), for every documented route's
+  old `/api` address answering as its `/api/v1` one, marked deprecated, and for every kind of error carrying `error`
+  and `code`, sharing one harness
   (`crates/mise-api/tests/common`) that gives each test its own database and media folder and drops them even when the
   test fails; a pipeline snapshot test (`crates/mise-cli/tests/pipeline_snapshot.rs`) that runs the demo bundle
   through every import stage and compares each stage's report, the food tree and every dish page at 1 to 6 servings
@@ -118,3 +120,4 @@ What a reviewer can rely on today:
 | 2026-11-10 | Web pages are parsed with html5ever into a small DOM of mise's own (`mise_ingest::schema_org`), not `scraper` (its CSS crates are MPL-2.0) or html5ever's test-only `rcdom`. A page nesting elements past 512, where browsers stop nesting, is refused: html5ever's work grows with the square of the depth |
 | 2026-11-10 | A dish option lists the choices most versions offer first; on a tie, the dish's default, then the option's reading order (Regular before Double protein; Standard, v2, v3; proteins alphabetically, then No meat). Versions are numbered by how many versions share them, then by label, so a re-run of `derive-options` changes nothing |
 | 2026-11-10 | Recipe cards print through the browser from a print stylesheet, not Typst: the print dialog makes the PDF, a journey checks the page count, and the server needs no PDF engine. Typst stays an option for things the browser can't do, such as a book of many cards |
+| 2026-11-10 | The old `/api` addresses carry `Deprecation: @1794268800` (RFC 9745's form, a date: 2026-11-10, when `/api/v1` came; the drafts' `true` didn't make the RFC) and `Link: <...>; rel="successor-version"` to the new address. Error codes add `method_not_allowed` (axum's 405, which had no body) and `payload_too_large` (a JSON body over 2 MB) to the nine named in T19, so no error answers outside the one shape. The web app acts on `code`, never on a status or a message |

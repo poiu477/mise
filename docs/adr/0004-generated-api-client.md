@@ -16,7 +16,7 @@ requests and answers have to be kept the same on both sides somehow.
 - **React 19 with React Router, Vite and TypeScript**; function components and hooks, one stylesheet, no UI or
   state library; server data goes through TanStack Query ([style.md](../style.md#typescript-and-react)).
 - **The server is the source of the API's types.** utoipa builds the OpenAPI 3.1 document from annotations on the
-  handlers and their Rust types; `mise-server openapi` prints it and the server serves it at `/api/openapi.json`.
+  handlers and their Rust types; `mise-server openapi` prints it and the server serves it at `/api/v1/openapi.json`.
 - **openapi-typescript** turns that document into `web/src/api/schema.d.ts`, and **openapi-fetch** is the client
   ([client.ts](../../web/src/api/client.ts)): typed paths, bodies and answers, with only a small `fetch` wrapper at
   run time. Its middleware sends `X-Mise-Account` and reacts to 401 and 412.

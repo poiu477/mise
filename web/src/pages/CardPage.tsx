@@ -17,10 +17,10 @@ export function CardPage() {
   const dishQuery = useQuery({
     queryKey: ["dish", slug],
     queryFn: ({ signal }) =>
-      answer(api.GET("/api/dishes/{slug}", { params: { path: { slug } }, signal })),
+      answer(api.GET("/api/v1/dishes/{slug}", { params: { path: { slug } }, signal })),
   });
   const dish = dishQuery.data;
-  const missing = dishQuery.error instanceof Refused && dishQuery.error.status === 404;
+  const missing = dishQuery.error instanceof Refused && dishQuery.error.code === "not_found";
   const chosen = dish && versionFor(dish, params);
   const servings = Number(params.get("s")) || (chosen ? startingServings(chosen) : 2);
 
@@ -28,7 +28,7 @@ export function CardPage() {
     queryKey: ["variant", chosen?.id, servings],
     queryFn: ({ signal }) =>
       answer(
-        api.GET("/api/variants/{id}", {
+        api.GET("/api/v1/variants/{id}", {
           params: { path: { id: chosen!.id }, query: { servings } },
           signal,
         }),

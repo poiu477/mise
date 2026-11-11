@@ -170,7 +170,7 @@ async fn an_old_slug_answers_with_the_dish_under_its_current_one() {
 
     for slug in ["black-bean-tacos", "smoky-black-bean-tacos"] {
         let dish = app
-            .json("GET", &format!("/api/dishes/{slug}"), &cookie, None)
+            .json("GET", &format!("/api/v1/dishes/{slug}"), &cookie, None)
             .await;
         assert_eq!(dish["id"], tacos.to_string(), "{slug}");
         assert_eq!(dish["slug"], "smoky-black-bean-tacos", "{slug}");
@@ -180,11 +180,16 @@ async fn an_old_slug_answers_with_the_dish_under_its_current_one() {
 
     // A slug no dish ever had is still not found, and an old one is still private.
     let reply = app
-        .send("GET", "/api/dishes/no-such-dish", As::Cookie(&cookie), None)
+        .send(
+            "GET",
+            "/api/v1/dishes/no-such-dish",
+            As::Cookie(&cookie),
+            None,
+        )
         .await;
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
     let reply = app
-        .send("GET", "/api/dishes/black-bean-tacos", As::Nobody, None)
+        .send("GET", "/api/v1/dishes/black-bean-tacos", As::Nobody, None)
         .await;
     assert_eq!(reply.status, StatusCode::UNAUTHORIZED);
 }
@@ -204,7 +209,7 @@ async fn a_live_dish_wins_over_a_retired_slug() {
         .unwrap();
 
     let dish = app
-        .json("GET", "/api/dishes/black-bean-tacos", &cookie, None)
+        .json("GET", "/api/v1/dishes/black-bean-tacos", &cookie, None)
         .await;
     assert_eq!(dish["id"], tacos.to_string());
 

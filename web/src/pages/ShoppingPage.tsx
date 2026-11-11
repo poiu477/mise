@@ -8,7 +8,14 @@ import {
   type FormEvent,
 } from "react";
 import { Link, useSearchParams } from "react-router";
-import { api, errorText, type ShoppingItem, type ShoppingList, type Weights } from "../api/client";
+import {
+  api,
+  errorCode,
+  errorText,
+  type ShoppingItem,
+  type ShoppingList,
+  type Weights,
+} from "../api/client";
 import { queryClient } from "../api/query";
 import {
   addition,
@@ -31,15 +38,17 @@ import { WEIGHTS, shortWeight } from "../weights";
 type Reached<T> = { data: T } | { refused: unknown } | "unreachable";
 
 /** A call's outcome. No answer, a server error or an ended session count as out of reach: worth trying again.
- * So does a 412, work made for an account that's no longer the one signed in: it waits until that one is back. */
+ * So does `account_changed`, work made for an account that's no longer the one signed in: it waits until that one
+ * is back. */
 async function reach<T>(
   call: Promise<{ data?: T; error?: unknown; response: Response }>,
 ): Promise<Reached<T>> {
   try {
     const r = await call;
     if (r.data !== undefined) return { data: r.data };
-    const status = r.response.status;
-    return status >= 500 || status === 401 || status === 412 ? "unreachable" : { refused: r.error };
+    const code = errorCode(r.error);
+    const waits = r.response.status >= 500 || code === "unauthorized" || code === "account_changed";
+    return waits ? "unreachable" : { refused: r.error };
   } catch {
     return "unreachable";
   }
@@ -53,7 +62,7 @@ export async function keepListsOnDevice(user: string) {
   const copy = deviceCopy(user);
   for (const week of [mondayOf(), addWeeks(mondayOf(), 1)]) {
     const r = await reach(
-      api.GET("/api/shopping", { params: { query: { week } }, signal: patience() }),
+      api.GET("/api/v1/shopping", { params: { query: { week } }, signal: patience() }),
     );
     if (r === "unreachable") return;
     if ("data" in r) copy.save(r.data);
@@ -70,7 +79,7 @@ async function send(c: Change): Promise<Sent> {
     case "tick":
       return sent(
         await reach(
-          api.PUT("/api/shopping/marks", {
+          api.PUT("/api/v1/shopping/marks", {
             body: { week: c.week, key: c.key, checked: c.checked },
             signal: patience(),
           }),
@@ -80,7 +89,7 @@ async function send(c: Change): Promise<Sent> {
       if (isLocal(c.id)) return "refused";
       return sent(
         await reach(
-          api.PATCH("/api/shopping/extras/{id}", {
+          api.PATCH("/api/v1/shopping/extras/{id}", {
             params: { path: { id: c.id } },
             body: { checked: c.checked },
             signal: patience(),
@@ -89,7 +98,7 @@ async function send(c: Change): Promise<Sent> {
       );
     case "add_extra": {
       const r = await reach(
-        api.POST("/api/shopping/extras", {
+        api.POST("/api/v1/shopping/extras", {
           body: addition(c),
           signal: patience(),
         }),
@@ -176,7 +185,7 @@ function WeekList({ user }: { user: string }) {
     queryFn: async (): Promise<Seen> => {
       const asked = ++latest.current;
       const r = await reach(
-        api.GET("/api/shopping", { params: { query: { week } }, signal: patience() }),
+        api.GET("/api/v1/shopping", { params: { query: { week } }, signal: patience() }),
       );
       // A change made since answered with a newer list.
       if (asked !== latest.current) return current();
@@ -268,17 +277,17 @@ function WeekList({ user }: { user: string }) {
   const deleteExtra = (id: string) => {
     if (isLocal(id))
       setPending(pendingRef.current.filter((c) => !(c.kind === "add_extra" && c.id === id)));
-    else run(api.DELETE("/api/shopping/extras/{id}", { params: { path: { id } } }));
+    else run(api.DELETE("/api/v1/shopping/extras/{id}", { params: { path: { id } } }));
   };
   const hide = (key: string, hidden: boolean) =>
-    run(api.PUT("/api/shopping/marks", { body: { week, key, hidden } }));
+    run(api.PUT("/api/v1/shopping/marks", { body: { week, key, hidden } }));
   const always = (foodId: string) =>
-    run(api.POST("/api/pantry-staples", { body: { week, food_id: foodId } }));
+    run(api.POST("/api/v1/pantry-staples", { body: { week, food_id: foodId } }));
   const weighIn = (foodId: string, weight_unit: Weights | null) =>
-    run(api.PUT("/api/shopping/food-weights", { body: { week, food_id: foodId, weight_unit } }));
+    run(api.PUT("/api/v1/shopping/food-weights", { body: { week, food_id: foodId, weight_unit } }));
   const unstaple = (foodId: string) =>
     run(
-      api.DELETE("/api/pantry-staples/{food_id}", {
+      api.DELETE("/api/v1/pantry-staples/{food_id}", {
         params: { path: { food_id: foodId }, query: { week } },
       }),
     );

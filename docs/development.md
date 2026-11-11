@@ -74,7 +74,7 @@ cd web && npm run dev                     # Vite on :5173 with /api forwarded to
 ```
 
 The first visit to an empty database creates the admin account. `mise user set-password <name>` (new password on
-standard input) recovers a lost one. The OpenAPI document is at `/api/openapi.json`.
+standard input) recovers a lost one. The OpenAPI document is at `/api/v1/openapi.json`.
 
 A second server for trying things, without touching the one in daily use:
 

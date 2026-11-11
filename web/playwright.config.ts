@@ -20,7 +20,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command: "node e2e/serve.mjs",
-    url: "http://127.0.0.1:8095/api/health",
+    url: "http://127.0.0.1:8095/api/v1/health",
     reuseExistingServer: false,
     timeout: 180_000,
     stdout: "pipe",

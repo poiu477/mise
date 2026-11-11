@@ -51,7 +51,7 @@ function ShoppingUnits() {
   const key = ["shopping-settings", useAccount()];
   const settings = useQuery({
     queryKey: key,
-    queryFn: ({ signal }) => answer(api.GET("/api/shopping/settings", { signal })),
+    queryFn: ({ signal }) => answer(api.GET("/api/v1/shopping/settings", { signal })),
   });
   const weights = settings.data?.weight_unit ?? null;
   const [error, setError] = useState("");
@@ -63,7 +63,7 @@ function ShoppingUnits() {
     queryClient.setQueryData(key, { weight_unit: next });
     setError("");
     const { data, error: failed } = await api
-      .PUT("/api/shopping/settings", { body: { weight_unit: next } })
+      .PUT("/api/v1/shopping/settings", { body: { weight_unit: next } })
       .catch(() => ({
         data: undefined,
         error: { error: "can't reach the server, so that wasn't saved" },
@@ -111,7 +111,7 @@ function PasswordForm({ me }: { me: Me }) {
     e.preventDefault();
     if (form.next !== form.confirm)
       return setMsg({ ok: false, text: "The new passwords don't match." });
-    const { error } = await api.POST("/api/me/password", {
+    const { error } = await api.POST("/api/v1/me/password", {
       body: { current: me.has_password ? form.current : undefined, new: form.next },
     });
     if (error) return setMsg({ ok: false, text: errorText(error) });
@@ -173,7 +173,7 @@ function Tokens() {
   const tokens =
     useQuery({
       queryKey: key,
-      queryFn: ({ signal }) => answer(api.GET("/api/me/tokens", { signal })),
+      queryFn: ({ signal }) => answer(api.GET("/api/v1/me/tokens", { signal })),
     }).data ?? [];
   const [name, setName] = useState("");
   const [scope, setScope] = useState("read");
@@ -184,7 +184,7 @@ function Tokens() {
   /** Makes a token and shows it once, to copy now. */
   const create = async (e: FormEvent) => {
     e.preventDefault();
-    const { data, error } = await api.POST("/api/me/tokens", { body: { name, scope } });
+    const { data, error } = await api.POST("/api/v1/me/tokens", { body: { name, scope } });
     if (error || !data) return setError(errorText(error));
     setFresh(data.token);
     setName("");
@@ -194,7 +194,7 @@ function Tokens() {
   /** Revokes a token after asking, since anything using it stops working. */
   const revoke = async (t: TokenInfo) => {
     if (!window.confirm(`Revoke "${t.name}"? Anything using it stops working.`)) return;
-    await api.DELETE("/api/me/tokens/{id}", { params: { path: { id: t.id } } });
+    await api.DELETE("/api/v1/me/tokens/{id}", { params: { path: { id: t.id } } });
     load();
   };
   return (
@@ -270,12 +270,12 @@ function Admin({ me }: { me: Me }) {
   const users =
     useQuery({
       queryKey: ["users", me.id],
-      queryFn: ({ signal }) => answer(api.GET("/api/users", { signal })),
+      queryFn: ({ signal }) => answer(api.GET("/api/v1/users", { signal })),
     }).data ?? [];
   const households =
     useQuery({
       queryKey: ["households", me.id],
-      queryFn: ({ signal }) => answer(api.GET("/api/households", { signal })),
+      queryFn: ({ signal }) => answer(api.GET("/api/v1/households", { signal })),
     }).data ?? [];
   const [error, setError] = useState("");
   const [form, setForm] = useState({
@@ -298,7 +298,7 @@ function Admin({ me }: { me: Me }) {
     u: UserInfo,
     change: { is_admin?: boolean; disabled?: boolean; household_id?: string },
   ) => {
-    const { error } = await api.PATCH("/api/users/{id}", {
+    const { error } = await api.PATCH("/api/v1/users/{id}", {
       params: { path: { id: u.id } },
       body: change,
     });
@@ -308,7 +308,7 @@ function Admin({ me }: { me: Me }) {
   /** Adds someone, in an existing household or a new one of their own. */
   const add = async (e: FormEvent) => {
     e.preventDefault();
-    const { error } = await api.POST("/api/users", {
+    const { error } = await api.POST("/api/v1/users", {
       body: {
         username: form.username,
         display_name: form.display_name || undefined,
@@ -326,7 +326,7 @@ function Admin({ me }: { me: Me }) {
   /** Adds an empty household to put people in. */
   const addHousehold = async (e: FormEvent) => {
     e.preventDefault();
-    const { error } = await api.POST("/api/households", { body: { name: newHousehold } });
+    const { error } = await api.POST("/api/v1/households", { body: { name: newHousehold } });
     if (error) return setError(errorText(error));
     setNewHousehold("");
     load();

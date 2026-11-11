@@ -115,7 +115,9 @@ test("a serving count the server refuses says why, on the dish page and its card
 
   // A server error, such as a proxy's 502 while mise restarts, isn't a refusal: it reads as before, with Try again.
   // The service worker fetches recipe data itself, so the browser context, not the page, sees the request.
-  await context.route("**/api/variants/*", (r) => r.fulfill({ status: 502, body: "Bad Gateway" }));
+  await context.route("**/api/v1/variants/*", (r) =>
+    r.fulfill({ status: 502, body: "Bad Gateway" }),
+  );
   for (const path of [
     "/dishes/weeknight-tomato-pasta?s=5",
     "/dishes/weeknight-tomato-pasta/card?s=5",
@@ -124,7 +126,7 @@ test("a serving count the server refuses says why, on the dish page and its card
     await expect(page.getByText("Can't reach the server"), path).toBeVisible();
     await expect(page.getByRole("button", { name: "Try again" }), path).toBeVisible();
   }
-  await context.unroute("**/api/variants/*");
+  await context.unroute("**/api/v1/variants/*");
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.locator(".card-steps li").first()).toBeVisible();
 });
@@ -170,10 +172,10 @@ test("a dish prints as a card with the amounts the dish page shows", async () =>
 });
 
 test("every demo recipe's card prints on one page", async () => {
-  const listed = await (await page.request.get("/api/dishes")).json();
+  const listed = await (await page.request.get("/api/v1/dishes")).json();
   const cards: string[] = [];
   for (const { slug } of listed.items as { slug: string }[]) {
-    const dish = await (await page.request.get(`/api/dishes/${slug}`)).json();
+    const dish = await (await page.request.get(`/api/v1/dishes/${slug}`)).json();
     for (const { id } of dish.variants as { id: string }[])
       cards.push(`/dishes/${slug}/card?v=${id}`);
   }
@@ -192,7 +194,7 @@ test("every demo recipe's card prints on one page", async () => {
   // ingredients, six steps, about 2,400 characters of steps), with a photo, still fits. The service worker fetches
   // recipe data itself, so the browser context, not the page, sees the request.
   let repeat = 1;
-  await context.route("**/api/variants/*", async (r) => {
+  await context.route("**/api/v1/variants/*", async (r) => {
     const v = await (await r.fetch()).json();
     const ingredients = [...v.ingredients, ...EXTRA_INGREDIENTS].slice(0, 17);
     const steps = Array.from({ length: repeat }, () => LONG_STEPS)
@@ -208,7 +210,7 @@ test("every demo recipe's card prints on one page", async () => {
   repeat = 3;
   expect(await printed(cards[0])).toBeGreaterThan(1);
   await expect(page.locator(".card-steps li")).toHaveCount(18);
-  await context.unroute("**/api/variants/*");
+  await context.unroute("**/api/v1/variants/*");
 });
 
 /** Lines to lengthen a demo recipe's ingredients to a long recipe's. */
@@ -304,7 +306,7 @@ test("ticks survive a reload, and the list keeps working offline", async () => {
   await context.setOffline(false);
   await expect(page.getByText("not sent yet")).toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByRole("status")).toHaveCount(0);
-  const list = await (await page.request.get("/api/shopping")).json();
+  const list = await (await page.request.get("/api/v1/shopping")).json();
   const items = list.sections.flatMap(
     (s: { items: { name: string; checked: boolean }[] }) => s.items,
   );
@@ -318,7 +320,7 @@ test("an addition whose answer is lost is sent again and added once", async () =
   let sends = 0;
   let firstSaved = () => {};
   const savedOnce = new Promise<void>((resolve) => (firstSaved = resolve));
-  await page.route("**/api/shopping/extras", async (r) => {
+  await page.route("**/api/v1/shopping/extras", async (r) => {
     sends++;
     if (sends > 1) return r.continue();
     await r.fetch();
@@ -331,7 +333,7 @@ test("an addition whose answer is lost is sent again and added once", async () =
   // the first send to have been saved before reading the server's list.
   await savedOnce;
   await expect(page.getByText("not sent yet")).toBeVisible();
-  const saved = await (await page.request.get("/api/shopping")).json();
+  const saved = await (await page.request.get("/api/v1/shopping")).json();
   expect(saved.extras.map((x: { name: string }) => x.name)).toEqual(["Foil", "Tape"]);
 
   // Reopening sends it again, and the server knows it already.
@@ -339,9 +341,9 @@ test("an addition whose answer is lost is sent again and added once", async () =
   await expect.poll(() => sends, { timeout: 15_000 }).toBe(2);
   await expect(page.getByText("not sent yet")).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "Tape", exact: true })).toHaveCount(1);
-  const list = await (await page.request.get("/api/shopping")).json();
+  const list = await (await page.request.get("/api/v1/shopping")).json();
   expect(list.extras.map((x: { name: string }) => x.name)).toEqual(["Foil", "Tape"]);
-  await page.unroute("**/api/shopping/extras");
+  await page.unroute("**/api/v1/shopping/extras");
 });
 
 test("a list left open in one tab keeps saving after another tab signs in", async () => {
@@ -364,7 +366,7 @@ test("a list left open in one tab keeps saving after another tab signs in", asyn
 
 test("work queued as one person never lands on whoever signs in after them", async () => {
   // Robin, the admin, adds Sam, in a household of Sam's own.
-  const made = await page.request.post("/api/users", {
+  const made = await page.request.post("/api/v1/users", {
     data: { username: "sam", password: "sam's long password", household_name: "Sam's household" },
   });
   expect(made.ok()).toBe(true);
@@ -372,16 +374,16 @@ test("work queued as one person never lands on whoever signs in after them", asy
   await expect(shoppingItem("Black Beans")).toBeVisible();
 
   // Robin adds something the server can't take just now, so it waits on the device.
-  await page.route("**/api/shopping/extras", (r) => r.abort());
+  await page.route("**/api/v1/shopping/extras", (r) => r.abort());
   await page.getByRole("textbox", { name: "Add something else" }).fill("Robin's foil");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByText("not sent yet")).toBeVisible();
-  await page.unroute("**/api/shopping/extras");
+  await page.unroute("**/api/v1/shopping/extras");
 
   // Sam signs in, in another tab: the cookie is shared, so every tab now talks to the server as Sam.
   const other = await context.newPage();
-  await other.request.post("/api/auth/logout");
-  const login = await other.request.post("/api/auth/login", {
+  await other.request.post("/api/v1/auth/logout");
+  const login = await other.request.post("/api/v1/auth/login", {
     data: { username: "sam", password: "sam's long password" },
   });
   expect(login.ok()).toBe(true);
@@ -392,7 +394,7 @@ test("work queued as one person never lands on whoever signs in after them", asy
   // it as meant for someone else, and the tab follows Sam instead of sending it as Sam.
   await expect(page.getByText("Nothing planned for this week yet")).toBeVisible();
   await page.waitForLoadState("networkidle");
-  const sams = await (await other.request.get("/api/shopping")).json();
+  const sams = await (await other.request.get("/api/v1/shopping")).json();
   expect(sams.extras).toEqual([]);
   // Robin's addition is still waiting on the device, for Robin.
   const waiting = await page.evaluate(() =>

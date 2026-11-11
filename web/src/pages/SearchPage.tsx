@@ -23,7 +23,7 @@ export function SearchPage() {
     queryKey: ["dishes", asked],
     queryFn: ({ pageParam, signal }) =>
       answer(
-        api.GET("/api/dishes", {
+        api.GET("/api/v1/dishes", {
           params: { query: { ...asked, limit: PAGE, offset: pageParam } },
           signal,
         }),
