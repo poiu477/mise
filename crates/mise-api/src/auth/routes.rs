@@ -57,6 +57,9 @@ pub struct Me {
     pub household: Household,
     /// The account can sign in with a password (single-sign-on-only accounts cannot).
     pub has_password: bool,
+    /// This is a kitchen device, not an account: `id` is its kitchen token's, `display_name` its name, and the
+    /// username, email and household name are empty.
+    pub kitchen: bool,
 }
 
 pub(crate) async fn load_me(pool: &sqlx::PgPool, id: Uuid) -> ApiResult<Me> {
@@ -80,6 +83,7 @@ pub(crate) async fn load_me(pool: &sqlx::PgPool, id: Uuid) -> ApiResult<Me> {
             name: hname,
         },
         has_password,
+        kitchen: false,
     })
 }
 
@@ -220,12 +224,15 @@ pub async fn logout(
     ))
 }
 
-/// The signed-in account.
-#[utoipa::path(get, path = "/api/v1/me", operation_id = "me", tag = "account", responses((status = 200, description = "The signed-in account", body = Me), (status = 401, description = "Not signed in", body = crate::error::ErrorBody)))]
+/// The signed-in account, or the kitchen device (`kitchen` true, with no personal data).
+#[utoipa::path(get, path = "/api/v1/me", operation_id = "me", tag = "account", responses((status = 200, description = "The signed-in account, or the kitchen device", body = Me), (status = 401, description = "Not signed in", body = crate::error::ErrorBody)))]
 pub async fn me(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
 ) -> ApiResult<Json<Me>> {
+    if u.via == Via::Kitchen {
+        return Ok(Json(super::kitchen::me(&s.pool, u.id).await?));
+    }
     Ok(Json(load_me(&s.pool, u.id).await?))
 }
 
@@ -679,7 +686,7 @@ pub async fn create_household(
     Ok(Json(Household { id, name }))
 }
 
-fn session_only(u: &CurrentUser) -> ApiResult<()> {
+pub(super) fn session_only(u: &CurrentUser) -> ApiResult<()> {
     if u.via == Via::Session {
         Ok(())
     } else {

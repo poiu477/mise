@@ -45,6 +45,7 @@ pub struct AppState {
         health, dishes::list, dishes::get, variants::get, media::get,
         auth::routes::config, auth::routes::setup, auth::routes::login, auth::routes::logout, auth::oidc::start, auth::oidc::callback,
         auth::routes::me, auth::routes::change_password, auth::routes::list_tokens, auth::routes::create_token, auth::routes::delete_token,
+        auth::kitchen::open_link, auth::kitchen::list, auth::kitchen::create, auth::kitchen::delete,
         auth::routes::list_users, auth::routes::create_user, auth::routes::update_user, auth::routes::list_households, auth::routes::create_household,
         plan::get, plan::add, plan::update, plan::remove,
         shopping::get, shopping::mark, shopping::add_extra, shopping::update_extra, shopping::remove_extra, shopping::add_staple, shopping::remove_staple,
@@ -55,6 +56,7 @@ pub struct AppState {
         (name = "plan", description = "The household's weekly plan"), (name = "shopping", description = "The shopping list worked out from the plan"),
         (name = "auth", description = "Signing in"), (name = "account", description = "The signed-in account"),
         (name = "admin", description = "Accounts and households (admins)"),
+        (name = "kitchen", description = "Kitchen devices: a one-time link sets a cookie that reads the plan and recipes"),
     ),
     modifiers(&Security)
 )]
@@ -172,6 +174,7 @@ fn api_routes() -> Router<AppState> {
         .route("/auth/setup", post(auth::routes::setup))
         .route("/auth/login", post(auth::routes::login))
         .route("/auth/logout", post(auth::routes::logout))
+        .route("/auth/kitchen", get(auth::kitchen::open_link))
         .route("/me", get(auth::routes::me))
         .route("/me/password", post(auth::routes::change_password))
         .route(
@@ -179,6 +182,11 @@ fn api_routes() -> Router<AppState> {
             get(auth::routes::list_tokens).post(auth::routes::create_token),
         )
         .route("/me/tokens/{id}", delete(auth::routes::delete_token))
+        .route(
+            "/kitchen-tokens",
+            get(auth::kitchen::list).post(auth::kitchen::create),
+        )
+        .route("/kitchen-tokens/{id}", delete(auth::kitchen::delete))
         .route(
             "/users",
             get(auth::routes::list_users).post(auth::routes::create_user),

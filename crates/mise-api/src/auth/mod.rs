@@ -1,7 +1,9 @@
 //! Accounts and sign-in. Every API route except health and sign-in itself needs a signed-in user: a browser
-//! session (an HttpOnly cookie) or a personal API token (`Authorization: Bearer mise_…`). Passwords are
-//! argon2id; sessions and tokens are random 256-bit values stored only as SHA-256 hashes.
+//! session (an HttpOnly cookie) or a personal API token (`Authorization: Bearer mise_…`), or a kitchen device's
+//! cookie, which reads the household's plan and recipes only (see `kitchen`). Passwords are argon2id; sessions and
+//! tokens are random 256-bit values stored only as SHA-256 hashes.
 
+pub mod kitchen;
 pub mod oidc;
 pub mod routes;
 
@@ -13,7 +15,7 @@ use anyhow::{Context, bail};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use axum::{
     extract::{Request, State},
-    http::{Method, header},
+    http::{HeaderValue, Method, header},
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -38,6 +40,7 @@ const PUBLIC: &[&str] = &[
     "/auth/config",
     "/auth/setup",
     "/auth/login",
+    "/auth/kitchen",
     "/auth/oidc/start",
     "/auth/oidc/callback",
 ];
@@ -117,7 +120,8 @@ impl Auth {
     }
 }
 
-/// Who is calling, attached to every authenticated request.
+/// Who is calling, attached to every authenticated request. A kitchen device has no account: its `id` is its
+/// kitchen token's, and `require_auth` lets it reach only the routes `kitchen::may` lists.
 #[derive(Clone, Debug)]
 pub struct CurrentUser {
     pub id: Uuid,
@@ -130,7 +134,11 @@ pub struct CurrentUser {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Via {
     Session,
-    Token { read_only: bool },
+    Token {
+        read_only: bool,
+    },
+    /// A kitchen device's cookie.
+    Kitchen,
 }
 
 impl CurrentUser {
@@ -361,16 +369,18 @@ async fn from_token(pool: &PgPool, token: &str) -> Result<Option<CurrentUser>, A
 pub const ACCOUNT_HEADER: &str = "x-mise-account";
 
 /// Resolve the caller and refuse what they may not do. Paths outside the API (the web app) and the public
-/// routes pass through untouched.
+/// routes pass through untouched. A bearer token comes first, then an account's session cookie, then a kitchen
+/// device's cookie.
 pub async fn require_auth(
     State(s): State<AppState>,
     jar: CookieJar,
     mut req: Request,
     next: Next,
 ) -> Response {
-    if crate::api_path(req.uri().path()).is_none_or(|rest| PUBLIC.contains(&rest)) {
-        return next.run(req).await;
-    }
+    let rest = match crate::api_path(req.uri().path()) {
+        Some(rest) if !PUBLIC.contains(&rest) => rest.to_string(),
+        _ => return next.run(req).await,
+    };
     let bearer = req
         .headers()
         .get(header::AUTHORIZATION)
@@ -378,19 +388,40 @@ pub async fn require_auth(
         .and_then(|h| h.strip_prefix("Bearer "))
         .map(str::trim)
         .map(str::to_string);
+    // The kitchen cookie to set again on the way out, renewing its lifetime, when this request renewed its use.
+    let mut renew = None;
     let user = match (bearer, jar.get(SESSION_COOKIE)) {
         (Some(t), _) => match t.strip_prefix(TOKEN_PREFIX) {
             Some(t) => from_token(&s.pool, t).await,
             None => Ok(None),
         },
-        (None, Some(c)) => from_session(&s.pool, c.value(), s.auth.config.session_days).await,
-        (None, None) => Ok(None),
+        (None, session) => {
+            let user = match session {
+                Some(c) => from_session(&s.pool, c.value(), s.auth.config.session_days).await,
+                None => Ok(None),
+            };
+            match (user, jar.get(kitchen::COOKIE)) {
+                (Ok(None), Some(c)) => match kitchen::from_cookie(&s.pool, c.value()).await {
+                    Ok(Some((u, renewed))) => {
+                        renew = renewed.then(|| c.value().to_string());
+                        Ok(Some(u))
+                    }
+                    Ok(None) => Ok(None),
+                    Err(e) => Err(e),
+                },
+                (user, _) => user,
+            }
+        }
     };
     let user = match user {
         Ok(Some(u)) => u,
         Ok(None) => return ApiError::Unauthorized.into_response(),
         Err(e) => return e.into_response(),
     };
+    if user.via == Via::Kitchen && !kitchen::may(req.method(), &rest) {
+        return ApiError::Forbidden("a kitchen device can only read the plan and recipes".into())
+            .into_response();
+    }
     if user.via == (Via::Token { read_only: true })
         && !matches!(*req.method(), Method::GET | Method::HEAD)
     {
@@ -402,7 +433,14 @@ pub async fn require_auth(
         return ApiError::AccountChanged.into_response();
     }
     req.extensions_mut().insert(user);
-    next.run(req).await
+    let mut res = next.run(req).await;
+    if let Some(cookie) = renew
+        .map(|secret| kitchen::cookie(secret, &s.auth.config).to_string())
+        .and_then(|c| HeaderValue::from_str(&c).ok())
+    {
+        res.headers_mut().append(header::SET_COOKIE, cookie);
+    }
+    res
 }
 
 #[cfg(test)]
