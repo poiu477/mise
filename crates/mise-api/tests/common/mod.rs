@@ -57,6 +57,13 @@ pub enum As<'a> {
     Cookie(&'a str),
     /// A script with this API token.
     Bearer(&'a str),
+    /// A kitchen device with this kitchen cookie.
+    Kitchen(&'a str),
+    /// A browser holding both an account's session cookie and a kitchen cookie.
+    Both {
+        session: &'a str,
+        kitchen: &'a str,
+    },
 }
 
 /// A response, read through.
@@ -70,14 +77,19 @@ pub struct Reply {
 impl Reply {
     /// The session cookie this response sets: empty when it clears it.
     pub fn session(&self) -> Option<String> {
+        self.cookie("mise_session")
+            .map(|c| c.split(';').next().unwrap_or_default().to_string())
+    }
+
+    /// The whole `Set-Cookie` line this response sends for the cookie `name`, after `name=`: its value, then its
+    /// attributes.
+    pub fn cookie(&self, name: &str) -> Option<String> {
+        let prefix = format!("{name}=");
         self.headers
             .get_all(header::SET_COOKIE)
             .iter()
             .filter_map(|h| h.to_str().ok())
-            .find_map(|c| {
-                c.strip_prefix("mise_session=")
-                    .map(|v| v.split(';').next().unwrap_or_default().to_string())
-            })
+            .find_map(|c| c.strip_prefix(&prefix).map(str::to_string))
     }
 
     /// A response header as text, if it is set and readable.
@@ -149,6 +161,11 @@ impl TestApp {
             As::Nobody => b,
             As::Cookie(c) => b.header(header::COOKIE, format!("mise_session={c}")),
             As::Bearer(t) => b.header(header::AUTHORIZATION, format!("Bearer {t}")),
+            As::Kitchen(k) => b.header(header::COOKIE, format!("mise_kitchen={k}")),
+            As::Both { session, kitchen } => b.header(
+                header::COOKIE,
+                format!("mise_session={session}; mise_kitchen={kitchen}"),
+            ),
         }
     }
 

@@ -80,7 +80,7 @@ The Rust crates' documentation, built from `main`, is on GitLab Pages at
 | `docs/style.md` | How code, comments, commits and UI text are written |
 | `docs/curation.md` | Food curation files, dish decisions, preferred versions |
 | `docs/seed-bundle.md` | The bulk-import format |
-| `docs/sign-in.md` | Accounts, households, single sign-on, API tokens |
+| `docs/sign-in.md` | Accounts, households, single sign-on, API tokens, kitchen devices |
 | `docs/scaling-rules.md` | How recipes scale: established rules, exceptions, the archive's evidence |
 | `docs/deploy.md` | Running mise with Docker Compose (e.g. in a Proxmox LXC) |
 | `compose.yaml`, `Dockerfile`, `Caddyfile` | The production stack, with optional HTTPS; settings in `deploy.env.example` |

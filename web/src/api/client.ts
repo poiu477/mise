@@ -100,6 +100,8 @@ export type AuthInfo = components["schemas"]["AuthInfo"];
 export type Me = components["schemas"]["Me"];
 /** An API token as its owner sees it: name, scope ("read" or "read_write") and when it was last used. */
 export type TokenInfo = components["schemas"]["TokenInfo"];
+/** A kitchen device's token as the household's admins see it: name, whether its link has been opened, last use. */
+export type KitchenToken = components["schemas"]["KitchenToken"];
 /** An account as an admin sees it on the account page. */
 export type UserInfo = components["schemas"]["UserInfo"];
 /** A household: the people who share a plan and a shopping list. */

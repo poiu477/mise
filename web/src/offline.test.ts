@@ -81,6 +81,7 @@ const signedIn = (store: Store, id = "me") =>
       is_admin: true,
       has_password: true,
       household: { id: "h", name: "Home" },
+      kitchen: false,
     },
     store,
   );

@@ -92,18 +92,6 @@ account. The schema already has `user` and `web` sources and `variants.parent_va
 - **Done when:** API tests show a version owned by one household is invisible to another in search, the dish page,
   a direct fetch by id, and when added to a plan by id; the pipeline snapshot test still passes unchanged.
 
-### T23 · Kitchen device tokens
-
-The Echo Show's browser can't sign in comfortably or send headers, so kitchen mode runs on a device token.
-
-- From the account page, a household admin issues a kitchen token with a name ("Kitchen Echo"); opening its one-time
-  link on the device sets a long-lived cookie. A kitchen session reads the household's plan, dishes, versions and
-  photos, and nothing else: no shopping list, accounts, names or emails, and no changes. Tokens are listed and
-  revoked like API tokens.
-- **Touches:** `crates/mise-api/src/auth/`, a new migration, `web/src/pages/AccountPage.tsx`.
-- **Done when:** API tests show a kitchen session can read each allowed route and is refused every other one,
-  that `/api/v1/me` reveals no personal data to it, and that a revoked token stops working at once.
-
 ### T24 · Kitchen mode
 
 - A kitchen view of a planned dish for a 1280 × 800 screen: one step at a time in large type, the step's ingredients

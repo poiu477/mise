@@ -41,7 +41,8 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
 - **Media.** Content-addressed `media` (by hash) with `media_derivatives` (web sizes) and links to variants, steps
   and foods.
 - **Review.** `review_items` queue doubtful merges, unmatched names and conflicting evidence for a person.
-- **Accounts.** `households` (the sharing boundary), `users`, `user_identities` (OIDC), `sessions`, `api_tokens`.
+- **Accounts.** `households` (the sharing boundary), `users`, `user_identities` (OIDC), `sessions`, `api_tokens`,
+  `kitchen_tokens` (a kitchen device's one-time link, then its cookie).
 - **Planning.** `plan_entries` (a version and serving count in a household's week, named by its Monday);
   `shopping_marks` (ticked or removed, per food: the key is the food's id, or the name of an unmatched line),
   `shopping_extras` (added by hand), `pantry_staples` (always on hand),
@@ -87,9 +88,15 @@ whose versions all joined another. A live dish's slug always wins over a retired
 `lib.rs` builds the router. Every route is served under `/api/v1`; the same routes answer under the old `/api` for
 one more release, with a `Deprecation` header and a `Link` to the new address (`mark_deprecated`), except
 `/api/health` and single sign-on's two redirects, which keep their addresses for good. Every route sits behind
-`auth::require_auth` except health, the OpenAPI document and sign-in. A session cookie (`mise_session`) or a bearer
-token (`mise_…`, read or read-write) identifies a `CurrentUser` with their `household_id`, and every planning query is
-scoped by it. The web app also sends `X-Mise-Account` with the account it is working as; when that isn't the account
+`auth::require_auth` except health, the OpenAPI document and sign-in. A bearer token (`mise_…`, read or read-write),
+else a session cookie (`mise_session`), else a kitchen device's cookie (`mise_kitchen`) identifies a `CurrentUser` with
+their `household_id`, and every planning query is scoped by it. A kitchen device has no account: its `CurrentUser`
+carries its kitchen token's id and `Via::Kitchen`, and `require_auth` refuses it every route but the few
+`auth::kitchen::may` lists (reading `/me`, the plan, dishes, versions and photos) before any handler runs; `/me`
+answers it with `kitchen: true` and no username, email or household name. Its cookie comes from a one-time link an
+admin issues (`/api/v1/auth/kitchen?code=…`, valid for an hour), and is renewed, at most hourly, as the device is
+used. Sessions, API tokens, kitchen links and kitchen cookies are random 256-bit secrets stored only as SHA-256
+hashes. The web app also sends `X-Mise-Account` with the account it is working as; when that isn't the account
 signed in (someone else signed in since, in another tab, with the shared cookie) the request is refused with 412, so
 queued work never lands in another household, and the app re-checks who is signed in. Handlers return
 `ApiResult<T>`; `error.rs` maps errors to the right status and one JSON body, `{ "error": "…", "code": "…" }`: a

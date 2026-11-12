@@ -46,6 +46,16 @@ whose `/.well-known/openid-configuration` the provider serves (in Authentik: the
 **Account → API tokens** makes a token for scripts and integrations, sent as `Authorization: Bearer mise_…`.
 Read tokens can only read. Tokens are shown once and stored as hashes; a token cannot create other tokens.
 
+## Kitchen devices
+
+A screen in the kitchen, such as an Echo Show, whose browser can't sign in comfortably. An admin adds one under
+**Account → Kitchen devices** with a name and gets a link, shown once: open it on the device within the hour. It
+works once, and sets a cookie on the device that lasts 400 days from its last use. The device reads the household's
+plan, dishes, versions and photos and nothing else: no shopping list, accounts, names or emails, and no changes.
+**Revoke** signs it out at its next request. A browser signed in to an account stays signed in when a kitchen link
+is opened in it, and acts as that account until it signs out. Open the link on the device itself: an app that
+previews links may open it first, and then it no longer works.
+
 ## Behind a reverse proxy
 
 Set `PUBLIC_BASE_URL` to the outside address. With an `https` URL, session cookies are marked Secure. Without it,
