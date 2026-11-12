@@ -175,11 +175,12 @@ type FoodTreeRow = (
     Option<String>,
 );
 
+/// The week's planned versions and their lines; like the plan, only versions the household can see.
 async fn plan_lines(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Planned> {
     let entries: Vec<(Uuid, f64, String)> = sqlx::query_as(
         "SELECT e.variant_id, e.servings::float8, coalesce(d.title, v.title) FROM plan_entries e
          JOIN variants v ON v.id = e.variant_id LEFT JOIN dishes d ON d.id = v.dish_id
-         WHERE e.household_id = $1 AND e.week = $2 ORDER BY e.created_at, e.id",
+         WHERE e.household_id = $1 AND e.week = $2 AND visible_to(v, $1) ORDER BY e.created_at, e.id",
     )
     .bind(household)
     .bind(week)

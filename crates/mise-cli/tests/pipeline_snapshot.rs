@@ -23,10 +23,10 @@ use std::{
     sync::Arc,
 };
 
-use axum::{Json, extract::State};
+use axum::{Extension, Json, extract::State};
 use mise_api::{
     AppState,
-    auth::{Auth, AuthConfig},
+    auth::{Auth, AuthConfig, CurrentUser, Via},
     dishes,
     extract::{Path as ApiPath, Query},
     variants::{self, RenderParams},
@@ -261,11 +261,23 @@ fn redact_ids(s: &str) -> String {
     out
 }
 
+/// Who reads the pages: an account in a household of its own. The demo recipes belong to no household, so every
+/// account sees all of them, as this one does.
+fn reader() -> Extension<CurrentUser> {
+    Extension(CurrentUser {
+        id: uuid::Uuid::nil(),
+        username: "reader".into(),
+        is_admin: false,
+        household_id: uuid::Uuid::nil(),
+        via: Via::Session,
+    })
+}
+
 /// A dish page: the dish with its options and versions, then each version at every serving count in `SERVINGS`,
 /// as the API serves them. Versions are numbered in the order the page lists them.
 async fn dish_page(state: &AppState, slug: &str) -> String {
     // Options and their choices keep the order the API gives: `derive_options` settles it from the data alone.
-    let Json(dish) = dishes::get(State(state.clone()), ApiPath(slug.to_string()))
+    let Json(dish) = dishes::get(State(state.clone()), reader(), ApiPath(slug.to_string()))
         .await
         .unwrap_or_else(|e| panic!("dish {slug}: {e}"));
     let mut versions: Vec<&dishes::VariantSummary> = dish.variants.iter().collect();
@@ -358,6 +370,7 @@ async fn version(out: &mut String, state: &AppState, number: usize, id: uuid::Uu
     for n in SERVINGS {
         let Json(v) = variants::get(
             State(state.clone()),
+            reader(),
             ApiPath(id),
             Query(RenderParams {
                 servings: Some(f64::from(n)),

@@ -58,13 +58,15 @@ type EntryRow = (
     Option<Uuid>,
 );
 
+/// A week's plan, with only the versions the household can see: one it can no longer see drops out rather than
+/// showing another household's recipe.
 async fn load(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Plan> {
     let rows: Vec<EntryRow> = sqlx::query_as(
         "SELECT e.id, e.variant_id, d.slug, v.title, v.subtitle, e.servings::float8,
                 ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id ORDER BY y.servings),
                 (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1)
          FROM plan_entries e JOIN variants v ON v.id = e.variant_id LEFT JOIN dishes d ON d.id = v.dish_id
-         WHERE e.household_id = $1 AND e.week = $2 ORDER BY e.created_at, e.id",
+         WHERE e.household_id = $1 AND e.week = $2 AND visible_to(v, $1) ORDER BY e.created_at, e.id",
     )
     .bind(household)
     .bind(week)
@@ -117,10 +119,10 @@ pub struct NewEntry {
     pub servings: Option<f64>,
 }
 
-/// Add a dish to a week. Answers with the week's plan.
+/// Add a dish to a week. Answers with the week's plan; a version the household can't see is not found.
 #[utoipa::path(
     post, path = "/api/v1/plan/entries", operation_id = "add_plan_entry", tag = "plan", request_body = NewEntry,
-    responses((status = 200, description = "The week's plan with the dish added", body = Plan), (status = 404, description = "No such version", body = crate::error::ErrorBody))
+    responses((status = 200, description = "The week's plan with the dish added", body = Plan), (status = 404, description = "No such version, or not one this household can see", body = crate::error::ErrorBody))
 )]
 pub async fn add(
     State(s): State<AppState>,
@@ -128,9 +130,10 @@ pub async fn add(
     JsonBody(b): JsonBody<NewEntry>,
 ) -> ApiResult<Json<Plan>> {
     let yields: Option<(Vec<f64>,)> = sqlx::query_as(
-        "SELECT ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id ORDER BY y.servings) FROM variants v WHERE v.id = $1",
+        "SELECT ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id ORDER BY y.servings) FROM variants v WHERE v.id = $1 AND visible_to(v, $2)",
     )
     .bind(b.variant_id)
+    .bind(me.household_id)
     .fetch_optional(&s.pool)
     .await?;
     let (yields,) = yields.ok_or(ApiError::NotFound)?;
