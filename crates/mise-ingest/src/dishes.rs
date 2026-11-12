@@ -5,8 +5,12 @@
 //! reused as a template for a different dish are left apart and queued for review. Decisions recorded in
 //! `dish_decisions` override all of this: decided merges are applied last, and decided pairs are not queued
 //! again. Variants pinned by a person, and dishes a person made, are never touched.
+//!
+//! A household's own versions (imports, forks, recipes written in the app) group like any others, with one limit:
+//! they may join a dish everyone sees, but never a dish only another household can see. A dish everyone sees takes its
+//! name and the version it opens on from the versions everyone sees, so nothing of a household's own shows through it.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -75,6 +79,8 @@ struct V {
     has_steps: bool,
     has_hero: bool,
     published: Option<chrono::DateTime<chrono::Utc>>,
+    /// The household that owns the version; none for seed and bundle versions, which everyone sees.
+    household_id: Option<Uuid>,
 }
 
 struct UnionFind(Vec<usize>);
@@ -147,7 +153,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
 
     let vs: Vec<V> = sqlx::query_as(
         "SELECT id, title, subtitle, parent_variant_id, coalesce(meta->>'content_type', 'recipe') AS content_type,
-                has_steps, (meta->'media'->>'hero') IS NOT NULL AS has_hero, published_at AS published
+                has_steps, (meta->'media'->>'hero') IS NOT NULL AS has_hero, published_at AS published, household_id
          FROM variants WHERE dish_id IS NULL ORDER BY id",
     )
     .fetch_all(&mut *tx)
@@ -376,6 +382,24 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         }
     }
 
+    // 3c. Households: a component with a version everyone sees may hold any household's own versions too, but one
+    //     without is split by owner, so one household's version never joins a dish only another can see. Decided
+    //     merges included: a decision is about recipes, not about who may see them.
+    components = components
+        .into_iter()
+        .flat_map(|members| {
+            let mut by_owner: BTreeMap<Option<Uuid>, Vec<usize>> = BTreeMap::new();
+            for &m in &members {
+                by_owner.entry(vs[m].household_id).or_default().push(m);
+            }
+            if by_owner.contains_key(&None) || by_owner.len() == 1 {
+                vec![members]
+            } else {
+                by_owner.into_values().collect()
+            }
+        })
+        .collect();
+
     // 4. One dish per component; its default is the most complete, newest version. Each component takes over
     //    the previous dish it shares the most versions with (greedily, largest overlap first), keeping its id,
     //    and its slug while that still fits the name. Larger dishes choose slugs first, so a big family gets the
@@ -441,7 +465,14 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let mut made: Vec<(Uuid, String)> = vec![(Uuid::nil(), String::new()); components.len()]; // (id, slug)
     for &c in &order {
         let members = &components[c];
-        let best = *members
+        // A dish everyone sees is named by, and opens on, versions everyone sees; a household's own dish by its own.
+        let shared: Vec<usize> = members
+            .iter()
+            .copied()
+            .filter(|&m| vs[m].household_id.is_none())
+            .collect();
+        let named_by: &[usize] = if shared.is_empty() { members } else { &shared };
+        let best = *named_by
             .iter()
             .max_by_key(|&&i| (vs[i].has_steps, votes(i), vs[i].has_hero, vs[i].published))
             .expect("components are never empty");
@@ -449,7 +480,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         // version happens to be the default: that one may be a protein swap or carry a word like "Organic".
         let mut counts: HashMap<String, (usize, Option<chrono::DateTime<chrono::Utc>>)> =
             HashMap::new();
-        for &m in members {
+        for &m in named_by {
             let e = counts.entry(clean_title(&vs[m].title)).or_default();
             e.0 += votes(m);
             e.1 = e.1.max(vs[m].published);
@@ -482,7 +513,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         d_title.push(title.clone());
         // Subtitle: the most common one among versions that carry the chosen title, so the two read together.
         let mut subs: HashMap<String, usize> = HashMap::new();
-        for &m in members
+        for &m in named_by
             .iter()
             .filter(|&&m| clean_title(&vs[m].title) == title)
         {
