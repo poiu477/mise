@@ -137,7 +137,12 @@ fn to_login(error: &str) -> Response {
 
 /// Begin single sign-on: redirect to the provider.
 #[utoipa::path(get, path = "/api/auth/oidc/start", operation_id = "oidc_start", tag = "auth",
-    params(("return_to" = Option<String>, Query)), responses((status = 303, description = "To the provider")))]
+    params(("return_to" = Option<String>, Query)), security(()),
+    responses(
+        (status = 303, description = "To the provider, or back to the sign-in page saying why single sign-on isn't available"),
+        (status = 400, description = "The query can't be read", body = crate::error::ErrorBody)
+    )
+)]
 pub async fn start(
     State(s): State<AppState>,
     headers: HeaderMap,
@@ -198,8 +203,13 @@ pub struct CallbackParams {
 }
 
 /// The provider sends people back here; sign them in and continue where they started.
-#[utoipa::path(get, path = "/api/auth/oidc/callback", operation_id = "oidc_callback", tag = "auth",
-    responses((status = 303, description = "Signed in, back to the app")))]
+#[utoipa::path(get, path = "/api/auth/oidc/callback", operation_id = "oidc_callback", tag = "auth", security(()),
+    responses(
+        (status = 303, description = "Signed in and back to the app, or back to the sign-in page saying why not"),
+        (status = 400, description = "The query can't be read", body = crate::error::ErrorBody),
+        (status = 500, description = "Signed in at the provider, but the server failed to start the session; the details are in its log", body = crate::error::ErrorBody)
+    )
+)]
 pub async fn callback(
     State(s): State<AppState>,
     jar: CookieJar,

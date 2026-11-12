@@ -81,7 +81,13 @@ type SummaryRow = (
 );
 
 /// Search and browse the dishes this household can see.
-#[utoipa::path(get, path = "/api/v1/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams), responses((status = 200, description = "Matching dishes, a page at a time", body = DishPage)))]
+#[utoipa::path(get, path = "/api/v1/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams),
+    responses(
+        (status = 200, description = "Matching dishes, a page at a time", body = DishPage),
+        (status = 400, description = "A query value can't be read: `limit` or `offset` isn't a number, say", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
+)]
 pub async fn list(
     State(s): State<AppState>,
     Extension(me): Extension<CurrentUser>,
@@ -196,7 +202,12 @@ type DishRow = (Uuid, String, String, Option<String>, String, Option<Uuid>);
 #[utoipa::path(
     get, path = "/api/v1/dishes/{slug}", operation_id = "get_dish", tag = "dishes",
     params(("slug" = String, Path, description = "The dish's slug, or one it had before it was renamed")),
-    responses((status = 200, description = "The dish with its versions and options", body = Dish), (status = 404, description = "No such dish, or not one this household can see", body = crate::error::ErrorBody))
+    responses(
+        (status = 200, description = "The dish with its versions and options", body = Dish),
+        (status = 400, description = "The slug has a NUL character", body = crate::error::ErrorBody),
+        (status = 404, description = "No such dish, or not one this household can see", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
 )]
 pub async fn get(
     State(s): State<AppState>,

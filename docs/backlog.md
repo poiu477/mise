@@ -32,17 +32,6 @@ status.md if it changed either.
   style request (no JSON content type, no custom header) to sign-out and to a DELETE route is refused or harmless,
   as the written stance says; the browser journeys pass (they would catch a policy that breaks the app).
 
-### T7 · Document every response each endpoint can return
-
-The OpenAPI annotations list the main responses, but every signed-in route can also return 401 and 412
-(`X-Mise-Account`), browser-only actions 403, and some validation 400s are missing.
-
-- Add the missing responses to the `#[utoipa::path]` annotations, then a test that calls each route in the ways
-  that produce each documented status and fails on a status the document doesn't list.
-- **Touches:** `crates/mise-api/src/` (annotations only), a new test in `crates/mise-api/tests/`,
-  `web/src/api/schema.d.ts` (regenerated).
-- **Done when:** the new test passes; `web/scripts/check-openapi.mjs` still passes.
-
 ### T9 · Observability
 
 - An option for JSON logs, a request id on every log line (and in the response), a readiness check that the
@@ -72,8 +61,7 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
   `[lints] workspace = true` in every crate's `Cargo.toml`, removing the per-crate attributes. `mise-cli` is a binary
   and has no public items, so it's covered without work.
 - **Touches:** `crates/mise-api/src/` (comments only), `web/src/api/schema.d.ts` (regenerated), every `Cargo.toml`.
-- **Needs:** T7 (it rewrites the same annotations). Not while the database-code rework is in flight: it
-  moves most of this crate.
+- **Needs:** not while the database-code rework is in flight: it moves most of this crate.
 - **Done when:** clippy passes workspace-wide with the lint in `Cargo.toml`; a missing doc comment in any crate fails
   it.
 
@@ -196,8 +184,7 @@ Each of these waits on a question in status.md's "Open questions" or on Paul.
 
 - **Database code:** `#[derive(sqlx::FromRow)]` structs, compile-time checked queries with `.sqlx` committed, SQL
   moved out of handlers into per-domain modules. It touches every file in `crates/mise-api/src/`, so it runs
-  alone, with nothing else in flight there. Order with T7 is settled: either can go first (T7 changes the OpenAPI
-  annotations and adds tests, this changes queries and their modules), but never both at once.
+  alone, with nothing else in flight there.
 - **Deploy gate:** a CI job that starts the Compose stack on an empty volume, upgrades a database from the previous
   release, and backs up and restores. Needs T10 (a previous release to upgrade from).
 - **Presentation:** README screenshots (taken by Playwright from the demo bundle), a hosted demo (**Paul**: where),

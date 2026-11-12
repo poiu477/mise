@@ -103,7 +103,10 @@ queued work never lands in another household, and the app re-checks who is signe
 sentence to show people, and a stable name for programs (`not_found`, `bad_request`, `unauthorized`,
 `bad_credentials`, `forbidden`, `method_not_allowed`, `conflict`, `account_changed`, `payload_too_large`,
 `too_many_requests`, `internal`). `extract.rs` wraps axum's extractors so bad input answers in that shape too, and
-the router does the same for an unknown address and a method a route doesn't take. Endpoints that change a plan or a
+the router does the same for an unknown address and a method a route doesn't take. Each route's `#[utoipa::path]`
+lists every status it can answer: its own, and the shared sets in `error.rs` (`SignedIn`, `ReadOnlyToken`,
+`TooLarge`, `ServerError`) for what the middleware, the body extractor and a failing server answer;
+`tests/responses.rs` checks each route gives all of them and nothing else. Endpoints that change a plan or a
 list answer with the whole plan or list, so the client never has to merge.
 
 The shopping list is never stored: `shopping::build` works it out from the week's plan on each request and lays the
