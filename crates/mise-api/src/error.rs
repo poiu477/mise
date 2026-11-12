@@ -197,15 +197,28 @@ impl utoipa::IntoResponses for SignedIn {
     }
 }
 
-/// A change refused to a read-only API token (`auth::require_auth`). Routes that refuse other callers too write
-/// their own 403 instead.
+/// A change refused to a read-only API token or a kitchen device (`auth::require_auth`). Routes that refuse other
+/// callers too write their own 403 instead.
 pub struct ReadOnlyToken;
 
 impl utoipa::IntoResponses for ReadOnlyToken {
     fn responses() -> ResponseMap {
         documented(&[(
             403,
-            "Called with a read-only API token, which can't make changes",
+            "Called with a read-only API token or from a kitchen device, neither of which can make changes",
+        )])
+    }
+}
+
+/// A read refused to a kitchen device (`auth::require_auth`), which reads only the plan and recipes: for routes
+/// that refuse nobody else. Routes that refuse other callers too name kitchen devices in their own 403.
+pub struct KitchenDevice;
+
+impl utoipa::IntoResponses for KitchenDevice {
+    fn responses() -> ResponseMap {
+        documented(&[(
+            403,
+            "Called from a kitchen device, which reads only the plan and recipes",
         )])
     }
 }

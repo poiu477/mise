@@ -65,17 +65,6 @@ status.md if it changed either.
 - **Done when:** clippy passes workspace-wide with the lint in `Cargo.toml`; a missing doc comment in any crate fails
   it.
 
-### T23 · Kitchen device tokens
-
-The Echo Show's browser can't sign in comfortably or send headers, so kitchen mode runs on a device token.
-
-- From the account page, a household admin issues a kitchen token with a name ("Kitchen Echo"); opening its one-time
-  link on the device sets a long-lived cookie. A kitchen session reads the household's plan, dishes, versions and
-  photos, and nothing else: no shopping list, accounts, names or emails, and no changes. Tokens are listed and
-  revoked like API tokens.
-- **Touches:** `crates/mise-api/src/auth/`, a new migration, `web/src/pages/AccountPage.tsx`.
-- **Done when:** API tests show a kitchen session can read each allowed route and is refused every other one,
-  that `/api/v1/me` reveals no personal data to it, and that a revoked token stops working at once.
 
 ### T24 · Kitchen mode
 

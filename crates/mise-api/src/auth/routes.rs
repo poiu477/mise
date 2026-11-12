@@ -62,6 +62,9 @@ pub struct Me {
     pub household: Household,
     /// The account can sign in with a password (single-sign-on-only accounts cannot).
     pub has_password: bool,
+    /// This is a kitchen device, not an account: `id` is its kitchen token's, `display_name` its name, and the
+    /// username, email and household name are empty.
+    pub kitchen: bool,
 }
 
 pub(crate) async fn load_me(pool: &sqlx::PgPool, id: Uuid) -> ApiResult<Me> {
@@ -85,6 +88,7 @@ pub(crate) async fn load_me(pool: &sqlx::PgPool, id: Uuid) -> ApiResult<Me> {
             name: hname,
         },
         has_password,
+        kitchen: false,
     })
 }
 
@@ -247,10 +251,10 @@ pub async fn logout(
     ))
 }
 
-/// The signed-in account.
+/// The signed-in account, or the kitchen device (`kitchen` true, with no personal data).
 #[utoipa::path(get, path = "/api/v1/me", operation_id = "me", tag = "account",
     responses(
-        (status = 200, description = "The signed-in account", body = Me),
+        (status = 200, description = "The signed-in account, or the kitchen device", body = Me),
         crate::error::SignedIn
     )
 )]
@@ -258,6 +262,9 @@ pub async fn me(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
 ) -> ApiResult<Json<Me>> {
+    if u.via == Via::Kitchen {
+        return Ok(Json(super::kitchen::me(&s.pool, u.id).await?));
+    }
     Ok(Json(load_me(&s.pool, u.id).await?))
 }
 
@@ -273,7 +280,7 @@ pub struct PasswordChange {
     responses(
         (status = 204, description = "Password changed; other sessions are signed out"),
         (status = 400, description = "The current password is wrong, the new one is too short or too long, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
-        (status = 403, description = "Called with an API token; only a browser session can change the password", body = crate::error::ErrorBody),
+        (status = 403, description = "Called with an API token or from a kitchen device; only a browser session can change the password", body = crate::error::ErrorBody),
         crate::error::SignedIn,
         crate::error::TooLarge
     )
@@ -352,7 +359,8 @@ type TokenRow = (Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>);
 #[utoipa::path(get, path = "/api/v1/me/tokens", operation_id = "list_tokens", tag = "account",
     responses(
         (status = 200, description = "This account's API tokens", body = [TokenInfo]),
-        crate::error::SignedIn
+        crate::error::SignedIn,
+        crate::error::KitchenDevice
     )
 )]
 pub async fn list_tokens(
@@ -382,7 +390,7 @@ pub async fn list_tokens(
     responses(
         (status = 200, description = "The new token, shown only this once", body = NewToken),
         (status = 400, description = "The scope isn't read or read_write, the name is empty, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
-        (status = 403, description = "Called with an API token; only a browser session can make tokens", body = crate::error::ErrorBody),
+        (status = 403, description = "Called with an API token or from a kitchen device; only a browser session can make tokens", body = crate::error::ErrorBody),
         crate::error::SignedIn,
         crate::error::TooLarge
     )
@@ -469,7 +477,7 @@ pub struct UserInfo {
 #[utoipa::path(get, path = "/api/v1/users", operation_id = "list_users", tag = "admin",
     responses(
         (status = 200, description = "Every account", body = [UserInfo]),
-        (status = 403, description = "Not an admin", body = crate::error::ErrorBody),
+        (status = 403, description = "Not an admin, or called from a kitchen device", body = crate::error::ErrorBody),
         crate::error::SignedIn
     )
 )]
@@ -549,7 +557,7 @@ pub struct NewUser {
     responses(
         (status = 200, description = "The new account", body = Me),
         (status = 400, description = "The username or password is refused, the household doesn't exist, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
-        (status = 403, description = "Not an admin, or called with a read-only API token", body = crate::error::ErrorBody),
+        (status = 403, description = "Not an admin, or called with a read-only API token or from a kitchen device", body = crate::error::ErrorBody),
         (status = 409, description = "That username or email is taken", body = crate::error::ErrorBody),
         crate::error::SignedIn,
         crate::error::TooLarge
@@ -639,7 +647,7 @@ pub struct UserUpdate {
     responses(
         (status = 200, description = "The updated account", body = Me),
         (status = 400, description = "The id isn't a UUID; the change would turn off your own account or leave no admin; the household doesn't exist; the password is too short or too long; or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
-        (status = 403, description = "Not an admin, or called with a read-only API token", body = crate::error::ErrorBody),
+        (status = 403, description = "Not an admin, or called with a read-only API token or from a kitchen device", body = crate::error::ErrorBody),
         (status = 404, description = "No such account", body = crate::error::ErrorBody),
         crate::error::SignedIn,
         crate::error::TooLarge
@@ -723,7 +731,7 @@ pub async fn update_user(
 #[utoipa::path(get, path = "/api/v1/households", operation_id = "list_households", tag = "admin",
     responses(
         (status = 200, description = "Every household", body = [Household]),
-        (status = 403, description = "Not an admin", body = crate::error::ErrorBody),
+        (status = 403, description = "Not an admin, or called from a kitchen device", body = crate::error::ErrorBody),
         crate::error::SignedIn
     )
 )]
@@ -752,7 +760,7 @@ pub struct NewHousehold {
     responses(
         (status = 200, description = "The new household", body = Household),
         (status = 400, description = "The name is empty, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
-        (status = 403, description = "Not an admin, or called with a read-only API token", body = crate::error::ErrorBody),
+        (status = 403, description = "Not an admin, or called with a read-only API token or from a kitchen device", body = crate::error::ErrorBody),
         crate::error::SignedIn,
         crate::error::TooLarge
     )
@@ -774,7 +782,7 @@ pub async fn create_household(
     Ok(Json(Household { id, name }))
 }
 
-fn session_only(u: &CurrentUser) -> ApiResult<()> {
+pub(super) fn session_only(u: &CurrentUser) -> ApiResult<()> {
     if u.via == Via::Session {
         Ok(())
     } else {

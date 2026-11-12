@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import {
   api,
   errorText,
+  type KitchenToken,
   type Me,
   type TokenInfo,
   type UserInfo,
@@ -13,7 +14,7 @@ import { useAccount, useSession } from "../session";
 import { WEIGHTS } from "../weights";
 
 /** The account page: who is signed in, the household's list units, password, API tokens and, for admins,
- * people and households. Needs the server. */
+ * kitchen devices, people and households. Needs the server. */
 export function AccountPage() {
   const { session, signOut } = useSession();
   if (session.status === "offline")
@@ -41,6 +42,7 @@ export function AccountPage() {
       <ShoppingUnits />
       <PasswordForm me={me} />
       <Tokens />
+      {me.is_admin && <KitchenDevices />}
       {me.is_admin && <Admin me={me} />}
     </article>
   );
@@ -259,6 +261,104 @@ function Tokens() {
           </select>
         </label>
         <button type="submit">Create token</button>
+      </form>
+      {error && <p className="form-error">{error}</p>}
+    </section>
+  );
+}
+
+/** For admins: the household's kitchen devices. A new one's link is shown once, to open on the device, which then
+ * reads the plan and recipes and nothing else. */
+function KitchenDevices() {
+  const key = ["kitchen-tokens", useAccount()];
+  const devices =
+    useQuery({
+      queryKey: key,
+      queryFn: ({ signal }) => answer(api.GET("/api/v1/kitchen-tokens", { signal })),
+    }).data ?? [];
+  const [name, setName] = useState("");
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  /** Shows the devices afresh after a change. */
+  const load = () => queryClient.invalidateQueries({ queryKey: key });
+  /** Makes a token and shows its one-time link, as a full address to type or open on the device. */
+  const create = async (e: FormEvent) => {
+    e.preventDefault();
+    const { data, error } = await api.POST("/api/v1/kitchen-tokens", { body: { name } });
+    if (error || !data) return setError(errorText(error));
+    setFresh(new URL(data.link, window.location.origin).href);
+    setName("");
+    setError("");
+    load();
+  };
+  /** Revokes a device after asking; it's signed out on its next request. */
+  const revoke = async (d: KitchenToken) => {
+    if (!window.confirm(`Revoke "${d.name}"? It stops showing the plan at once.`)) return;
+    await api.DELETE("/api/v1/kitchen-tokens/{id}", { params: { path: { id: d.id } } });
+    load();
+  };
+  /** Where a device's link stands. */
+  const state = (d: KitchenToken) => {
+    if (d.linked_at) return `Linked ${day(d.linked_at)}`;
+    if (d.link_expires_at && new Date(d.link_expires_at) > new Date()) return "Link not opened yet";
+    return "Link expired";
+  };
+  return (
+    <section className="panel">
+      <h2>Kitchen devices</h2>
+      <p className="sub">
+        A screen in the kitchen that shows the plan and recipes without signing in. It can't see the
+        shopping list or anyone's account, and can't change anything.
+      </p>
+      {fresh && (
+        <div className="fresh-token">
+          <p>
+            Open this link on the device within the hour. It works once and won't be shown again.
+          </p>
+          <code>{fresh}</code>
+          <button type="button" onClick={() => navigator.clipboard?.writeText(fresh)}>
+            Copy
+          </button>
+        </div>
+      )}
+      {devices.length > 0 && (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Link</th>
+              <th>Last used</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {devices.map((d) => (
+              <tr key={d.id}>
+                <td>{d.name}</td>
+                <td>{state(d)}</td>
+                <td>{d.last_used_at ? day(d.last_used_at) : "Never"}</td>
+                <td>
+                  <button type="button" className="link danger" onClick={() => revoke(d)}>
+                    Revoke
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <form className="form row" onSubmit={create}>
+        <label>
+          Name
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Kitchen Echo"
+            maxLength={100}
+            required
+          />
+        </label>
+        <button type="submit">Add device</button>
       </form>
       {error && <p className="form-error">{error}</p>}
     </section>

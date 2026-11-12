@@ -26,12 +26,20 @@ const DISH: &str = "black-bean-tacos";
 const WEEK: &str = "2027-01-04";
 
 /// Documented statuses no call here can produce, with why.
-const UNPRODUCED: &[(&str, &str, u16, &str)] = &[(
-    "GET",
-    "/api/auth/oidc/callback",
-    500,
-    "only when the database fails between the provider's answer and saving the session",
-)];
+const UNPRODUCED: &[(&str, &str, u16, &str)] = &[
+    (
+        "GET",
+        "/api/auth/oidc/callback",
+        500,
+        "only when the database fails between the provider's answer and saving the session",
+    ),
+    (
+        "GET",
+        "/api/v1/auth/kitchen",
+        500,
+        "only when the database fails while a link with a code is opened; without one it reads nothing",
+    ),
+];
 
 /// The route `method path` documents `status` but no call here can produce it.
 fn unproduced(method: &str, path: &str, status: u16) -> bool {
@@ -241,6 +249,10 @@ const STAPLE_REMOVE: (&str, &str) = ("DELETE", "/api/v1/pantry-staples/{food_id}
 const SETTINGS: (&str, &str) = ("GET", "/api/v1/shopping/settings");
 const SETTINGS_CHANGE: (&str, &str) = ("PUT", "/api/v1/shopping/settings");
 const FOOD_WEIGHTS: (&str, &str) = ("PUT", "/api/v1/shopping/food-weights");
+const KITCHEN_TOKENS: (&str, &str) = ("GET", "/api/v1/kitchen-tokens");
+const NEW_KITCHEN: (&str, &str) = ("POST", "/api/v1/kitchen-tokens");
+const REVOKE_KITCHEN: (&str, &str) = ("DELETE", "/api/v1/kitchen-tokens/{id}");
+const OPEN_KITCHEN: (&str, &str) = ("GET", "/api/v1/auth/kitchen");
 const HEALTH: (&str, &str) = ("GET", "/api/v1/health");
 const SSO_START: (&str, &str) = ("GET", "/api/auth/oidc/start");
 const SSO_CALLBACK: (&str, &str) = ("GET", "/api/auth/oidc/callback");
@@ -429,6 +441,61 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
         "not an admin",
     )
     .await;
+
+    // Kitchen devices: issued by an admin from a browser, opened once on the device.
+    let made = c
+        .call(
+            NEW_KITCHEN,
+            me,
+            Some(json!({"name": "Kitchen"})),
+            200,
+            "a kitchen token",
+        )
+        .await;
+    let link = made.body["link"].as_str().unwrap().to_string();
+    let spare = c
+        .call(
+            NEW_KITCHEN,
+            me,
+            Some(json!({"name": "Spare"})),
+            200,
+            "another kitchen token",
+        )
+        .await
+        .body["info"]["id"]
+        .clone();
+    c.call(NEW_KITCHEN, me, Some(json!({"name": " "})), 400, "no name")
+        .await;
+    let named = json!({"name": "Mine"});
+    c.call(NEW_KITCHEN, cook, Some(named.clone()), 403, "not an admin")
+        .await;
+    c.call(
+        NEW_KITCHEN,
+        As::Bearer(&writer),
+        Some(named),
+        403,
+        "an API token issuing one",
+    )
+    .await;
+    c.call(KITCHEN_TOKENS, me, None, 200, "the kitchen tokens")
+        .await;
+    c.call(KITCHEN_TOKENS, cook, None, 403, "not an admin")
+        .await;
+    let spare = format!("/api/v1/kitchen-tokens/{}", spare.as_str().unwrap());
+    c.expect(REVOKE_KITCHEN, &spare, cook, None, 403, "not an admin")
+        .await;
+    c.expect(REVOKE_KITCHEN, &spare, me, None, 204, "revoking one")
+        .await;
+    c.expect(REVOKE_KITCHEN, &spare, me, None, 404, "revoking it again")
+        .await;
+    let device = c
+        .expect(OPEN_KITCHEN, &link, As::Nobody, None, 303, "a kitchen link")
+        .await
+        .cookie("mise_kitchen")
+        .expect("the link sets the kitchen cookie");
+    let device = device.split(';').next().unwrap().to_string();
+    c.expect(OPEN_KITCHEN, &link, As::Nobody, None, 303, "a used link")
+        .await;
     c.call(LOGOUT, cook, None, 204, "signing out").await;
 
     // Signing in.
@@ -800,6 +867,13 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
             if method != "GET" {
                 let req = raw(method, &url, As::Bearer(&reader), body.clone(), None);
                 c.expect_request(route, req, 403, "a read-only token").await;
+            }
+            // tests/kitchen.rs checks what a kitchen device may call; here, that each refusal is documented.
+            let rest = path.strip_prefix("/api/v1").unwrap_or(path);
+            let allowed = mise_api::auth::kitchen::may(&method.parse().unwrap(), rest);
+            if !allowed {
+                let req = raw(method, &url, As::Kitchen(&device), body.clone(), None);
+                c.expect_request(route, req, 403, "a kitchen device").await;
             }
         }
         if *takes_body {

@@ -555,7 +555,8 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
     responses(
         (status = 200, description = "The week's shopping list", body = ShoppingList),
         (status = 400, description = "`week` isn't a date", body = crate::error::ErrorBody),
-        crate::error::SignedIn
+        crate::error::SignedIn,
+        crate::error::KitchenDevice
     )
 )]
 pub async fn get(
@@ -810,7 +811,8 @@ pub struct ShoppingSettings {
 #[utoipa::path(get, path = "/api/v1/shopping/settings", operation_id = "get_shopping_settings", tag = "shopping",
     responses(
         (status = 200, description = "The household's shopping settings", body = ShoppingSettings),
-        crate::error::SignedIn
+        crate::error::SignedIn,
+        crate::error::KitchenDevice
     )
 )]
 pub async fn settings(

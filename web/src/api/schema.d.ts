@@ -55,6 +55,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/kitchen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open a kitchen token's one-time link: sets the device's cookie and goes to the web app. A link works once and
+         *     for an hour; a used, expired or unknown one goes to the sign-in page with an explanation. A browser signed in to
+         *     an account stays signed in, and its account comes first until it signs out.
+         */
+        get: operations["open_kitchen_link"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -178,6 +199,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kitchen-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The household's kitchen tokens (admins only). */
+        get: operations["list_kitchen_tokens"];
+        put?: never;
+        /**
+         * Issue a kitchen token for the household (admins only, from a browser session). Answers with its one-time
+         *     link, shown only this once.
+         */
+        post: operations["create_kitchen_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kitchen-tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one of the household's kitchen tokens (admins only). The device is refused from its next request. */
+        delete: operations["delete_kitchen_token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -185,7 +244,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The signed-in account. */
+        /** The signed-in account, or the kitchen device (`kitchen` true, with no personal data). */
         get: operations["me"];
         put?: never;
         post?: never;
@@ -640,6 +699,29 @@ export interface components {
             /** @description Supplied by the source (meal kit) rather than from the pantry. */
             shipped?: boolean | null;
         };
+        KitchenToken: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When an unopened link stops working; null once it has been opened.
+             */
+            link_expires_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When its link was opened on the device; null while the link waits.
+             */
+            linked_at?: string | null;
+            name: string;
+        };
+        KitchenTokenRequest: {
+            /** @description What the device is called, such as "Kitchen Echo". */
+            name: string;
+        };
         /** @description Something left off the list, to put back. */
         LeftOut: {
             key: string;
@@ -670,6 +752,11 @@ export interface components {
             /** Format: uuid */
             id: string;
             is_admin: boolean;
+            /**
+             * @description This is a kitchen device, not an account: `id` is its kitchen token's, `display_name` its name, and the
+             *     username, email and household name are empty.
+             */
+            kitchen: boolean;
             username: string;
         };
         NewEntry: {
@@ -701,6 +788,14 @@ export interface components {
         };
         NewHousehold: {
             name: string;
+        };
+        NewKitchenToken: {
+            info: components["schemas"]["KitchenToken"];
+            /**
+             * @description Shown once: open it on the kitchen device within the hour. A full address when the install's
+             *     PUBLIC_BASE_URL is set, else a path on this install.
+             */
+            link: string;
         };
         NewStaple: {
             /** Format: uuid */
@@ -1015,6 +1110,45 @@ export interface operations {
             };
         };
     };
+    open_kitchen_link: {
+        parameters: {
+            query?: {
+                /** @description The link's one-time code. */
+                code?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description To the web app with the kitchen cookie set, or to the sign-in page when the link doesn't work */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The query can't be read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -1118,7 +1252,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1388,7 +1522,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Not an admin */
+            /** @description Not an admin, or called from a kitchen device */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1457,7 +1591,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Not an admin, or called with a read-only API token */
+            /** @description Not an admin, or called with a read-only API token or from a kitchen device */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1495,6 +1629,214 @@ export interface operations {
             };
         };
     };
+    list_kitchen_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The household's kitchen tokens */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KitchenToken"][];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not an admin, or called from a kitchen device */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_kitchen_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KitchenTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description The new token and its one-time link */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewKitchenToken"];
+                };
+            };
+            /** @description The name is empty or over 100 characters, or the body isn't JSON of the right shape */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not an admin, or called with an API token or from a kitchen device; only a browser session can issue kitchen tokens */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The body is over 2 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_kitchen_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id isn't a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not an admin, or called with a read-only API token or from a kitchen device */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such token in this household */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     me: {
         parameters: {
             query?: never;
@@ -1504,7 +1846,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The signed-in account */
+            /** @description The signed-in account, or the kitchen device */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1580,7 +1922,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with an API token; only a browser session can change the password */
+            /** @description Called with an API token or from a kitchen device; only a browser session can change the password */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1638,6 +1980,15 @@ export interface operations {
             };
             /** @description Not signed in: no session or token, or one that has ended */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called from a kitchen device, which reads only the plan and recipes */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1705,7 +2056,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with an API token; only a browser session can make tokens */
+            /** @description Called with an API token or from a kitchen device; only a browser session can make tokens */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1779,7 +2130,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1924,7 +2275,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2012,7 +2363,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2140,7 +2491,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2225,7 +2576,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2305,7 +2656,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2391,6 +2742,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            /** @description Called from a kitchen device, which reads only the plan and recipes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
             /** @description `X-Mise-Account` names another account than the one signed in */
             412: {
                 headers: {
@@ -2451,7 +2811,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2527,7 +2887,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2607,7 +2967,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2694,7 +3054,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2781,7 +3141,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2839,6 +3199,15 @@ export interface operations {
             };
             /** @description Not signed in: no session or token, or one that has ended */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called from a kitchen device, which reads only the plan and recipes */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2906,7 +3275,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Called with a read-only API token, which can't make changes */
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2971,7 +3340,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Not an admin */
+            /** @description Not an admin, or called from a kitchen device */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3040,7 +3409,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Not an admin, or called with a read-only API token */
+            /** @description Not an admin, or called with a read-only API token or from a kitchen device */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3129,7 +3498,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Not an admin, or called with a read-only API token */
+            /** @description Not an admin, or called with a read-only API token or from a kitchen device */
             403: {
                 headers: {
                     [name: string]: unknown;

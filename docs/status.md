@@ -1,6 +1,6 @@
 # Status
 
-As of 2026-11-10. Where things stand, known issues, open questions and the decisions made. The work still to do is in
+As of 2026-11-11. Where things stand, known issues, open questions and the decisions made. The work still to do is in
 [backlog.md](backlog.md); the maintainer's design document (private) holds the goals and the long-range roadmap. Update
 both in the same merge request as the work.
 
@@ -11,7 +11,7 @@ both in the same merge request as the work.
 | 1 Data core | Done; its gate (500 full-archive dishes checked by hand) was waived when the hand-trimmed launch seed took the full archive's place (see Decisions) | Seed bundle format and importer; food matching, tree and curation files; dish grouping with drift splitting, protein twins and recorded decisions; options; content-addressed media with web-size copies; grouping gate report |
 | 2 Browse and cook | Done (gate passed on 60 seed recipes, 2026-11-01) | REST API under `/api/v1` with an OpenAPI document that lists every status each route can answer, one error body (`error` and a stable `code`), and the old `/api` addresses answering, deprecated, for one more release; web app (PWA) with search, dish pages, option toggles, any serving count; step text rewritten for the chosen servings; local accounts, households, OIDC single sign-on, sessions, API tokens; Docker Compose stack with nightly backups, and HTTPS behind an existing proxy or through the stack's own Caddy (the `https` profile) |
 | 3 Plan and shop | Core done (gate passed in use, 2026-11-03) | Weekly household plan; shopping list worked out from it, exact totals by store section, kinds of one food on one line and amounts added up across units where the food's density or item size converts them, household and per-food weight units, pantry staples, hand-added items, ticks, printing, works offline on a phone |
-| 4 Kitchen and imports | Under way, as tasks T23 to T32 in the backlog; gate half two (20 sample pages read to their records, T25) passes | Recipes that belong to a household: a version one household owns is invisible to every other in search, dish pages, by id, the plan and the shopping list, and grouping never puts it in a dish only another household can see (T22); reading schema.org Recipe data (JSON-LD, microdata as a fallback) from a page or JSON file into bundle-shaped records, for import from a link (T26) and from files (T27); printable recipe cards: any version at any serving count on one page, printed or saved as PDF from the browser |
+| 4 Kitchen and imports | Under way, as tasks T24 to T32 in the backlog; gate half two (20 sample pages read to their records, T25) passes | Recipes that belong to a household: a version one household owns is invisible to every other in search, dish pages, by id, the plan and the shopping list, and grouping never puts it in a dish only another household can see (T22); kitchen devices: an admin issues a kitchen token whose one-time link sets a long-lived cookie that reads the household's plan and recipes and nothing else (T23); reading schema.org Recipe data (JSON-LD, microdata as a fallback) from a page or JSON file into bundle-shaped records, for import from a link (T26) and from files (T27); printable recipe cards: any version at any serving count on one page, printed or saved as PDF from the browser |
 | 5 Optional extras | Not started | |
 
 The live data is the launch seed: 237 dishes and 308 versions from meals received between October 2023 and October
@@ -82,6 +82,10 @@ What a reviewer can rely on today:
 - A recipe card fits one page up to about 17 ingredients and 2,400 characters of steps (nine in ten of the
   household's recipes); longer ones may run onto a second page.
 - The fuzz suite takes about 25 seconds in a debug build, mostly the measure search.
+- A kitchen device opens the ordinary web app until kitchen mode (T24) gives it a view of its own; the pages it may not
+  read (the shopping list, the account page) show an error there.
+- A kitchen link carries a full 256-bit code (43 characters), long to type on a device's on-screen keyboard. A
+  shorter code would need its own guessing limits; worth it only if typing it proves a real nuisance.
 - When the server refuses a change queued on the shopping list, "Some changes couldn't be saved" shows only until
   the list reloads a moment later.
 - Dish slugs are one namespace for the whole install, so a household's own dish can push another household's dish
@@ -126,6 +130,7 @@ What a reviewer can rely on today:
 | 2026-11-10 | Phase 4 is broken into Ready tasks (T22 to T33). Process work stops growing: no new workflow rules or CI unless a task needs them |
 | 2026-11-10 | Web pages are parsed with html5ever into a small DOM of mise's own (`mise_ingest::schema_org`), not `scraper` (its CSS crates are MPL-2.0) or html5ever's test-only `rcdom`. A page nesting elements past 512, where browsers stop nesting, is refused: html5ever's work grows with the square of the depth |
 | 2026-11-10 | A dish option lists the choices most versions offer first; on a tie, the dish's default, then the option's reading order (Regular before Double protein; Standard, v2, v3; proteins alphabetically, then No meat). Versions are numbered by how many versions share them, then by label, so a re-run of `derive-options` changes nothing |
+| 2026-11-11 | A kitchen device signs in with a cookie set by a one-time link (T23), not a bearer token: the Echo Show's browser can't send headers, and a lasting secret in every address would end up in history and logs. The link is valid for an hour and works once; the cookie is a separate secret, renewed as the device is used. A kitchen session is refused every route but reading `/me`, the plan, dishes, versions and photos, checked in the auth middleware before any handler, and a test walks every documented route to prove it. `/me` answers with `kitchen: true` and no personal data, so the web app can tell it apart |
 | 2026-11-10 | Recipe cards print through the browser from a print stylesheet, not Typst: the print dialog makes the PDF, a journey checks the page count, and the server needs no PDF engine. Typst stays an option for things the browser can't do, such as a book of many cards |
 | 2026-11-10 | The old `/api` addresses carry `Deprecation: @1794268800` (RFC 9745's form, a date: 2026-11-10, when `/api/v1` came; the drafts' `true` didn't make the RFC) and `Link: <...>; rel="successor-version"` to the new address. Error codes add `method_not_allowed` (axum's 405, which had no body) and `payload_too_large` (a JSON body over 2 MB) to the nine named in T19, so no error answers outside the one shape. The web app acts on `code`, never on a status or a message |
 | 2026-11-10 | Kinds of a food share one shopping line only while a recipe in the week asks for the food itself (any onion is covered by the yellow onion another recipe wants), or when curation marks the food `shop_as_one`; never through a category. One kind alone keeps its own name, and two kinds alone stay apart: a recipe that asks for red onion wants red |

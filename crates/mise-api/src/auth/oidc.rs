@@ -127,7 +127,7 @@ fn safe_return(p: Option<String>) -> String {
         .unwrap_or_else(|| "/".into())
 }
 
-fn to_login(error: &str) -> Response {
+pub(super) fn to_login(error: &str) -> Response {
     Redirect::to(&format!(
         "/login?error={}",
         url::form_urlencoded::byte_serialize(error.as_bytes()).collect::<String>()
