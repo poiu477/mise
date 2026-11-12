@@ -141,6 +141,84 @@ impl IntoResponse for ApiError {
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
+// Responses many routes share, written once and named in each route's `#[utoipa::path]` beside its own:
+// `responses((status = 200, ...), SignedIn, ReadOnlyToken)`. Each answers before the handler runs, or apart from
+// it, so no handler's code shows them. tests/responses.rs checks every route gives each response it documents and
+// none it doesn't.
+
+/// Error responses with the error body, from (status, description) pairs.
+fn documented(list: &[(u16, &str)]) -> ResponseMap {
+    use utoipa::openapi::{ContentBuilder, Ref, ResponseBuilder};
+    list.iter()
+        .map(|&(status, description)| {
+            let body = ContentBuilder::new()
+                .schema(Some(Ref::from_schema_name("ErrorBody")))
+                .build();
+            let response = ResponseBuilder::new()
+                .description(description)
+                .content("application/json", body)
+                .build();
+            (status.to_string(), response.into())
+        })
+        .collect()
+}
+
+type ResponseMap =
+    std::collections::BTreeMap<String, utoipa::openapi::RefOr<utoipa::openapi::response::Response>>;
+
+const SERVER_FAILED: (u16, &str) = (500, "The server failed; the details are in its log");
+
+/// A server failure: any route that reads or writes the database.
+pub struct ServerError;
+
+impl utoipa::IntoResponses for ServerError {
+    fn responses() -> ResponseMap {
+        documented(&[SERVER_FAILED])
+    }
+}
+
+/// What every route that needs a signed-in person can answer before its handler runs (`auth::require_auth`), and a
+/// server failure.
+pub struct SignedIn;
+
+impl utoipa::IntoResponses for SignedIn {
+    fn responses() -> ResponseMap {
+        documented(&[
+            (
+                401,
+                "Not signed in: no session or token, or one that has ended",
+            ),
+            (
+                412,
+                "`X-Mise-Account` names another account than the one signed in",
+            ),
+            SERVER_FAILED,
+        ])
+    }
+}
+
+/// A change refused to a read-only API token (`auth::require_auth`). Routes that refuse other callers too write
+/// their own 403 instead.
+pub struct ReadOnlyToken;
+
+impl utoipa::IntoResponses for ReadOnlyToken {
+    fn responses() -> ResponseMap {
+        documented(&[(
+            403,
+            "Called with a read-only API token, which can't make changes",
+        )])
+    }
+}
+
+/// A JSON body over the size the server reads (2 MB; `extract::JsonBody`).
+pub struct TooLarge;
+
+impl utoipa::IntoResponses for TooLarge {
+    fn responses() -> ResponseMap {
+        documented(&[(413, "The body is over 2 MB")])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

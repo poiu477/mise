@@ -550,7 +550,13 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
 }
 
 /// A week's shopping list.
-#[utoipa::path(get, path = "/api/v1/shopping", operation_id = "get_shopping", tag = "shopping", params(WeekParams), responses((status = 200, description = "The week's shopping list", body = ShoppingList)))]
+#[utoipa::path(get, path = "/api/v1/shopping", operation_id = "get_shopping", tag = "shopping", params(WeekParams),
+    responses(
+        (status = 200, description = "The week's shopping list", body = ShoppingList),
+        (status = 400, description = "`week` isn't a date", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
+)]
 pub async fn get(
     State(s): State<AppState>,
     Extension(me): Extension<CurrentUser>,
@@ -571,7 +577,15 @@ pub struct Mark {
 }
 
 /// Tick an item off, or take it off or put it back on this week's list. Answers with the list.
-#[utoipa::path(put, path = "/api/v1/shopping/marks", operation_id = "mark_shopping_item", tag = "shopping", request_body = Mark, responses((status = 200, description = "The updated list", body = ShoppingList)))]
+#[utoipa::path(put, path = "/api/v1/shopping/marks", operation_id = "mark_shopping_item", tag = "shopping", request_body = Mark,
+    responses(
+        (status = 200, description = "The updated list", body = ShoppingList),
+        (status = 400, description = "The key is empty or too long, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken,
+        crate::error::TooLarge
+    )
+)]
 pub async fn mark(
     State(s): State<AppState>,
     Extension(me): Extension<CurrentUser>,
@@ -627,7 +641,10 @@ pub struct NewExtra {
     post, path = "/api/v1/shopping/extras", operation_id = "add_shopping_extra", tag = "shopping", request_body = NewExtra,
     responses(
         (status = 200, description = "The list with the item on it, added now or by an earlier request with the same key", body = ShoppingList),
-        (status = 400, description = "The name or the key is empty or too long", body = crate::error::ErrorBody)
+        (status = 400, description = "The name or the key is empty or too long, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken,
+        crate::error::TooLarge
     )
 )]
 pub async fn add_extra(
@@ -665,7 +682,14 @@ pub struct ExtraChange {
 /// Tick a hand-added item off. Answers with the list.
 #[utoipa::path(
     patch, path = "/api/v1/shopping/extras/{id}", operation_id = "update_shopping_extra", tag = "shopping", params(("id" = Uuid, Path)), request_body = ExtraChange,
-    responses((status = 200, description = "The updated list", body = ShoppingList), (status = 404, description = "No such item on this household's list", body = crate::error::ErrorBody))
+    responses(
+        (status = 200, description = "The updated list", body = ShoppingList),
+        (status = 400, description = "The id isn't a UUID, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 404, description = "No such item on this household's list", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken,
+        crate::error::TooLarge
+    )
 )]
 pub async fn update_extra(
     State(s): State<AppState>,
@@ -686,7 +710,13 @@ pub async fn update_extra(
 /// Delete a hand-added item. Answers with the list.
 #[utoipa::path(
     delete, path = "/api/v1/shopping/extras/{id}", operation_id = "delete_shopping_extra", tag = "shopping", params(("id" = Uuid, Path)),
-    responses((status = 200, description = "The list without it", body = ShoppingList), (status = 404, description = "No such item on this household's list", body = crate::error::ErrorBody))
+    responses(
+        (status = 200, description = "The list without it", body = ShoppingList),
+        (status = 400, description = "The id isn't a UUID", body = crate::error::ErrorBody),
+        (status = 404, description = "No such item on this household's list", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken
+    )
 )]
 pub async fn remove_extra(
     State(s): State<AppState>,
@@ -714,7 +744,14 @@ pub struct NewStaple {
 /// Mark a food as always on hand, leaving it off every list. Answers with the list.
 #[utoipa::path(
     post, path = "/api/v1/pantry-staples", operation_id = "add_pantry_staple", tag = "shopping", request_body = NewStaple,
-    responses((status = 200, description = "The list without that food", body = ShoppingList), (status = 404, description = "No such food", body = crate::error::ErrorBody))
+    responses(
+        (status = 200, description = "The list without that food", body = ShoppingList),
+        (status = 400, description = "The body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 404, description = "No such food", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken,
+        crate::error::TooLarge
+    )
 )]
 pub async fn add_staple(
     State(s): State<AppState>,
@@ -740,7 +777,13 @@ pub async fn add_staple(
 /// Put a food back on the list. Answers with the list.
 #[utoipa::path(
     delete, path = "/api/v1/pantry-staples/{food_id}", operation_id = "delete_pantry_staple", tag = "shopping",
-    params(("food_id" = Uuid, Path), WeekParams), responses((status = 200, description = "The list with that food back on it", body = ShoppingList))
+    params(("food_id" = Uuid, Path), WeekParams),
+    responses(
+        (status = 200, description = "The list with that food back on it", body = ShoppingList),
+        (status = 400, description = "The food id isn't a UUID, or `week` isn't a date", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken
+    )
 )]
 pub async fn remove_staple(
     State(s): State<AppState>,
@@ -763,7 +806,12 @@ pub struct ShoppingSettings {
 }
 
 /// The household's shopping list settings.
-#[utoipa::path(get, path = "/api/v1/shopping/settings", operation_id = "get_shopping_settings", tag = "shopping", responses((status = 200, description = "The household's shopping settings", body = ShoppingSettings)))]
+#[utoipa::path(get, path = "/api/v1/shopping/settings", operation_id = "get_shopping_settings", tag = "shopping",
+    responses(
+        (status = 200, description = "The household's shopping settings", body = ShoppingSettings),
+        crate::error::SignedIn
+    )
+)]
 pub async fn settings(
     State(s): State<AppState>,
     Extension(me): Extension<CurrentUser>,
@@ -778,7 +826,15 @@ pub async fn settings(
 }
 
 /// Change the household's shopping list settings, for everyone in it.
-#[utoipa::path(put, path = "/api/v1/shopping/settings", operation_id = "update_shopping_settings", tag = "shopping", request_body = ShoppingSettings, responses((status = 200, description = "The saved settings", body = ShoppingSettings)))]
+#[utoipa::path(put, path = "/api/v1/shopping/settings", operation_id = "update_shopping_settings", tag = "shopping", request_body = ShoppingSettings,
+    responses(
+        (status = 200, description = "The saved settings", body = ShoppingSettings),
+        (status = 400, description = "The weight unit isn't one mise knows, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken,
+        crate::error::TooLarge
+    )
+)]
 pub async fn update_settings(
     State(s): State<AppState>,
     Extension(me): Extension<CurrentUser>,
@@ -804,7 +860,14 @@ pub struct FoodWeights {
 /// Choose how one food's weight reads on the household's lists. Answers with the list.
 #[utoipa::path(
     put, path = "/api/v1/shopping/food-weights", operation_id = "set_food_weights", tag = "shopping", request_body = FoodWeights,
-    responses((status = 200, description = "The updated list", body = ShoppingList), (status = 404, description = "No such food", body = crate::error::ErrorBody))
+    responses(
+        (status = 200, description = "The updated list", body = ShoppingList),
+        (status = 400, description = "The weight unit isn't one mise knows, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 404, description = "No such food", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken,
+        crate::error::TooLarge
+    )
 )]
 pub async fn set_food_weights(
     State(s): State<AppState>,
