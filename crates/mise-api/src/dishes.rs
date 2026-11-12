@@ -64,7 +64,13 @@ type SummaryRow = (
 );
 
 /// Search and browse dishes.
-#[utoipa::path(get, path = "/api/v1/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams), responses((status = 200, description = "Matching dishes, a page at a time", body = DishPage)))]
+#[utoipa::path(get, path = "/api/v1/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams),
+    responses(
+        (status = 200, description = "Matching dishes, a page at a time", body = DishPage),
+        (status = 400, description = "A query value can't be read: `limit` or `offset` isn't a number, say", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
+)]
 pub async fn list(
     State(s): State<AppState>,
     Query(p): Query<ListParams>,
@@ -175,7 +181,12 @@ type DishRow = (Uuid, String, String, Option<String>, String, Option<Uuid>);
 #[utoipa::path(
     get, path = "/api/v1/dishes/{slug}", operation_id = "get_dish", tag = "dishes",
     params(("slug" = String, Path, description = "The dish's slug, or one it had before it was renamed")),
-    responses((status = 200, description = "The dish with its versions and options", body = Dish), (status = 404, description = "No such dish", body = crate::error::ErrorBody))
+    responses(
+        (status = 200, description = "The dish with its versions and options", body = Dish),
+        (status = 400, description = "The slug has a NUL character", body = crate::error::ErrorBody),
+        (status = 404, description = "No such dish", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
 )]
 pub async fn get(State(s): State<AppState>, Path(slug): Path<String>) -> ApiResult<Json<Dish>> {
     // A live slug wins over a retired one; grouping keeps the two apart, so this only guards a stray row.

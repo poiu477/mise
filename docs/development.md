@@ -191,7 +191,8 @@ the maintainer approves it, and holds one whose pipeline has no SAST results. Au
 requests, since the project has one maintainer: the approval is the deliberate look at the finding. Fix a real finding;
 dismiss a false positive in the vulnerability report with the reason.
 
-The steps: the Rust job (formatting, clippy, tests against a Postgres service, a check that every response in the
+The steps: the Rust job (formatting, clippy, tests against a Postgres service, among them one that every route
+answers only with the statuses the OpenAPI document lists for it, a check that every response in the
 OpenAPI document has the description OpenAPI 3.1 requires (`web/scripts/check-openapi.mjs`), and a check that
 `web/src/api/schema.d.ts` matches the server), the Rust docs built with warnings as errors (`rust docs` on merge
 requests; on `main`, `pages` builds them once and publishes them to GitLab Pages, opening at `mise_core`), the web job
