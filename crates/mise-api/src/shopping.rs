@@ -1,12 +1,12 @@
 //! The shopping list: worked out from the week's plan each time, with what people ticked, removed and added on top.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use axum::{Extension, Json, extract::State};
 use chrono::NaiveDate;
-use mise_core::quantity::{Family, Quantity};
+use mise_core::quantity::{Quantity, Unit};
 use mise_core::servings::{self, CountUnit};
-use mise_core::shopping::{self, CHECK, OTHER, WeightUnit};
+use mise_core::shopping::{self, CHECK, MarkLine, Measures, OTHER, TreeFood, WeightUnit};
 use mise_core::step_amounts::{self, Template};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -106,31 +106,76 @@ pub struct ShoppingList {
     pub weight_unit: Weights,
 }
 
-/// One food across the week.
-struct Group {
+/// One line of the week's list before marks: the foods it adds up and what it needs of them.
+struct Line {
+    /// Names the line when ticking or removing it: the line's food id, or the name of an unmatched line.
+    key: String,
+    /// The line's food: the parent its kinds add up at, or the one food.
     food_id: Option<Uuid>,
+    /// The keys marks are kept under, one per food on the line.
+    foods: Vec<String>,
     name: String,
     section: String,
-    /// Every line for it is a pantry line.
+    /// Every ingredient line for it is a pantry line.
     pantry: bool,
     count: Option<CountUnit>,
+    measures: Measures,
     needs: Vec<Quantity>,
     recipes: Vec<String>,
 }
 
-type LineRow = (
+/// A food as the list needs it: its place in the tree and what reads and converts its amounts.
+#[derive(Default)]
+struct FoodRow {
+    name: String,
+    tree: TreeFood,
+    count: Option<CountUnit>,
+    section: Option<String>,
+    measures: Measures,
+}
+
+/// The week's lines, worked out from the plan, and the food tree they came from.
+struct Planned {
+    entries: usize,
+    lines: Vec<Line>,
+    /// Foods the household always has that the plan uses: (food id, name).
+    staples: Vec<(Uuid, String)>,
+    tree: HashMap<Uuid, TreeFood>,
+}
+
+impl Planned {
+    /// The foods a mark sent with `key` lands on (see `shopping::foods_to_mark`).
+    fn foods_to_mark(&self, key: &str) -> Vec<String> {
+        let lines: Vec<MarkLine> = self
+            .lines
+            .iter()
+            .map(|l| MarkLine {
+                key: l.key.clone(),
+                foods: l.foods.clone(),
+            })
+            .collect();
+        shopping::foods_to_mark(key, &lines, |food, of| {
+            match (Uuid::parse_str(food), Uuid::parse_str(of)) {
+                (Ok(food), Ok(of)) => shopping::is_kind_of(food, of, &self.tree),
+                _ => false,
+            }
+        })
+    }
+}
+
+type LineRow = (Uuid, Uuid, String, Option<Uuid>, Option<bool>);
+type FoodTreeRow = (
     Uuid,
-    Uuid,
-    String,
     Option<Uuid>,
-    Option<String>,
-    Option<bool>,
+    bool,
+    bool,
+    String,
     Option<String>,
     Option<String>,
     Option<String>,
 );
 
-async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<ShoppingList> {
+async fn plan_lines(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Planned> {
     let entries: Vec<(Uuid, f64, String)> = sqlx::query_as(
         "SELECT e.variant_id, e.servings::float8, coalesce(d.title, v.title) FROM plan_entries e
          JOIN variants v ON v.id = e.variant_id LEFT JOIN dishes d ON d.id = v.dish_id
@@ -142,18 +187,8 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
     .await?;
     let variants: Vec<Uuid> = entries.iter().map(|e| e.0).collect();
 
-    // A food's section is its own, or the nearest ancestor's.
     let lines: Vec<LineRow> = sqlx::query_as(
-        "SELECT il.id, il.variant_id, il.raw_name, il.food_id, f.name, il.shipped, f.props->>'count_unit', f.props->>'count_size', section.name
-         FROM ingredient_lines il LEFT JOIN foods f ON f.id = il.food_id
-         LEFT JOIN LATERAL (
-             WITH RECURSIVE up AS (
-                 SELECT f.parent_id, f.props->>'store_section' AS name, 0 AS depth
-                 UNION ALL
-                 SELECT p.parent_id, p.props->>'store_section', up.depth + 1 FROM foods p JOIN up ON p.id = up.parent_id
-             )
-             SELECT up.name FROM up WHERE up.name IS NOT NULL ORDER BY up.depth LIMIT 1
-         ) section ON true
+        "SELECT il.id, il.variant_id, il.raw_name, il.food_id, il.shipped FROM ingredient_lines il
          WHERE il.variant_id = ANY($1) ORDER BY il.position",
     )
     .bind(&variants)
@@ -200,36 +235,220 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
         }
     }
 
-    let mut groups: BTreeMap<String, Group> = BTreeMap::new();
+    // The plan's foods and everything they are kinds of, for sections, merging and conversions.
+    let used_ids: Vec<Uuid> = lines.iter().filter_map(|l| l.3).collect();
+    let mut foods: HashMap<Uuid, FoodRow> = HashMap::new();
+    for (id, parent, category, shop_as_one, name, count_unit, count_size, section) in
+        sqlx::query_as::<_, FoodTreeRow>(
+            "WITH RECURSIVE up AS (
+                 SELECT id FROM foods WHERE id = ANY($1)
+                 UNION SELECT f.parent_id FROM foods f JOIN up ON f.id = up.id WHERE f.parent_id IS NOT NULL
+             )
+             SELECT f.id, f.parent_id, f.kind = 'category', coalesce(f.props->'shop_as_one' = 'true'::jsonb, false),
+                    f.name, f.props->>'count_unit', f.props->>'count_size', f.props->>'store_section'
+             FROM foods f JOIN up ON up.id = f.id",
+        )
+        .bind(&used_ids)
+        .fetch_all(&s.pool)
+        .await?
+    {
+        foods.insert(
+            id,
+            FoodRow {
+                name,
+                tree: TreeFood {
+                    parent,
+                    category,
+                    shop_as_one,
+                },
+                count: CountUnit::from_props(count_unit.as_deref(), count_size.as_deref()),
+                section,
+                measures: Measures::default(),
+            },
+        );
+    }
+    let known: Vec<Uuid> = foods.keys().copied().collect();
+    for (food, kind, item, ml, grams) in sqlx::query_as::<_, (Uuid, String, String, Option<f64>, Option<f64>)>(
+        "SELECT food_id, kind, item, ml::float8, grams::float8 FROM food_measures WHERE food_id = ANY($1) ORDER BY created_at, id",
+    )
+    .bind(&known)
+    .fetch_all(&s.pool)
+    .await?
+    {
+        let Some(f) = foods.get_mut(&food) else { continue };
+        match (kind.as_str(), ml, grams) {
+            ("density", Some(ml), Some(g)) => f.measures.add_density(ml, g),
+            ("item", ml, g) => {
+                if let Some(ml) = ml {
+                    f.measures.add_item(&item, &Quantity::new(ml, Unit::Ml));
+                }
+                if let Some(g) = g {
+                    f.measures.add_item(&item, &Quantity::new(g, Unit::G));
+                }
+            }
+            _ => {}
+        }
+    }
+    let tree: HashMap<Uuid, TreeFood> = foods.iter().map(|(id, f)| (*id, f.tree.clone())).collect();
+    // A food's count words, section and measures are its own, or its nearest ancestor's.
+    let nearest = |food: Uuid| {
+        shopping::ancestors(food, &tree)
+            .into_iter()
+            .filter_map(|a| foods.get(&a))
+    };
+    let count_of = |food: Uuid| nearest(food).find_map(|f| f.count.clone());
+
+    let staple_ids: Vec<Uuid> =
+        sqlx::query_scalar("SELECT food_id FROM pantry_staples WHERE household_id = $1")
+            .bind(household)
+            .fetch_all(&s.pool)
+            .await?;
+
+    // Every food the plan uses, in the plan's order, with what it needs.
+    struct Use {
+        pantry: bool,
+        needs: Vec<Quantity>,
+        recipes: Vec<String>,
+    }
+    let mut order: Vec<String> = Vec::new();
+    let mut uses: HashMap<String, Use> = HashMap::new();
+    let mut raw_names: HashMap<String, String> = HashMap::new();
     for (variant, target, dish) in &entries {
-        for (line, line_variant, raw, food_id, food, shipped, count_unit, count_size, section) in
-            &lines
-        {
+        for (line, line_variant, raw, food_id, shipped) in &lines {
             if line_variant != variant {
                 continue;
             }
             let key = food_id.map_or_else(|| raw.to_lowercase(), |f| f.to_string());
-            let g = groups.entry(key).or_insert_with(|| Group {
-                food_id: *food_id,
-                name: food.clone().unwrap_or_else(|| raw.clone()),
-                section: section.clone().unwrap_or_else(|| OTHER.to_string()),
-                pantry: true,
-                count: CountUnit::from_props(count_unit.as_deref(), count_size.as_deref()),
-                needs: Vec::new(),
-                recipes: Vec::new(),
+            raw_names.entry(key.clone()).or_insert_with(|| raw.clone());
+            let u = uses.entry(key.clone()).or_insert_with(|| {
+                order.push(key.clone());
+                Use {
+                    pantry: true,
+                    needs: Vec::new(),
+                    recipes: Vec::new(),
+                }
             });
-            g.pantry &= *shipped == Some(false);
-            g.needs.extend(
+            u.pantry &= *shipped == Some(false);
+            let count = food_id.and_then(count_of);
+            // A bare "1" is counted in the food's own words before kinds of one food add up together.
+            u.needs.extend(
                 amounts
                     .get(line)
-                    .and_then(|a| servings::line_quantity(a, *target)),
+                    .and_then(|a| servings::line_quantity(a, *target))
+                    .map(|q| match (&q.unit, &count) {
+                        (Unit::Count(noun), Some(c)) if noun.is_empty() => {
+                            Quantity::new(q.amount, Unit::Count(c.noun.clone()))
+                        }
+                        _ => q,
+                    }),
             );
-            if !g.recipes.contains(dish) {
-                g.recipes.push(dish.clone());
+            if !u.recipes.contains(dish) {
+                u.recipes.push(dish.clone());
             }
         }
     }
 
+    // A line whose food the household always has is left off whole, kinds and all: "Always have" on the onion line
+    // sends the onion. A kind that is a staple itself leaves only its own part off. The rest is gathered again
+    // without them.
+    let matched: Vec<Uuid> = order
+        .iter()
+        .filter_map(|k| Uuid::parse_str(k).ok())
+        .filter(|f| foods.contains_key(f))
+        .collect();
+    let mut staples = Vec::new();
+    let mut left_off: HashSet<Uuid> = HashSet::new();
+    for g in shopping::gather(&matched, &tree) {
+        if staple_ids.contains(&g.line) {
+            staples.push((g.line, foods[&g.line].name.clone()));
+            left_off.extend(g.foods);
+        }
+    }
+    for f in &matched {
+        if staple_ids.contains(f) && left_off.insert(*f) {
+            staples.push((*f, foods[f].name.clone()));
+        }
+    }
+    let bought: Vec<Uuid> = matched
+        .into_iter()
+        .filter(|f| !left_off.contains(f))
+        .collect();
+    let gathered: HashMap<Uuid, shopping::Gathered> = shopping::gather(&bought, &tree)
+        .into_iter()
+        .map(|g| (g.foods[0], g))
+        .collect();
+
+    let mut out = Vec::new();
+    for key in &order {
+        let food = Uuid::parse_str(key).ok().filter(|f| foods.contains_key(f));
+        let Some(food) = food else {
+            let u = &uses[key];
+            out.push(Line {
+                key: key.clone(),
+                food_id: None,
+                foods: vec![key.clone()],
+                name: raw_names[key].clone(),
+                section: OTHER.to_string(),
+                pantry: u.pantry,
+                count: None,
+                measures: Measures::default(),
+                needs: u.needs.clone(),
+                recipes: u.recipes.clone(),
+            });
+            continue;
+        };
+        // Each line once, where its first food comes in the plan.
+        let Some(g) = gathered.get(&food) else {
+            continue;
+        };
+        let mut line = Line {
+            key: g.line.to_string(),
+            food_id: Some(g.line),
+            foods: g.foods.iter().map(Uuid::to_string).collect(),
+            name: foods[&g.named].name.clone(),
+            section: nearest(g.named)
+                .find_map(|f| f.section.clone())
+                .unwrap_or_else(|| OTHER.to_string()),
+            pantry: true,
+            count: count_of(g.named)
+                .or_else(|| count_of(g.line))
+                .or_else(|| g.foods.iter().find_map(|f| count_of(*f))),
+            measures: Measures::default(),
+            needs: Vec::new(),
+            recipes: Vec::new(),
+        };
+        // The named food's measures first, then the others', then what the line's food is a kind of.
+        let mut by = vec![g.named];
+        by.extend(g.foods.iter().copied().filter(|f| *f != g.named));
+        by.extend(shopping::ancestors(g.line, &tree).into_iter().skip(1));
+        for f in by {
+            if let Some(f) = foods.get(&f) {
+                line.measures.add(&f.measures);
+            }
+        }
+        for f in &g.foods {
+            let u = &uses[&f.to_string()];
+            line.pantry &= u.pantry;
+            line.needs.extend(u.needs.iter().cloned());
+            for r in &u.recipes {
+                if !line.recipes.contains(r) {
+                    line.recipes.push(r.clone());
+                }
+            }
+        }
+        out.push(line);
+    }
+    Ok(Planned {
+        entries: entries.len(),
+        lines: out,
+        staples,
+        tree,
+    })
+}
+
+async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<ShoppingList> {
+    let planned = plan_lines(s, household, week).await?;
+    // Marks are kept per food, so a line shows ticked (or removed) when every food on it is.
     let marks: HashMap<String, (bool, bool)> =
         sqlx::query_as::<_, (String, bool, bool)>("SELECT item_key, checked, hidden FROM shopping_marks WHERE household_id = $1 AND week = $2")
             .bind(household)
@@ -239,11 +458,6 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
             .into_iter()
             .map(|(k, c, h)| (k, (c, h)))
             .collect();
-    let staples: Vec<Uuid> =
-        sqlx::query_scalar("SELECT food_id FROM pantry_staples WHERE household_id = $1")
-            .bind(household)
-            .fetch_all(&s.pool)
-            .await?;
     let usual: String = sqlx::query_scalar("SELECT weight_unit FROM households WHERE id = $1")
         .bind(household)
         .fetch_one(&s.pool)
@@ -260,44 +474,49 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
     .collect();
 
     let mut by_section: BTreeMap<(usize, String), Vec<ShoppingItem>> = BTreeMap::new();
-    let (mut removed, mut left_out) = (Vec::new(), Vec::new());
-    for (key, g) in groups {
-        if g.food_id.is_some_and(|f| staples.contains(&f)) {
-            left_out.push(LeftOut { key, name: g.name });
+    let mut removed = Vec::new();
+    let mut left_out: Vec<LeftOut> = planned
+        .staples
+        .into_iter()
+        .map(|(id, name)| LeftOut {
+            key: id.to_string(),
+            name,
+        })
+        .collect();
+    for l in planned.lines {
+        let marked = |which: fn(&(bool, bool)) -> bool| {
+            shopping::all_marked(&l.foods, |f| marks.get(f).is_some_and(which))
+        };
+        if marked(|m| m.1) {
+            removed.push(LeftOut {
+                key: l.key,
+                name: l.name,
+            });
             continue;
         }
-        let (checked, hidden) = marks.get(&key).copied().unwrap_or((false, false));
-        if hidden {
-            removed.push(LeftOut { key, name: g.name });
-            continue;
-        }
-        let section = if g.pantry {
+        let checked = marked(|m| m.0);
+        let section = if l.pantry {
             CHECK.to_string()
         } else {
-            g.section
+            l.section
         };
-        let weight_unit = g.food_id.and_then(|f| per_food.get(&f).copied());
-        let weighed = g.needs.iter().any(|q| q.unit.family() == Family::Weight)
-            || g.count
-                .as_ref()
-                .and_then(|c| c.size.as_ref())
-                .is_some_and(|s| s.unit.family() == Family::Weight);
+        let weight_unit = l.food_id.and_then(|f| per_food.get(&f).copied());
         by_section
             .entry((shopping::section_order(&section), section))
             .or_default()
             .push(ShoppingItem {
-                amount: shopping::total(
-                    &g.needs,
-                    g.count.as_ref(),
+                amount: l.measures.total(
+                    &l.needs,
+                    l.count.as_ref(),
                     weight_unit.unwrap_or(usual).core(),
                 ),
-                weighed,
+                weighed: l.measures.weighed(&l.needs, l.count.as_ref()),
                 weight_unit,
-                key,
-                food_id: g.food_id,
-                name: g.name,
+                key: l.key,
+                food_id: l.food_id,
+                name: l.name,
                 checked,
-                recipes: g.recipes,
+                recipes: l.recipes,
             });
     }
     let sections = by_section
@@ -309,6 +528,7 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
         .collect();
     removed.sort_by_key(|l: &LeftOut| l.name.to_lowercase());
     left_out.sort_by_key(|l: &LeftOut| l.name.to_lowercase());
+    left_out.dedup_by(|a, b| a.key == b.key);
 
     let extras = sqlx::query_as::<_, (Uuid, String, bool, Option<String>)>("SELECT id, name, checked, client_key FROM shopping_extras WHERE household_id = $1 AND week = $2 ORDER BY created_at, id")
         .bind(household)
@@ -320,7 +540,7 @@ async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Shop
         .collect();
     Ok(ShoppingList {
         week,
-        meals: entries.len(),
+        meals: planned.entries,
         extras,
         sections,
         removed,
@@ -359,14 +579,20 @@ pub async fn mark(
 ) -> ApiResult<Json<ShoppingList>> {
     clean(&b.key)?;
     let week = monday(b.week);
+    // Marks are kept per food. The key names a line as the device saw it, which may have merged or split since,
+    // so it marks every food on the lines that now cover it.
+    let foods = plan_lines(&s, me.household_id, week)
+        .await?
+        .foods_to_mark(&b.key);
     sqlx::query(
-        "INSERT INTO shopping_marks (household_id, week, item_key, checked, hidden) VALUES ($1, $2, $3, coalesce($4, false), coalesce($5, false))
+        "INSERT INTO shopping_marks (household_id, week, item_key, checked, hidden)
+         SELECT $1, $2, k, coalesce($4, false), coalesce($5, false) FROM UNNEST($3::text[]) AS k
          ON CONFLICT (household_id, week, item_key)
          DO UPDATE SET checked = coalesce($4, shopping_marks.checked), hidden = coalesce($5, shopping_marks.hidden)",
     )
     .bind(me.household_id)
     .bind(week)
-    .bind(&b.key)
+    .bind(&foods)
     .bind(b.checked)
     .bind(b.hidden)
     .execute(&s.pool)

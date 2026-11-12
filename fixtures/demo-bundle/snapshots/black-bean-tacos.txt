@@ -25,7 +25,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 3 tortillas Flour Tortillas [scaled]
 - ½ can Black Beans [scaled]
-- ¼ onion Yellow Onion [scaled]
+- ¼ cup Onion [scaled]
 - ¼ cup Monterey Jack Cheese [scaled]
 - ½ lime Lime [scaled]
 - 1 TBSP Sour Cream [scaled]
@@ -40,7 +40,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 6 tortillas Flour Tortillas
 - 1 can Black Beans
-- ½ onion Yellow Onion
+- ½ cup Onion
 - ½ cup Monterey Jack Cheese
 - 1 lime Lime
 - 2 TBSP Sour Cream
@@ -55,7 +55,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 9 tortillas Flour Tortillas [scaled]
 - 1½ cans Black Beans [scaled]
-- ¾ onion Yellow Onion [scaled]
+- ¾ cup Onion [scaled]
 - ¾ cup Monterey Jack Cheese [scaled]
 - 1½ limes Lime [scaled]
 - 3 TBSP Sour Cream [scaled]
@@ -70,7 +70,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 12 tortillas Flour Tortillas
 - 2 cans Black Beans
-- 1 onion Yellow Onion
+- 1 cup Onion
 - 1 cup Monterey Jack Cheese
 - 2 limes Lime
 - 4 TBSP Sour Cream
@@ -85,7 +85,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 15 tortillas Flour Tortillas [scaled]
 - 2½ cans Black Beans [scaled]
-- 1½ onions Yellow Onion [scaled]
+- 1¼ cups Onion [scaled]
 - 1¼ cups Monterey Jack Cheese [scaled]
 - 2½ limes Lime [scaled]
 - ¼ cup + 1 TBSP Sour Cream [scaled]
@@ -100,7 +100,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 18 tortillas Flour Tortillas [scaled]
 - 3 cans Black Beans [scaled]
-- 1½ onions Yellow Onion [scaled]
+- 1½ cups Onion [scaled]
 - 1½ cups Monterey Jack Cheese [scaled]
 - 3 limes Lime [scaled]
 - ⅓ cup + 2 tsp Sour Cream [scaled]
@@ -122,7 +122,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 3 tortillas Flour Tortillas [scaled]
 - ½ can Black Beans [scaled]
-- ¼ onion Yellow Onion [scaled]
+- ¼ cup Onion [scaled]
 - ¼ cup Cheddar Cheese [scaled]
 - ½ lime Lime [scaled]
 - 1 TBSP Sour Cream [scaled]
@@ -137,7 +137,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 6 tortillas Flour Tortillas
 - 1 can Black Beans
-- ½ onion Yellow Onion
+- ½ cup Onion
 - ½ cup Cheddar Cheese
 - 1 lime Lime
 - 2 TBSP Sour Cream
@@ -152,7 +152,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 9 tortillas Flour Tortillas [scaled]
 - 1½ cans Black Beans [scaled]
-- ¾ onion Yellow Onion [scaled]
+- ¾ cup Onion [scaled]
 - ¾ cup Cheddar Cheese [scaled]
 - 1 lime Lime [scaled]
 - 3 TBSP Sour Cream [scaled]
@@ -167,7 +167,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 12 tortillas Flour Tortillas
 - 2 cans Black Beans
-- 1 onion Yellow Onion
+- 1 cup Onion
 - 1 cup Cheddar Cheese
 - 1 lime Lime
 - 4 TBSP Sour Cream
@@ -182,7 +182,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 15 tortillas Flour Tortillas [scaled]
 - 2½ cans Black Beans [scaled]
-- 1½ onions Yellow Onion [scaled]
+- 1¼ cups Onion [scaled]
 - 1¼ cups Cheddar Cheese [scaled]
 - 1½ limes Lime [scaled]
 - ¼ cup + 1 TBSP Sour Cream [scaled]
@@ -197,7 +197,7 @@ meta {"content_type":"recipe","difficulty":1,"prep_time":"PT20M","tags":["vegeta
 
 - 18 tortillas Flour Tortillas [scaled]
 - 3 cans Black Beans [scaled]
-- 1½ onions Yellow Onion [scaled]
+- 1½ cups Onion [scaled]
 - 1½ cups Cheddar Cheese [scaled]
 - 1½ limes Lime [scaled]
 - ⅓ cup + 2 tsp Sour Cream [scaled]

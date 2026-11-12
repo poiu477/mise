@@ -86,6 +86,39 @@ impl Kitchen {
         variant
     }
 
+    /// Make `food` a kind of `parent` in the food tree.
+    async fn kind_of(&self, food: Uuid, parent: Uuid) {
+        sqlx::query("UPDATE foods SET parent_id = $2 WHERE id = $1")
+            .bind(food)
+            .bind(parent)
+            .execute(&self.pool)
+            .await
+            .unwrap();
+    }
+
+    /// Plan a version for `WEEK` at its default servings; returns the entry's id.
+    async fn plan(&self, variant: Uuid) -> String {
+        let plan = self
+            .call(
+                "POST",
+                "/api/v1/plan/entries",
+                Some(json!({"week": WEEK, "variant_id": variant})),
+            )
+            .await;
+        let entries = plan["entries"].as_array().unwrap();
+        entries.last().unwrap()["id"].as_str().unwrap().to_string()
+    }
+
+    /// Tick or untick whatever `key` names; answers with the list.
+    async fn tick(&self, key: &str, checked: bool) -> Value {
+        self.call(
+            "PUT",
+            "/api/v1/shopping/marks",
+            Some(json!({"week": WEEK, "key": key, "checked": checked})),
+        )
+        .await
+    }
+
     /// Someone in a household of their own, next door, signed in. Returns their session cookie.
     async fn neighbour(&self) -> String {
         let household = self
@@ -116,6 +149,258 @@ fn section_names(list: &Value) -> Vec<String> {
         .iter()
         .map(|s| s["name"].as_str().unwrap().to_string())
         .collect()
+}
+
+/// Every item's name on the list, in order.
+fn names(list: &Value) -> Vec<String> {
+    list["sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|s| s["items"].as_array().unwrap())
+        .map(|i| i["name"].as_str().unwrap().to_string())
+        .collect()
+}
+
+/// Whether the item named `name` shows ticked.
+fn ticked(list: &Value, name: &str) -> bool {
+    item(list, name).unwrap_or_else(|| panic!("{name} is on the list"))["checked"] == true
+}
+
+#[tokio::test]
+async fn the_demo_week_has_one_onion_line() {
+    let app = test_app!(TestApp::with_demo());
+    let cookie = app.setup_owner().await;
+    let dishes = [
+        "weeknight-tomato-pasta",
+        "black-bean-tacos",
+        "lemon-herb-chicken",
+    ];
+    for slug in dishes {
+        let dish = app
+            .json("GET", &format!("/api/v1/dishes/{slug}"), &cookie, None)
+            .await;
+        app.json(
+            "POST",
+            "/api/v1/plan/entries",
+            &cookie,
+            Some(json!({"week": WEEK, "variant_id": dish["default_variant"]})),
+        )
+        .await;
+    }
+    let list = app
+        .json(
+            "GET",
+            &format!("/api/v1/shopping?week={WEEK}"),
+            &cookie,
+            None,
+        )
+        .await;
+    // The pasta's yellow onion and the tacos' half cup of any onion: one onion is a cup (curation.json).
+    let onion = item(&list, "Yellow Onion").expect("one onion line");
+    assert_eq!(onion["amount"], "1½ onions");
+    assert_eq!(
+        onion["recipes"],
+        json!(["Weeknight Tomato Pasta", "Black Bean Tacos"])
+    );
+    assert!(item(&list, "Onion").is_none(), "no second onion line");
+    // Counts only, so the garlic reads as the recipes wrote it; one kind of amount isn't restated.
+    assert_eq!(item(&list, "Garlic").unwrap()["amount"], "3 cloves");
+    assert_eq!(item(&list, "Parmesan").unwrap()["amount"], "¼ cup");
+}
+
+#[tokio::test]
+async fn kinds_of_a_food_share_a_line_only_while_a_recipe_asks_for_the_food() {
+    let app = test_app!(Kitchen::new());
+    let onion = app
+        .food(
+            "Onion",
+            json!({"count_unit": "onion", "store_section": "Produce"}),
+        )
+        .await;
+    let yellow = app.food("Yellow Onion", json!({})).await;
+    let red = app.food("Red Onion", json!({})).await;
+    app.kind_of(yellow, onion).await;
+    app.kind_of(red, onion).await;
+    let salsa = app.recipe("Salsa", &[(yellow, 1.0, "unit", true)]).await;
+    let tacos = app.recipe("Tacos", &[(red, 0.5, "unit", true)]).await;
+    let soup = app.recipe("Soup", &[(onion, 1.0, "unit", true)]).await;
+    let (yellow, onion) = (yellow.to_string(), onion.to_string());
+
+    // Two kinds, and no recipe for any onion: a recipe that asks for red onion wants red.
+    app.plan(salsa).await;
+    app.plan(tacos).await;
+    let list = app.tick(&yellow, true).await;
+    assert_eq!(names(&list), ["Red Onion", "Yellow Onion"]);
+    assert_eq!(item(&list, "Yellow Onion").unwrap()["amount"], "1 onion");
+    assert!(ticked(&list, "Yellow Onion"));
+    assert!(!ticked(&list, "Red Onion"));
+
+    // Soup asks for any onion, so all three are one line, and with only some of it ticked it isn't.
+    let entry = app.plan(soup).await;
+    let list = app.list().await;
+    assert_eq!(names(&list), ["Onion"]);
+    let merged = item(&list, "Onion").unwrap();
+    assert_eq!(merged["key"], onion);
+    assert_eq!(merged["amount"], "2½ onions");
+    assert_eq!(merged["recipes"], json!(["Salsa", "Tacos", "Soup"]));
+    assert!(!ticked(&list, "Onion"), "a mix shows as not ticked");
+
+    // Taking soup off splits the line again, and each part keeps its own tick.
+    app.call("DELETE", &format!("/api/v1/plan/entries/{entry}"), None)
+        .await;
+    let list = app.list().await;
+    assert!(ticked(&list, "Yellow Onion"));
+    assert!(!ticked(&list, "Red Onion"));
+
+    // Ticking the merged line ticks every food on it, so each part stays ticked after a split.
+    let entry = app.plan(soup).await;
+    assert!(ticked(&app.tick(&onion, true).await, "Onion"));
+    app.call("DELETE", &format!("/api/v1/plan/entries/{entry}"), None)
+        .await;
+    let list = app.list().await;
+    assert!(ticked(&list, "Yellow Onion"));
+    assert!(ticked(&list, "Red Onion"));
+
+    // "Always have" on the merged line sends the line's food, and leaves the whole line off.
+    app.plan(soup).await;
+    let list = app
+        .call(
+            "POST",
+            "/api/v1/pantry-staples",
+            Some(json!({"week": WEEK, "food_id": onion})),
+        )
+        .await;
+    assert_eq!(names(&list), Vec::<String>::new());
+    assert_eq!(list["staples"], json!([{"key": onion, "name": "Onion"}]));
+}
+
+#[tokio::test]
+async fn kinds_share_a_line_when_curation_buys_the_food_as_one() {
+    let app = test_app!(Kitchen::new());
+    let pepper = app
+        .food(
+            "Pepper",
+            json!({"count_unit": "pepper", "store_section": "Produce"}),
+        )
+        .await;
+    let bell = app.food("Bell Pepper", json!({})).await;
+    let poblano = app.food("Poblano Pepper", json!({})).await;
+    app.kind_of(bell, pepper).await;
+    app.kind_of(poblano, pepper).await;
+    let fajitas = app.recipe("Fajitas", &[(bell, 1.0, "unit", true)]).await;
+    let rajas = app.recipe("Rajas", &[(poblano, 2.0, "unit", true)]).await;
+    app.plan(fajitas).await;
+    app.plan(rajas).await;
+    // As a curation file sets it (`mise food apply`).
+    let pool = app.pool.clone();
+    let buy_as_one = |value: bool| {
+        let pool = pool.clone();
+        async move {
+            let op = mise_ingest::curate::Op::Set {
+                food: "Pepper".into(),
+                key: "shop_as_one".into(),
+                value: json!(value),
+            };
+            mise_ingest::curate::apply(&pool, &op).await
+        }
+    };
+
+    // No recipe asks for any pepper, so each kind keeps its own line.
+    let list = app.list().await;
+    assert_eq!(names(&list), ["Bell Pepper", "Poblano Pepper"]);
+
+    // Bought as one: one line named for the pepper, the amounts added up.
+    buy_as_one(true).await.unwrap();
+    let list = app.list().await;
+    assert_eq!(names(&list), ["Pepper"]);
+    let peppers = item(&list, "Pepper").unwrap();
+    assert_eq!(peppers["key"], pepper.to_string());
+    assert_eq!(peppers["amount"], "3 peppers");
+    assert_eq!(peppers["recipes"], json!(["Fajitas", "Rajas"]));
+
+    // A tick on it covers both kinds, as their own lines show once the pepper is no longer bought as one.
+    assert!(ticked(&app.tick(&pepper.to_string(), true).await, "Pepper"));
+    buy_as_one(false).await.unwrap();
+    let list = app.list().await;
+    assert_eq!(names(&list), ["Bell Pepper", "Poblano Pepper"]);
+    assert!(ticked(&list, "Bell Pepper"));
+    assert!(ticked(&list, "Poblano Pepper"));
+}
+
+#[tokio::test]
+async fn a_tick_sent_for_a_line_that_has_merged_or_split_lands_on_the_lines_covering_it() {
+    let app = test_app!(Kitchen::new());
+    let onion = app.food("Onion", json!({"count_unit": "onion"})).await;
+    let yellow = app.food("Yellow Onion", json!({})).await;
+    let red = app.food("Red Onion", json!({})).await;
+    app.kind_of(yellow, onion).await;
+    app.kind_of(red, onion).await;
+    let salsa = app.recipe("Salsa", &[(yellow, 1.0, "unit", true)]).await;
+    let tacos = app.recipe("Tacos", &[(red, 1.0, "unit", true)]).await;
+    let soup = app.recipe("Soup", &[(onion, 1.0, "unit", true)]).await;
+    let (yellow, onion) = (yellow.to_string(), onion.to_string());
+    app.plan(salsa).await;
+    app.plan(tacos).await;
+    let entry = app.plan(soup).await;
+
+    // A phone saw the Yellow Onion line before soup was planned, and ticked it offline: it ticks the merged line.
+    let list = app.tick(&yellow, true).await;
+    assert!(ticked(&list, "Onion"));
+    app.tick(&yellow, false).await;
+
+    // Another saw the merged line before soup came off the plan: its tick lands on each part.
+    app.call("DELETE", &format!("/api/v1/plan/entries/{entry}"), None)
+        .await;
+    let list = app.tick(&onion, true).await;
+    assert_eq!(names(&list), ["Red Onion", "Yellow Onion"]);
+    assert!(ticked(&list, "Yellow Onion"));
+    assert!(ticked(&list, "Red Onion"));
+}
+
+#[tokio::test]
+async fn amounts_add_up_across_units_where_the_food_says_how() {
+    let app = test_app!(Kitchen::new());
+    let garlic = app.food("Garlic", json!({})).await;
+    let parmesan = app.food("Parmesan", json!({})).await;
+    let ginger = app.food("Ginger", json!({})).await;
+    for (food, kind, item, ml, grams) in [
+        (garlic, "item", "clove", Some(4.929), None),
+        (parmesan, "density", "", Some(236.6), Some(85.05)),
+        // A density doesn't say how big a thumb of ginger is.
+        (ginger, "density", "", Some(1.0), Some(0.6)),
+    ] {
+        sqlx::query("INSERT INTO food_measures (id, food_id, kind, item, ml, grams) VALUES ($1, $2, $3, $4, $5::float8::numeric, $6::float8::numeric)")
+            .bind(Uuid::now_v7()).bind(food).bind(kind).bind(item).bind(ml).bind(grams)
+            .execute(&app.pool).await.unwrap();
+    }
+    let stir_fry = app
+        .recipe(
+            "Stir Fry",
+            &[
+                (garlic, 2.0, "clove", true),
+                (parmesan, 0.5, "cup", true),
+                (ginger, 1.0, "thumb", true),
+            ],
+        )
+        .await;
+    let pasta = app
+        .recipe(
+            "Pasta",
+            &[
+                (garlic, 1.0, "tablespoon", true),
+                (parmesan, 1.5, "ounce", true),
+                (ginger, 1.0, "teaspoon", true),
+            ],
+        )
+        .await;
+    app.plan(stir_fry).await;
+    app.plan(pasta).await;
+    let list = app.list().await;
+    assert_eq!(item(&list, "Garlic").unwrap()["amount"], "5 cloves");
+    assert_eq!(item(&list, "Parmesan").unwrap()["amount"], "3 oz");
+    assert_eq!(item(&list, "Parmesan").unwrap()["weighed"], true);
+    assert_eq!(item(&list, "Ginger").unwrap()["amount"], "1 tsp + 1 thumb");
 }
 
 #[tokio::test]

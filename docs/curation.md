@@ -24,6 +24,20 @@ food both ways. Together they read "1 packet (1½ oz)". Without them the amount 
 `store_section` places a food on the shopping list (`Produce`, `Dairy & Eggs`); a food without one uses its nearest
 ancestor's, and falls under Other when none has one. The sections and their order are in `mise_core::shopping::SECTIONS`.
 
+Kinds of a food share its shopping line while a recipe in the week asks for the food itself. `shop_as_one`: `true`
+makes two kinds share a line even without one (peppers bought as "peppers"); a category never does.
+
+Two ops say how a food's amounts add up on the shopping list. Kinds of the food use its measures when they have
+none of their own.
+
+| Op | Fields | Effect |
+| --- | --- | --- |
+| `density` | `food`, `volume`, `weight` | What a volume weighs (`"1 cup"`, `"3 oz"`): cups and ounces of it add up as one weight |
+| `item_size` | `food`, `item`, `size` | How much one item is (`"clove"`, `"1 tsp"`; or `"onion"`, `"8 oz"`): counts and measures add up. Give a volume and a weight in two ops if both are known |
+
+A density alone never turns "2 cloves" into spoons: only an item size does. Both are also `mise food density` and
+`mise food item-size`.
+
 ```json
 [
   {"op": "merge", "from": "Oil", "into": "Cooking Oil"},

@@ -39,6 +39,18 @@ pub enum FoodCommand {
         /// A JSON value or plain text.
         value: String,
     },
+    /// Say what a volume of FOOD weighs, e.g. `Parmesan "1 cup" "3 oz"`, so the list adds cups and ounces up.
+    Density {
+        food: String,
+        volume: String,
+        weight: String,
+    },
+    /// Say how much one ITEM of FOOD is, e.g. `Garlic clove "1 tsp"`, so the list adds counts and measures up.
+    ItemSize {
+        food: String,
+        item: String,
+        size: String,
+    },
     /// Apply a JSON file of operations (see docs/curation.md), all or nothing.
     Apply { file: std::path::PathBuf },
 }
@@ -68,6 +80,16 @@ pub async fn run(pool: &PgPool, cmd: FoodCommand) -> Result<()> {
         FoodCommand::Alias { food, alias } => Op::Alias { food, alias },
         FoodCommand::Unrelate { food, other } => Op::Unrelate { food, other },
         FoodCommand::Merge { from, into } => Op::Merge { from, into },
+        FoodCommand::Density {
+            food,
+            volume,
+            weight,
+        } => Op::Density {
+            food,
+            volume,
+            weight,
+        },
+        FoodCommand::ItemSize { food, item, size } => Op::ItemSize { food, item, size },
         FoodCommand::Set { food, key, value } => {
             let value = serde_json::from_str(&value).unwrap_or(serde_json::Value::String(value));
             Op::Set { food, key, value }

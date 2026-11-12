@@ -13,17 +13,17 @@ ImportStats {
 ## Match foods
 
 MatchStats {
-    names: 25,
-    foods_created: 25,
+    names: 26,
+    foods_created: 26,
     lines_matched: 39,
-    kind_of_links: 0,
+    kind_of_links: 1,
     related_links: 0,
     review_items: 0,
 }
 
 ## Apply curation
 
-29 changes
+34 changes
 
 ## Group dishes
 
@@ -75,9 +75,10 @@ variant_yields: 9
 ingredient_lines: 39
 line_amounts: 72
 steps: 18
-foods: 25
-food_aliases: 25
+foods: 26
+food_aliases: 26
 food_relations: 0
+food_measures: 3
 dishes: 4
 dish_options: 1
 variant_attributes: 15
@@ -97,13 +98,14 @@ none
 - Chicken Stock Concentrate {"count_size":"2 tsp","count_unit":"packet","store_section":"Sauces & Condiments"}
 - Crushed Tomatoes {"store_section":"Canned & Jarred"}
 - Flour Tortillas {"count_unit":"tortilla","store_section":"Bakery"}
-- Garlic {"store_section":"Produce"}
+- Garlic {"store_section":"Produce"} [one clove, 4.9 ml]
 - Jasmine Rice {"store_section":"Pasta & Grains"}
 - Lemon {"count_unit":"lemon","store_section":"Produce"}
 - Lime {"count_unit":"lime","store_section":"Produce"}
 - Monterey Jack Cheese {"store_section":"Dairy & Eggs"}
 - Olive Oil
-- Parmesan {"store_section":"Dairy & Eggs"}
+- Onion {"count_unit":"onion","store_section":"Produce"} [one onion, 236.6 ml]
+- Parmesan {"store_section":"Dairy & Eggs"} [236.6 ml weighs 85.0 g]
 - Parsley {"store_section":"Produce"}
 - Red Pepper Flakes {"store_section":"Spices & Seasonings"}
 - Salt
@@ -113,4 +115,4 @@ none
 - Soy Sauce {"store_section":"Sauces & Condiments"}
 - Spaghetti {"store_section":"Pasta & Grains"}
 - Taco Spice Blend {"store_section":"Spices & Seasonings"}
-- Yellow Onion {"count_unit":"onion","store_section":"Produce"}
+- Yellow Onion (kind of Onion) {"count_unit":"onion","store_section":"Produce"}

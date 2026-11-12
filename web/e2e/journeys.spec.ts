@@ -275,6 +275,31 @@ test("two more dishes and the week's list take under 20 interactions", async () 
   expect(sections.at(-1)).toBe("Check you have");
 });
 
+test("kinds of one food share a line, and its tick survives a reload", async () => {
+  // The pasta asks for a yellow onion and the tacos for half a cup of any onion: one line, in onions.
+  const onions = page.locator(".shop-section li").filter({ hasText: /onion/i });
+  await expect(onions).toHaveCount(1);
+  await expect(onions.locator(".item-name")).toContainText("Yellow Onion");
+  await expect(onions.locator(".item-amount")).toHaveText("1½ onions");
+  await onions.getByRole("checkbox").check();
+  await expect(onions.getByRole("checkbox")).toBeChecked();
+  // Wait for the server to have the tick, so the reload reads it from there, not from the device's queue.
+  await expect
+    .poll(async () => {
+      const list = await (await page.request.get("/api/v1/shopping")).json();
+      const items = list.sections.flatMap(
+        (s: { items: { name: string; checked: boolean }[] }) => s.items,
+      );
+      return items.find((i: { name: string }) => i.name === "Yellow Onion")?.checked;
+    })
+    .toBe(true);
+
+  await page.reload();
+  const reloaded = page.locator(".shop-section li").filter({ hasText: /onion/i });
+  await expect(reloaded).toHaveCount(1);
+  await expect(reloaded.getByRole("checkbox")).toBeChecked();
+});
+
 test("ticks survive a reload, and the list keeps working offline", async () => {
   const garlic = shoppingItem("Garlic").getByRole("checkbox");
   await garlic.check();
