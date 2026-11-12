@@ -25,6 +25,9 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
 - **Sources and records.** A `source` (a seed bundle, the web, a file, a person) supplies `source_records`, kept
   verbatim so imports can be re-processed. Each record becomes a `variant`.
 - **Dishes and variants.** A `dish` is what people choose; its `variants` are the published or forked versions.
+  A variant belongs to one household (`household_id`, with a `visibility`, only `private` so far) or, for seed and
+  bundle versions, to none; the SQL function `visible_to(variant, household)` says whether a household can see it,
+  and a dish shows to a household only through the versions it can see.
   `variant_yields` are the serving counts a version was published for. `dish_options` (protein, portion, version) are
   derived from the differences between a dish's variants. `dish_decisions` (merge, keep apart) and
   `preferred_versions` (how often each version was had) steer grouping and the default version. `retired_slugs` keep
@@ -63,7 +66,9 @@ lines, without fetching anything; the sample pages in `fixtures/web-pages/` show
 titles; chains of small changes that drift into a different dish are split; protein swaps of one dish are joined.
 Doubtful merges go to review, and recorded decisions always win. A dish keeps its id from run to run, and its slug
 follows its name: when the name changes, the old slug is retired and still finds the dish, as does the slug of a dish
-whose versions all joined another. A live dish's slug always wins over a retired one.
+whose versions all joined another. A live dish's slug always wins over a retired one. A household's own versions
+may join a dish everyone sees, but never one only another household can see, and a shared dish is named, and opens
+on, versions everyone sees.
 
 ## Scaling and measuring (`mise-core`)
 
@@ -90,9 +95,12 @@ one more release, with a `Deprecation` header and a `Link` to the new address (`
 `/api/health` and single sign-on's two redirects, which keep their addresses for good. Every route sits behind
 `auth::require_auth` except health, the OpenAPI document and sign-in. A bearer token (`mise_…`, read or read-write),
 else a session cookie (`mise_session`), else a kitchen device's cookie (`mise_kitchen`) identifies a `CurrentUser` with
-their `household_id`, and every planning query is scoped by it. A kitchen device has no account: its `CurrentUser`
-carries its kitchen token's id and `Via::Kitchen`, and `require_auth` refuses it every route but the few
-`auth::kitchen::may` lists (reading `/me`, the plan, dishes, versions and photos) before any handler runs; `/me`
+their `household_id`, and every planning query is scoped by it. Recipe queries (search, the dish page, a version, the
+plan and the shopping list) read only the versions `visible_to` that household: another household's version answers
+404, like one that doesn't exist, and a dish two households share shows each its own share of versions and option
+choices. A kitchen device has no account: its `CurrentUser` carries its kitchen token's id, its household and
+`Via::Kitchen`, so its reads go through the same household scoping, and `require_auth` refuses it every route but the
+few `auth::kitchen::may` lists (reading `/me`, the plan, dishes, versions and photos) before any handler runs; `/me`
 answers it with `kitchen: true` and no username, email or household name. Its cookie comes from a one-time link an
 admin issues (`/api/v1/auth/kitchen?code=…`, valid for an hour), and is renewed, at most hourly, as the device is
 used. Sessions, API tokens, kitchen links and kitchen cookies are random 256-bit secrets stored only as SHA-256
@@ -103,7 +111,10 @@ queued work never lands in another household, and the app re-checks who is signe
 sentence to show people, and a stable name for programs (`not_found`, `bad_request`, `unauthorized`,
 `bad_credentials`, `forbidden`, `method_not_allowed`, `conflict`, `account_changed`, `payload_too_large`,
 `too_many_requests`, `internal`). `extract.rs` wraps axum's extractors so bad input answers in that shape too, and
-the router does the same for an unknown address and a method a route doesn't take. Endpoints that change a plan or a
+the router does the same for an unknown address and a method a route doesn't take. Each route's `#[utoipa::path]`
+lists every status it can answer: its own, and the shared sets in `error.rs` (`SignedIn`, `ReadOnlyToken`,
+`TooLarge`, `ServerError`) for what the middleware, the body extractor and a failing server answer;
+`tests/responses.rs` checks each route gives all of them and nothing else. Endpoints that change a plan or a
 list answer with the whole plan or list, so the client never has to merge.
 
 The shopping list is never stored: `shopping::build` works it out from the week's plan on each request and lays the

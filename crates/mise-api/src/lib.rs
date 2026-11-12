@@ -93,7 +93,11 @@ pub struct Health {
 }
 
 /// Liveness and version. `/api/health` answers too, for good: proxies and monitors check it.
-#[utoipa::path(get, path = "/api/v1/health", operation_id = "health", responses((status = 200, description = "The server is up", body = Health)))]
+#[utoipa::path(get, path = "/api/v1/health", operation_id = "health", security(()),
+    responses(
+        (status = 200, description = "The server is up", body = Health)
+    )
+)]
 pub async fn health() -> Json<Health> {
     Json(Health {
         status: "ok",

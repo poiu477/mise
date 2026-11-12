@@ -32,17 +32,6 @@ status.md if it changed either.
   style request (no JSON content type, no custom header) to sign-out and to a DELETE route is refused or harmless,
   as the written stance says; the browser journeys pass (they would catch a policy that breaks the app).
 
-### T7 · Document every response each endpoint can return
-
-The OpenAPI annotations list the main responses, but every signed-in route can also return 401 and 412
-(`X-Mise-Account`), browser-only actions 403, and some validation 400s are missing.
-
-- Add the missing responses to the `#[utoipa::path]` annotations, then a test that calls each route in the ways
-  that produce each documented status and fails on a status the document doesn't list.
-- **Touches:** `crates/mise-api/src/` (annotations only), a new test in `crates/mise-api/tests/`,
-  `web/src/api/schema.d.ts` (regenerated).
-- **Done when:** the new test passes; `web/scripts/check-openapi.mjs` still passes.
-
 ### T9 · Observability
 
 - An option for JSON logs, a request id on every log line (and in the response), a readiness check that the
@@ -72,25 +61,10 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
   `[lints] workspace = true` in every crate's `Cargo.toml`, removing the per-crate attributes. `mise-cli` is a binary
   and has no public items, so it's covered without work.
 - **Touches:** `crates/mise-api/src/` (comments only), `web/src/api/schema.d.ts` (regenerated), every `Cargo.toml`.
-- **Needs:** T7 (it rewrites the same annotations). Not while the database-code rework is in flight: it
-  moves most of this crate.
+- **Needs:** not while the database-code rework is in flight: it moves most of this crate.
 - **Done when:** clippy passes workspace-wide with the lint in `Cargo.toml`; a missing doc comment in any crate fails
   it.
 
-### T22 · Recipes that belong to a household
-
-Imports, the editor and forks all make recipes that belong to one household; today every recipe is visible to every
-account. The schema already has `user` and `web` sources and `variants.parent_variant_id` for lineage.
-
-- Through a new migration, give each version an owning household (none for seed and bundle recipes, which stay
-  visible to everyone) and a visibility (`private` by default; `partners` and `install` come with T31, so accept
-  only `private` for now). A dish shows to a household when any version it can see belongs to it; the dish page,
-  search, the plan and the shopping list only ever use versions the household can see.
-- **Touches:** a new migration, `crates/mise-api/src/` (dishes, variants, plan, shopping queries),
-  `crates/mise-ingest/src/dishes.rs` (grouping considers ownership: one household's version never joins a dish that
-  only another household can see).
-- **Done when:** API tests show a version owned by one household is invisible to another in search, the dish page,
-  a direct fetch by id, and when added to a plan by id; the pipeline snapshot test still passes unchanged.
 
 ### T24 · Kitchen mode
 
@@ -134,7 +108,9 @@ account. The schema already has `user` and `web` sources and `variants.parent_va
 - Create and update a household's own versions: title, yields, ingredient lines (each parsed with the line parser
   and matched to a food, with the match returned so the editor can show and correct it), steps with references to
   ingredients, and photos (uploaded, checked with the `image` crate, size-limited, stored like the others). Own
-  versions use the `user` source and `origin = 'user'`, and belong to the household (T22).
+  versions use the `user` source and `origin = 'user'`, and belong to the household (T22: `variants.household_id`).
+  A photo of an own version is served only to households that can see a version using it: today `/media` serves
+  any photo by id to anyone signed in, which was harmless while every photo came from the seed.
 - **Touches:** `crates/mise-api/src/` (a new module), `crates/mise-ingest/src/` (reusing the line parser and
   matcher), `web/src/api/schema.d.ts` (regenerated).
 - **Needs:** T22.
@@ -166,7 +142,9 @@ account. The schema already has `user` and `web` sources and `variants.parent_va
 As the design has it: each household sets a default visibility for the recipes and forks it makes, and any one can
 override it.
 
-- Levels `private`, `partners` (households this one has added as partners) and `install`; `SHARING_MAX_LEVEL` caps
+- Levels `private`, `partners` (households this one has added as partners) and `install`, by widening
+  `variants.visibility`'s check and the `visible_to` SQL function every recipe query goes through (both from T22's
+  migration 0015, replaced in a new one); `SHARING_MAX_LEVEL` caps
   the most open level on the install (default `install`). Shared items are read-only to others, who can fork them;
   withdrawing a share hides the item but leaves forks already made. Plans, lists and preferences always stay
   private.
@@ -195,8 +173,7 @@ Each of these waits on a question in status.md's "Open questions" or on Paul.
 
 - **Database code:** `#[derive(sqlx::FromRow)]` structs, compile-time checked queries with `.sqlx` committed, SQL
   moved out of handlers into per-domain modules. It touches every file in `crates/mise-api/src/`, so it runs
-  alone, with nothing else in flight there. Order with T7 is settled: either can go first (T7 changes the OpenAPI
-  annotations and adds tests, this changes queries and their modules), but never both at once.
+  alone, with nothing else in flight there.
 - **Deploy gate:** a CI job that starts the Compose stack on an empty volume, upgrades a database from the previous
   release, and backs up and restores. Needs T10 (a previous release to upgrade from).
 - **Presentation:** README screenshots (taken by Playwright from the demo bundle), a hosted demo (**Paul**: where),
@@ -231,8 +208,8 @@ Phase 3, still to build:
 - Nextcloud Tasks (the list as CalDAV to-dos) and Calendar (the plan as events or an iCal feed).
 - Days in the plan (meals belong to a week today).
 
-Phase 4, kitchen and imports, is broken into T22 to T32 under Ready: recipes owned by a household, kitchen
-mode, import from a link and from files, the editor and forks, sharing, and review queues in the web app (printable
-cards, T33, are done). Its gate is T24's kitchen journey and T25's 20 sample pages (that half passes since T25).
+Phase 4, kitchen and imports, is broken into T23 to T32 under Ready: kitchen mode, import from a link and from
+files, the editor and forks, sharing, and review queues in the web app (recipes owned by a household, T22, and
+printable cards, T33, are done). Its gate is T24's kitchen journey and T25's 20 sample pages (that half passes since T25).
 
 Break a phase item into Ready tasks, in the shape above, before starting it.

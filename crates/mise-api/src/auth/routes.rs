@@ -29,7 +29,12 @@ pub struct AuthInfo {
 }
 
 /// How this install signs people in.
-#[utoipa::path(get, path = "/api/v1/auth/config", operation_id = "auth_config", tag = "auth", responses((status = 200, description = "How this install signs people in", body = AuthInfo)))]
+#[utoipa::path(get, path = "/api/v1/auth/config", operation_id = "auth_config", tag = "auth", security(()),
+    responses(
+        (status = 200, description = "How this install signs people in", body = AuthInfo),
+        crate::error::ServerError
+    )
+)]
 pub async fn config(State(s): State<AppState>) -> ApiResult<Json<AuthInfo>> {
     let users: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
         .fetch_one(&s.pool)
@@ -97,8 +102,15 @@ pub struct SetupRequest {
 }
 
 /// Create the first account (an admin) on a fresh install. Refused once any account exists.
-#[utoipa::path(post, path = "/api/v1/auth/setup", operation_id = "setup", tag = "auth", request_body = SetupRequest,
-    responses((status = 200, description = "The admin account, signed in", body = Me), (status = 409, description = "An account already exists", body = crate::error::ErrorBody)))]
+#[utoipa::path(post, path = "/api/v1/auth/setup", operation_id = "setup", tag = "auth", request_body = SetupRequest, security(()),
+    responses(
+        (status = 200, description = "The admin account, signed in", body = Me),
+        (status = 400, description = "The username or password is refused, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 409, description = "An account already exists", body = crate::error::ErrorBody),
+        crate::error::TooLarge,
+        crate::error::ServerError
+    )
+)]
 pub async fn setup(
     State(s): State<AppState>,
     jar: CookieJar,
@@ -158,8 +170,17 @@ pub struct LoginRequest {
 }
 
 /// Sign in with a username and password. Sets the session cookie.
-#[utoipa::path(post, path = "/api/v1/auth/login", operation_id = "login", tag = "auth", request_body = LoginRequest,
-    responses((status = 200, description = "Signed in", body = Me), (status = 401, description = "Wrong username or password", body = crate::error::ErrorBody), (status = 429, description = "Too many attempts; try again after Retry-After seconds", body = crate::error::ErrorBody)))]
+#[utoipa::path(post, path = "/api/v1/auth/login", operation_id = "login", tag = "auth", request_body = LoginRequest, security(()),
+    responses(
+        (status = 200, description = "Signed in", body = Me),
+        (status = 400, description = "The body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 401, description = "Wrong username or password", body = crate::error::ErrorBody),
+        (status = 403, description = "The account is turned off, or this install signs in only with single sign-on", body = crate::error::ErrorBody),
+        (status = 429, description = "Too many attempts; try again after Retry-After seconds", body = crate::error::ErrorBody),
+        crate::error::TooLarge,
+        crate::error::ServerError
+    )
+)]
 pub async fn login(
     State(s): State<AppState>,
     jar: CookieJar,
@@ -207,7 +228,13 @@ pub async fn login(
 }
 
 /// Sign out of this browser.
-#[utoipa::path(post, path = "/api/v1/auth/logout", operation_id = "logout", tag = "auth", responses((status = 204, description = "Signed out")))]
+#[utoipa::path(post, path = "/api/v1/auth/logout", operation_id = "logout", tag = "auth",
+    responses(
+        (status = 204, description = "Signed out"),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken
+    )
+)]
 pub async fn logout(
     State(s): State<AppState>,
     jar: CookieJar,
@@ -225,7 +252,12 @@ pub async fn logout(
 }
 
 /// The signed-in account, or the kitchen device (`kitchen` true, with no personal data).
-#[utoipa::path(get, path = "/api/v1/me", operation_id = "me", tag = "account", responses((status = 200, description = "The signed-in account, or the kitchen device", body = Me), (status = 401, description = "Not signed in", body = crate::error::ErrorBody)))]
+#[utoipa::path(get, path = "/api/v1/me", operation_id = "me", tag = "account",
+    responses(
+        (status = 200, description = "The signed-in account, or the kitchen device", body = Me),
+        crate::error::SignedIn
+    )
+)]
 pub async fn me(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -245,7 +277,14 @@ pub struct PasswordChange {
 
 /// Set or change this account's password. Signs out every other browser.
 #[utoipa::path(post, path = "/api/v1/me/password", operation_id = "change_password", tag = "account", request_body = PasswordChange,
-    responses((status = 204, description = "Password changed; other sessions are signed out"), (status = 400, description = "The current password is wrong, or the new one has fewer than 8 characters", body = crate::error::ErrorBody), (status = 401, description = "Not signed in", body = crate::error::ErrorBody), (status = 403, description = "Called with an API token; only a browser session can change the password", body = crate::error::ErrorBody)))]
+    responses(
+        (status = 204, description = "Password changed; other sessions are signed out"),
+        (status = 400, description = "The current password is wrong, the new one is too short or too long, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 403, description = "Called with an API token or from a kitchen device; only a browser session can change the password", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::TooLarge
+    )
+)]
 pub async fn change_password(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -317,7 +356,13 @@ pub struct NewToken {
 type TokenRow = (Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>);
 
 /// This account's API tokens.
-#[utoipa::path(get, path = "/api/v1/me/tokens", operation_id = "list_tokens", tag = "account", responses((status = 200, description = "This account's API tokens", body = [TokenInfo])))]
+#[utoipa::path(get, path = "/api/v1/me/tokens", operation_id = "list_tokens", tag = "account",
+    responses(
+        (status = 200, description = "This account's API tokens", body = [TokenInfo]),
+        crate::error::SignedIn,
+        crate::error::KitchenDevice
+    )
+)]
 pub async fn list_tokens(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -341,7 +386,15 @@ pub async fn list_tokens(
 }
 
 /// Make an API token. Only from a browser session, so one token cannot mint another.
-#[utoipa::path(post, path = "/api/v1/me/tokens", operation_id = "create_token", tag = "account", request_body = TokenRequest, responses((status = 200, description = "The new token, shown only this once", body = NewToken)))]
+#[utoipa::path(post, path = "/api/v1/me/tokens", operation_id = "create_token", tag = "account", request_body = TokenRequest,
+    responses(
+        (status = 200, description = "The new token, shown only this once", body = NewToken),
+        (status = 400, description = "The scope isn't read or read_write, the name is empty, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 403, description = "Called with an API token or from a kitchen device; only a browser session can make tokens", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::TooLarge
+    )
+)]
 pub async fn create_token(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -380,7 +433,14 @@ pub async fn create_token(
 
 /// Revoke one of this account's tokens.
 #[utoipa::path(delete, path = "/api/v1/me/tokens/{id}", operation_id = "delete_token", tag = "account", params(("id" = Uuid, Path)),
-    responses((status = 204, description = "Revoked"), (status = 404, description = "No such token", body = crate::error::ErrorBody)))]
+    responses(
+        (status = 204, description = "Revoked"),
+        (status = 400, description = "The id isn't a UUID", body = crate::error::ErrorBody),
+        (status = 404, description = "No such token", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken
+    )
+)]
 pub async fn delete_token(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -414,7 +474,13 @@ pub struct UserInfo {
 }
 
 /// Every account (admins only).
-#[utoipa::path(get, path = "/api/v1/users", operation_id = "list_users", tag = "admin", responses((status = 200, description = "Every account", body = [UserInfo])))]
+#[utoipa::path(get, path = "/api/v1/users", operation_id = "list_users", tag = "admin",
+    responses(
+        (status = 200, description = "Every account", body = [UserInfo]),
+        (status = 403, description = "Not an admin, or called from a kitchen device", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
+)]
 pub async fn list_users(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -488,7 +554,15 @@ pub struct NewUser {
 
 /// Add an account (admins only).
 #[utoipa::path(post, path = "/api/v1/users", operation_id = "create_user", tag = "admin", request_body = NewUser,
-    responses((status = 200, description = "The new account", body = Me), (status = 409, description = "That username or email is taken", body = crate::error::ErrorBody)))]
+    responses(
+        (status = 200, description = "The new account", body = Me),
+        (status = 400, description = "The username or password is refused, the household doesn't exist, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 403, description = "Not an admin, or called with a read-only API token or from a kitchen device", body = crate::error::ErrorBody),
+        (status = 409, description = "That username or email is taken", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::TooLarge
+    )
+)]
 pub async fn create_user(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -570,7 +644,15 @@ pub struct UserUpdate {
 
 /// Change an account (admins only). An admin cannot remove the last admin or turn off their own account.
 #[utoipa::path(patch, path = "/api/v1/users/{id}", operation_id = "update_user", tag = "admin", params(("id" = Uuid, Path)), request_body = UserUpdate,
-    responses((status = 200, description = "The updated account", body = Me), (status = 404, description = "No such account", body = crate::error::ErrorBody)))]
+    responses(
+        (status = 200, description = "The updated account", body = Me),
+        (status = 400, description = "The id isn't a UUID; the change would turn off your own account or leave no admin; the household doesn't exist; the password is too short or too long; or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 403, description = "Not an admin, or called with a read-only API token or from a kitchen device", body = crate::error::ErrorBody),
+        (status = 404, description = "No such account", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::TooLarge
+    )
+)]
 pub async fn update_user(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -646,7 +728,13 @@ pub async fn update_user(
 }
 
 /// Every household (admins only).
-#[utoipa::path(get, path = "/api/v1/households", operation_id = "list_households", tag = "admin", responses((status = 200, description = "Every household", body = [Household])))]
+#[utoipa::path(get, path = "/api/v1/households", operation_id = "list_households", tag = "admin",
+    responses(
+        (status = 200, description = "Every household", body = [Household]),
+        (status = 403, description = "Not an admin, or called from a kitchen device", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
+)]
 pub async fn list_households(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -668,7 +756,15 @@ pub struct NewHousehold {
 }
 
 /// Add a household (admins only).
-#[utoipa::path(post, path = "/api/v1/households", operation_id = "create_household", tag = "admin", request_body = NewHousehold, responses((status = 200, description = "The new household", body = Household)))]
+#[utoipa::path(post, path = "/api/v1/households", operation_id = "create_household", tag = "admin", request_body = NewHousehold,
+    responses(
+        (status = 200, description = "The new household", body = Household),
+        (status = 400, description = "The name is empty, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 403, description = "Not an admin, or called with a read-only API token or from a kitchen device", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::TooLarge
+    )
+)]
 pub async fn create_household(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,

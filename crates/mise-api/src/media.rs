@@ -39,7 +39,12 @@ impl Image {
 #[utoipa::path(
     get, path = "/api/v1/media/{id}/{size}", operation_id = "get_media", tag = "media",
     params(("id" = Uuid, Path), ("size" = String, Path, description = "400, 1200 or original")),
-    responses((status = 200, description = "The image"), (status = 404, description = "No such image or size", body = crate::error::ErrorBody))
+    responses(
+        (status = 200, description = "The image"),
+        (status = 400, description = "The id isn't a UUID, or the size isn't 400, 1200 or original", body = crate::error::ErrorBody),
+        (status = 404, description = "No such photo, or its file is missing", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
 )]
 pub async fn get(
     State(s): State<AppState>,

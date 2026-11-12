@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use axum::{Json, extract::State};
+use axum::{Extension, Json, extract::State};
 use mise_core::servings;
 use mise_core::step_amounts::{self, Context, Template};
 use serde::{Deserialize, Serialize};
@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
+    auth::CurrentUser,
     error::{ApiError, ApiResult},
     extract::{Path, Query},
     media::Image,
@@ -91,22 +92,29 @@ type LineRow = (
     Option<String>,
 );
 
-/// A version of a dish at a serving count.
+/// A version of a dish at a serving count. Another household's own version is not found, as if it didn't exist.
 #[utoipa::path(
     get, path = "/api/v1/variants/{id}", operation_id = "get_variant", tag = "dishes", params(("id" = Uuid, Path), RenderParams),
-    responses((status = 200, description = "The version at the requested serving count", body = Variant), (status = 404, description = "No such version", body = crate::error::ErrorBody))
+    responses(
+        (status = 200, description = "The version at the requested serving count", body = Variant),
+        (status = 400, description = "The id isn't a UUID, or `servings` isn't a number or is out of range", body = crate::error::ErrorBody),
+        (status = 404, description = "No such version, or not one this household can see", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
 )]
 pub async fn get(
     State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
     Path(id): Path<Uuid>,
     Query(p): Query<RenderParams>,
 ) -> ApiResult<Json<Variant>> {
     let (title, subtitle, description, meta, dish_slug): (String, Option<String>, Option<String>, serde_json::Value, Option<String>) =
         sqlx::query_as(
             "SELECT v.title, v.subtitle, v.description, v.meta, d.slug FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
-             WHERE v.id = $1",
+             WHERE v.id = $1 AND visible_to(v, $2)",
         )
         .bind(id)
+        .bind(me.household_id)
         .fetch_optional(&s.pool)
         .await?
         .ok_or(ApiError::NotFound)?;

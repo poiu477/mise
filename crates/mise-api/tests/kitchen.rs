@@ -642,3 +642,127 @@ fn the_api_documents_kitchen_tokens() {
     let me: &Value = &doc["components"]["schemas"]["Me"]["properties"]["kitchen"];
     assert_eq!(me["type"], "boolean");
 }
+
+/// A version `household` owns, as an import would add it (published at 2 servings with two lines), grouped into a
+/// dish of its own by `mise-ingest`. Returns its id and its dish's slug.
+async fn own_recipe(app: &TestApp, household: &str, title: &str) -> (String, String) {
+    let id = uuid::Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO variants (id, origin, title, has_steps, content_hash, published_at, household_id)
+         VALUES ($1, 'user', $2, false, $1::text, '2026-11-10T12:00:00Z', $3::uuid)",
+    )
+    .bind(id)
+    .bind(title)
+    .bind(household)
+    .execute(&app.pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO variant_yields (variant_id, servings) VALUES ($1, 2)")
+        .bind(id)
+        .execute(&app.pool)
+        .await
+        .unwrap();
+    for (i, name) in ["Red Lentils", "Coconut Milk"].iter().enumerate() {
+        let line = uuid::Uuid::now_v7();
+        sqlx::query("INSERT INTO ingredient_lines (id, variant_id, line_key, position, raw_name, shipped) VALUES ($1, $2, $3, $4, $5, true)")
+            .bind(line)
+            .bind(id)
+            .bind(format!("l{i}"))
+            .bind(i as i32)
+            .bind(name)
+            .execute(&app.pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO line_amounts (line_id, servings, amount, unit) VALUES ($1, 2, 1, 'cup')",
+        )
+        .bind(line)
+        .execute(&app.pool)
+        .await
+        .unwrap();
+    }
+    mise_ingest::foods::match_foods(&app.pool).await.unwrap();
+    mise_ingest::dishes::group_dishes(&app.pool).await.unwrap();
+    mise_ingest::options::derive_options(&app.pool)
+        .await
+        .unwrap();
+    let slug: String = sqlx::query_scalar(
+        "SELECT d.slug FROM dishes d JOIN variants v ON v.dish_id = d.id WHERE v.id = $1",
+    )
+    .bind(id)
+    .fetch_one(&app.pool)
+    .await
+    .unwrap();
+    (id.to_string(), slug)
+}
+
+#[tokio::test]
+async fn a_kitchen_device_sees_only_what_its_household_can_see() {
+    let k = test_app!(Kitchen::new());
+    let app = &k.app;
+    let home = app.json("GET", "/api/v1/me", &k.owner, None).await["household"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let next_door = app
+        .json(
+            "POST",
+            "/api/v1/households",
+            &k.owner,
+            Some(json!({"name": "Next door"})),
+        )
+        .await["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let (ours, our_dish) = own_recipe(app, &home, "Our Lentil Soup").await;
+    let (theirs, their_dish) = own_recipe(app, &next_door, "Their Lentil Dal").await;
+    // Next door's version on this household's plan, as no API call can put it: the plan shows only what it can see.
+    sqlx::query(
+        "INSERT INTO plan_entries (id, household_id, week, variant_id, servings)
+         SELECT $1, $2::uuid, week, $3::uuid, 2 FROM plan_entries LIMIT 1",
+    )
+    .bind(uuid::Uuid::now_v7())
+    .bind(&home)
+    .bind(&theirs)
+    .execute(&app.pool)
+    .await
+    .unwrap();
+
+    // What the household can see, the device reads as the owner does.
+    for path in [
+        "/api/v1/dishes?q=lentil".to_string(),
+        "/api/v1/dishes".to_string(),
+        format!("/api/v1/dishes/{our_dish}"),
+        format!("/api/v1/variants/{ours}"),
+        "/api/v1/plan".to_string(),
+    ] {
+        let reply = k.get(&path).await;
+        assert_eq!(reply.status, StatusCode::OK, "{path}: {}", reply.body);
+        assert_eq!(
+            reply.body,
+            app.json("GET", &path, &k.owner, None).await,
+            "{path}"
+        );
+    }
+    let found = k.get("/api/v1/dishes?q=lentil").await.body.to_string();
+    assert!(found.contains("Our Lentil Soup"), "{found}");
+    assert!(!found.contains("Their Lentil Dal"), "{found}");
+    let plan = k.get("/api/v1/plan").await.body;
+    assert_eq!(plan["entries"].as_array().unwrap().len(), 1, "{plan}");
+    assert!(!plan.to_string().contains(&theirs), "{plan}");
+
+    // Next door's recipe isn't there for it, as for a dish or version that doesn't exist.
+    for path in [
+        format!("/api/v1/dishes/{their_dish}"),
+        format!("/api/v1/variants/{theirs}"),
+    ] {
+        let reply = k.get(&path).await;
+        assert_eq!(
+            reply.status,
+            StatusCode::NOT_FOUND,
+            "{path}: {}",
+            reply.body
+        );
+    }
+}

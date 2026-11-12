@@ -176,7 +176,12 @@ fn info((id, name, created_at, linked_at, link_expires_at, last_used_at): Row) -
 
 /// The household's kitchen tokens (admins only).
 #[utoipa::path(get, path = "/api/v1/kitchen-tokens", operation_id = "list_kitchen_tokens", tag = "kitchen",
-    responses((status = 200, description = "The household's kitchen tokens", body = [KitchenToken]), (status = 403, description = "Not an admin", body = crate::error::ErrorBody)))]
+    responses(
+        (status = 200, description = "The household's kitchen tokens", body = [KitchenToken]),
+        (status = 403, description = "Not an admin, or called from a kitchen device", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
+)]
 pub async fn list(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -195,7 +200,14 @@ pub async fn list(
 /// Issue a kitchen token for the household (admins only, from a browser session). Answers with its one-time
 /// link, shown only this once.
 #[utoipa::path(post, path = "/api/v1/kitchen-tokens", operation_id = "create_kitchen_token", tag = "kitchen", request_body = KitchenTokenRequest,
-    responses((status = 200, description = "The new token and its one-time link", body = NewKitchenToken), (status = 400, description = "No name, or one over 100 characters", body = crate::error::ErrorBody), (status = 403, description = "Not an admin, or not from a browser session", body = crate::error::ErrorBody)))]
+    responses(
+        (status = 200, description = "The new token and its one-time link", body = NewKitchenToken),
+        (status = 400, description = "The name is empty or over 100 characters, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 403, description = "Not an admin, or called with an API token or from a kitchen device; only a browser session can issue kitchen tokens", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::TooLarge
+    )
+)]
 pub async fn create(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -242,7 +254,14 @@ pub async fn create(
 
 /// Revoke one of the household's kitchen tokens (admins only). The device is refused from its next request.
 #[utoipa::path(delete, path = "/api/v1/kitchen-tokens/{id}", operation_id = "delete_kitchen_token", tag = "kitchen", params(("id" = Uuid, Path)),
-    responses((status = 204, description = "Revoked"), (status = 403, description = "Not an admin", body = crate::error::ErrorBody), (status = 404, description = "No such token in this household", body = crate::error::ErrorBody)))]
+    responses(
+        (status = 204, description = "Revoked"),
+        (status = 400, description = "The id isn't a UUID", body = crate::error::ErrorBody),
+        (status = 403, description = "Not an admin, or called with a read-only API token or from a kitchen device", body = crate::error::ErrorBody),
+        (status = 404, description = "No such token in this household", body = crate::error::ErrorBody),
+        crate::error::SignedIn
+    )
+)]
 pub async fn delete(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
@@ -271,8 +290,13 @@ pub struct LinkParams {
 /// Open a kitchen token's one-time link: sets the device's cookie and goes to the web app. A link works once and
 /// for an hour; a used, expired or unknown one goes to the sign-in page with an explanation. A browser signed in to
 /// an account stays signed in, and its account comes first until it signs out.
-#[utoipa::path(get, path = "/api/v1/auth/kitchen", operation_id = "open_kitchen_link", tag = "kitchen", params(LinkParams),
-    responses((status = 303, description = "To the web app with the kitchen cookie set, or to the sign-in page when the link doesn't work")))]
+#[utoipa::path(get, path = "/api/v1/auth/kitchen", operation_id = "open_kitchen_link", tag = "kitchen", params(LinkParams), security(()),
+    responses(
+        (status = 303, description = "To the web app with the kitchen cookie set, or to the sign-in page when the link doesn't work"),
+        (status = 400, description = "The query can't be read", body = crate::error::ErrorBody),
+        crate::error::ServerError
+    )
+)]
 pub async fn open_link(
     State(s): State<AppState>,
     jar: CookieJar,
