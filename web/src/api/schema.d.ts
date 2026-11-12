@@ -113,7 +113,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search and browse dishes. */
+        /** Search and browse the dishes this household can see. */
         get: operations["list_dishes"];
         put?: never;
         post?: never;
@@ -130,7 +130,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A dish with its options and versions, by its slug or one it used to have (its `slug` is always the current one). */
+        /**
+         * A dish with its options and versions, by its slug or one it used to have (its `slug` is always the current one).
+         *     A dish the household can see no version of is not found, as if it didn't exist.
+         */
         get: operations["get_dish"];
         put?: never;
         post?: never;
@@ -321,7 +324,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add a dish to a week. Answers with the week's plan. */
+        /** Add a dish to a week. Answers with the week's plan; a version the household can't see is not found. */
         post: operations["add_plan_entry"];
         delete?: never;
         options?: never;
@@ -496,7 +499,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A version of a dish at a serving count. */
+        /** A version of a dish at a serving count. Another household's own version is not found, as if it didn't exist. */
         get: operations["get_variant"];
         put?: never;
         post?: never;
@@ -523,7 +526,7 @@ export interface components {
             value: string;
             /**
              * Format: int64
-             * @description How many versions offer it.
+             * @description How many versions this household can see offer it.
              */
             variants: number;
             /** @description Years it was published, e.g. "2022–2024". */
@@ -540,7 +543,7 @@ export interface components {
             slug: string;
             subtitle?: string | null;
             title: string;
-            /** @description Newest first. */
+            /** @description The versions this household can see, newest first. */
             variants: components["schemas"]["VariantSummary"][];
         };
         DishOption: {
@@ -570,7 +573,7 @@ export interface components {
             title: string;
             /**
              * Format: int64
-             * @description Number of published or forked versions.
+             * @description Number of published or forked versions this household can see.
              */
             versions: number;
         };
@@ -1120,7 +1123,7 @@ export interface operations {
                     "application/json": components["schemas"]["Dish"];
                 };
             };
-            /** @description No such dish */
+            /** @description No such dish, or not one this household can see */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1480,7 +1483,7 @@ export interface operations {
                     "application/json": components["schemas"]["Plan"];
                 };
             };
-            /** @description No such version */
+            /** @description No such version, or not one this household can see */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1891,7 +1894,7 @@ export interface operations {
                     "application/json": components["schemas"]["Variant"];
                 };
             };
-            /** @description No such version */
+            /** @description No such version, or not one this household can see */
             404: {
                 headers: {
                     [name: string]: unknown;

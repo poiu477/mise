@@ -77,21 +77,6 @@ The OpenAPI annotations list the main responses, but every signed-in route can a
 - **Done when:** clippy passes workspace-wide with the lint in `Cargo.toml`; a missing doc comment in any crate fails
   it.
 
-### T22 · Recipes that belong to a household
-
-Imports, the editor and forks all make recipes that belong to one household; today every recipe is visible to every
-account. The schema already has `user` and `web` sources and `variants.parent_variant_id` for lineage.
-
-- Through a new migration, give each version an owning household (none for seed and bundle recipes, which stay
-  visible to everyone) and a visibility (`private` by default; `partners` and `install` come with T31, so accept
-  only `private` for now). A dish shows to a household when any version it can see belongs to it; the dish page,
-  search, the plan and the shopping list only ever use versions the household can see.
-- **Touches:** a new migration, `crates/mise-api/src/` (dishes, variants, plan, shopping queries),
-  `crates/mise-ingest/src/dishes.rs` (grouping considers ownership: one household's version never joins a dish that
-  only another household can see).
-- **Done when:** API tests show a version owned by one household is invisible to another in search, the dish page,
-  a direct fetch by id, and when added to a plan by id; the pipeline snapshot test still passes unchanged.
-
 ### T23 · Kitchen device tokens
 
 The Echo Show's browser can't sign in comfortably or send headers, so kitchen mode runs on a device token.
@@ -146,7 +131,9 @@ The Echo Show's browser can't sign in comfortably or send headers, so kitchen mo
 - Create and update a household's own versions: title, yields, ingredient lines (each parsed with the line parser
   and matched to a food, with the match returned so the editor can show and correct it), steps with references to
   ingredients, and photos (uploaded, checked with the `image` crate, size-limited, stored like the others). Own
-  versions use the `user` source and `origin = 'user'`, and belong to the household (T22).
+  versions use the `user` source and `origin = 'user'`, and belong to the household (T22: `variants.household_id`).
+  A photo of an own version is served only to households that can see a version using it: today `/media` serves
+  any photo by id to anyone signed in, which was harmless while every photo came from the seed.
 - **Touches:** `crates/mise-api/src/` (a new module), `crates/mise-ingest/src/` (reusing the line parser and
   matcher), `web/src/api/schema.d.ts` (regenerated).
 - **Needs:** T22.
@@ -178,7 +165,9 @@ The Echo Show's browser can't sign in comfortably or send headers, so kitchen mo
 As the design has it: each household sets a default visibility for the recipes and forks it makes, and any one can
 override it.
 
-- Levels `private`, `partners` (households this one has added as partners) and `install`; `SHARING_MAX_LEVEL` caps
+- Levels `private`, `partners` (households this one has added as partners) and `install`, by widening
+  `variants.visibility`'s check and the `visible_to` SQL function every recipe query goes through (both from T22's
+  migration 0015, replaced in a new one); `SHARING_MAX_LEVEL` caps
   the most open level on the install (default `install`). Shared items are read-only to others, who can fork them;
   withdrawing a share hides the item but leaves forks already made. Plans, lists and preferences always stay
   private.
@@ -243,8 +232,8 @@ Phase 3, still to build:
 - Nextcloud Tasks (the list as CalDAV to-dos) and Calendar (the plan as events or an iCal feed).
 - Days in the plan (meals belong to a week today).
 
-Phase 4, kitchen and imports, is broken into T22 to T32 under Ready: recipes owned by a household, kitchen
-mode, import from a link and from files, the editor and forks, sharing, and review queues in the web app (printable
-cards, T33, are done). Its gate is T24's kitchen journey and T25's 20 sample pages (that half passes since T25).
+Phase 4, kitchen and imports, is broken into T23 to T32 under Ready: kitchen mode, import from a link and from
+files, the editor and forks, sharing, and review queues in the web app (recipes owned by a household, T22, and
+printable cards, T33, are done). Its gate is T24's kitchen journey and T25's 20 sample pages (that half passes since T25).
 
 Break a phase item into Ready tasks, in the shape above, before starting it.

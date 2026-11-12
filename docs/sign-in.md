@@ -6,8 +6,8 @@ where the first visitor creates the admin account and the first household; after
 
 ## Accounts and households
 
-A household shares plans, favourites and lists; every account belongs to one. Admins can move people between
-households and add new ones.
+A household shares plans, favourites, lists and its own recipes, which no other household sees; every account
+belongs to one. Admins can move people between households and add new ones.
 
 ## Passwords
 

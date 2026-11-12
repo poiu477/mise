@@ -25,6 +25,9 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
 - **Sources and records.** A `source` (a seed bundle, the web, a file, a person) supplies `source_records`, kept
   verbatim so imports can be re-processed. Each record becomes a `variant`.
 - **Dishes and variants.** A `dish` is what people choose; its `variants` are the published or forked versions.
+  A variant belongs to one household (`household_id`, with a `visibility`, only `private` so far) or, for seed and
+  bundle versions, to none; the SQL function `visible_to(variant, household)` says whether a household can see it,
+  and a dish shows to a household only through the versions it can see.
   `variant_yields` are the serving counts a version was published for. `dish_options` (protein, portion, version) are
   derived from the differences between a dish's variants. `dish_decisions` (merge, keep apart) and
   `preferred_versions` (how often each version was had) steer grouping and the default version. `retired_slugs` keep
@@ -62,7 +65,9 @@ lines, without fetching anything; the sample pages in `fixtures/web-pages/` show
 titles; chains of small changes that drift into a different dish are split; protein swaps of one dish are joined.
 Doubtful merges go to review, and recorded decisions always win. A dish keeps its id from run to run, and its slug
 follows its name: when the name changes, the old slug is retired and still finds the dish, as does the slug of a dish
-whose versions all joined another. A live dish's slug always wins over a retired one.
+whose versions all joined another. A live dish's slug always wins over a retired one. A household's own versions
+may join a dish everyone sees, but never one only another household can see, and a shared dish is named, and opens
+on, versions everyone sees.
 
 ## Scaling and measuring (`mise-core`)
 
@@ -89,7 +94,9 @@ one more release, with a `Deprecation` header and a `Link` to the new address (`
 `/api/health` and single sign-on's two redirects, which keep their addresses for good. Every route sits behind
 `auth::require_auth` except health, the OpenAPI document and sign-in. A session cookie (`mise_session`) or a bearer
 token (`mise_…`, read or read-write) identifies a `CurrentUser` with their `household_id`, and every planning query is
-scoped by it. The web app also sends `X-Mise-Account` with the account it is working as; when that isn't the account
+scoped by it. Recipe queries (search, the dish page, a version, the plan and the shopping list) read only the versions
+`visible_to` that household: another household's version answers 404, like one that doesn't exist, and a dish two
+households share shows each its own share of versions and option choices. The web app also sends `X-Mise-Account` with the account it is working as; when that isn't the account
 signed in (someone else signed in since, in another tab, with the shared cookie) the request is refused with 412, so
 queued work never lands in another household, and the app re-checks who is signed in. Handlers return
 `ApiResult<T>`; `error.rs` maps errors to the right status and one JSON body, `{ "error": "…", "code": "…" }`: a
