@@ -7,8 +7,9 @@
 //!    volume (no extra space) and by copy otherwise. `media_sources` remembers which archive path produced
 //!    which media row, so a re-run only reads paths it has not stored yet. Missing files are counted, not fatal.
 //! 2. **Link.** Hero images become `variant_media` role `hero`; step images role `step` with the step they
-//!    belong to; each food gets `props.image_media_id` from the image its ingredient lines use most, unless a
-//!    food already has one. Rebuilt from the references every run; existing links are kept.
+//!    belong to; each food gets `props.image_media_id` from the image its ingredient lines use most (in versions
+//!    no household owns: a food's picture is everyone's), unless a food already has one. Rebuilt from the
+//!    references every run; existing links are kept.
 //! 3. **Derivatives.** Each stored image gets a copy per [`WEB_SIZES`] (longest side, never upscaled) as JPEG,
 //!    or PNG when it has real transparency. Runs on a thread pool; only media missing a size is processed.
 //!
@@ -511,12 +512,15 @@ async fn link(pool: &PgPool, stats: &mut StoreStats) -> Result<()> {
         }
     }
 
-    // A food's picture: the stored image its ingredient lines use most. A food that has one keeps it.
+    // A food's picture: the stored image its ingredient lines use most. A food that has one keeps it. Foods are
+    // everyone's and so are their pictures (the API serves them to every household), so only versions no household
+    // owns are counted: a household's own photo never becomes a food's picture.
     stats.food_images = sqlx::query(
         "WITH pick AS (
              SELECT DISTINCT ON (il.food_id) il.food_id, ms.media_id
              FROM ingredient_lines il JOIN media_sources ms ON ms.path = il.source_food->>'image'
-             WHERE il.food_id IS NOT NULL
+             JOIN variants v ON v.id = il.variant_id
+             WHERE il.food_id IS NOT NULL AND v.household_id IS NULL
              GROUP BY il.food_id, ms.media_id
              ORDER BY il.food_id, count(*) DESC, ms.media_id
          )
