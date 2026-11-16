@@ -2,6 +2,6 @@
 # too). When raising it, change the Dockerfile's and .gitlab-ci.yml's rust tags, Cargo.toml's rust-version and the
 # cargo-deny step in .github/workflows/ci.yml in the same commit; Renovate leaves the rust images alone.
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 components = ["rustfmt", "clippy"]
 profile = "minimal"
