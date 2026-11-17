@@ -1,4 +1,5 @@
-//! Recipes a household writes itself: create one, read it back as it was written, change it, give it a photo.
+//! Recipes a household writes itself: create one, read it back as it was written, change it, give it a photo,
+//! delete it.
 //!
 //! A written recipe is a version like any other (`origin = 'user'`, owned by the household, private to it), so the
 //! dish page, search, the plan and the shopping list treat it as they treat a seed version. It gets a dish of its
@@ -621,6 +622,67 @@ pub async fn update(
     let stored = load(&mut tx, id, me.household_id).await?;
     tx.commit().await?;
     Ok(Json(stored))
+}
+
+/// Delete a recipe the household wrote, for good. It leaves every plan it was on, and its dish goes with it when
+/// it was the dish's only version. A version copied from it stays, no longer naming it as its original.
+#[utoipa::path(
+    delete, path = "/api/v1/recipes/{id}", operation_id = "delete_recipe", tag = "recipes", params(("id" = Uuid, Path)),
+    responses(
+        (status = 204, description = "The recipe is gone"),
+        (status = 400, description = "The id isn't a UUID", body = crate::error::ErrorBody),
+        (status = 404, description = "No such recipe, or not one this household wrote", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken
+    )
+)]
+pub async fn delete(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    let mut tx = s.pool.begin().await?;
+    take_turn(&mut tx).await?;
+    let dish: Option<Uuid> = sqlx::query_scalar(
+        "SELECT dish_id FROM variants WHERE id = $1 AND origin = 'user' AND household_id = $2 FOR UPDATE",
+    )
+    .bind(id)
+    .bind(me.household_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+    sqlx::query("UPDATE variants SET parent_variant_id = NULL WHERE parent_variant_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    // Its yields, lines, amounts, steps, photo links and plan entries go with the version.
+    sqlx::query("DELETE FROM variants WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    if let Some(dish) = dish {
+        // A dish a person made goes with its last version. Any other dish that opened on this version opens on the
+        // best of what is left, as the dish page would choose for a household that couldn't see its default.
+        sqlx::query(
+            "DELETE FROM dishes d WHERE d.id = $1 AND d.origin = 'user'
+               AND NOT EXISTS (SELECT 1 FROM variants v WHERE v.dish_id = d.id)",
+        )
+        .bind(dish)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "UPDATE dishes d SET default_variant_id = (
+                 SELECT v.id FROM variants v WHERE v.dish_id = d.id
+                 ORDER BY v.household_id IS NULL DESC, v.has_steps DESC, v.published_at DESC NULLS LAST, v.id LIMIT 1)
+             WHERE d.id = $1 AND d.default_variant_id = $2",
+        )
+        .bind(dish)
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// An image file's bytes, as the API document describes a photo's request body.

@@ -1,5 +1,6 @@
 // The household's journeys through mise in a real browser, on the demo recipes (fixtures/demo-bundle), from an
-// empty install: first-run setup, cooking at any serving count, an old dish address, printing a recipe card,
+// empty install: first-run setup, cooking at any serving count, an old dish address, writing a recipe, printing a
+// recipe card,
 // planning a week, shopping (offline too), phone layout, accessibility and signing out. They run in order and share
 // one browser session, as a person would.
 import AxeBuilder from "@axe-core/playwright";
@@ -96,6 +97,90 @@ test("an old address for a renamed dish lands on its current one", async () => {
   await expect(page).toHaveURL(/\/dishes\/weeknight-tomato-pasta\?s=4$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weeknight Tomato Pasta");
   await expect(amountOf("Spaghetti")).toHaveText("12 oz");
+});
+
+/** A photo to upload: 16 × 12 pixels of orange, as a PNG. */
+const PHOTO = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAFUlEQVR42mO412NDEmIY1TCqATsCAAwgPJCWiDEFAAAAAElFTkSuQmCC",
+  "base64",
+);
+
+/** How the editor reads the ingredient line that names `food`: its row under the ingredients box. */
+const readingOf = (food: string) =>
+  page
+    .getByRole("region", { name: "How each ingredient reads" })
+    .locator("ul.reading-list > li")
+    .filter({ has: page.locator(".reading", { hasText: food }) });
+
+test("a recipe is written from nothing, corrected, photographed, cooked at another size, and deleted", async () => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Write a recipe" }).click();
+  await expect(page.getByRole("heading", { name: "Write a recipe" })).toBeVisible();
+  await page.getByLabel("Title", { exact: true }).fill("Garlic Toast");
+  await page.getByLabel("Servings").fill("2");
+  await page
+    .getByLabel("Ingredients")
+    .fill("4 slices bread\n2 cloves garlic, minced\n2 TBSP hard cheese, grated\n1 TBSP olive oil");
+
+  // Each line reads back as it will be stored, with the food it counts as.
+  await expect(readingOf("garlic").locator(".reading")).toHaveText("2 cloves · garlic · minced");
+  await expect(readingOf("garlic").locator(".food")).toHaveText("Garlic");
+  await expect(readingOf("olive oil").locator(".food")).toHaveText("Olive Oil");
+  // "hard cheese" is no food mise knows: the cook says it is Parmesan.
+  await expect(readingOf("hard cheese").locator(".food")).toHaveText("new food");
+  await page.getByRole("button", { name: "Change the food for hard cheese" }).click();
+  await page.getByLabel("Find a food").fill("parm");
+  await page.getByRole("button", { name: "Parmesan", exact: true }).click();
+  await expect(readingOf("hard cheese").locator(".food")).toHaveText("Parmesan");
+
+  await page
+    .getByLabel("Steps")
+    .fill(
+      "Toast the bread.\nRub with the garlic, drizzle with 1 TBSP olive oil and top with the cheese.",
+    );
+  await page
+    .getByLabel("Photo")
+    .setInputFiles({ name: "toast.png", mimeType: "image/png", buffer: PHOTO });
+  await expect(page.getByRole("img", { name: "The recipe's photo" })).toBeVisible();
+  await page.getByRole("button", { name: "Save recipe" }).click();
+
+  // Saved, it is a dish like any other, with its photo.
+  await expect(page).toHaveURL(/\/dishes\/garlic-toast$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Garlic Toast");
+  const hero = page.locator(".hero img");
+  await expect(hero).toHaveAttribute("src", /\/api\/v1\/media\/[0-9a-f-]+\/1200$/);
+  await expect
+    .poll(() => hero.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
+  await expect(amountOf("garlic")).toHaveText("2 cloves");
+  await expect(amountOf("olive oil")).toHaveText("1 TBSP");
+
+  // At another serving count the amounts follow, in the list and in the step that names one.
+  await page.getByRole("button", { name: "More servings" }).click();
+  await page.getByRole("button", { name: "More servings" }).click();
+  await expect(amountOf("garlic")).toHaveText("≈4 cloves");
+  await expect(amountOf("olive oil")).toHaveText("≈2 TBSP");
+  await expect(page.getByText("drizzle with 2 TBSP olive oil")).toBeVisible();
+
+  // Edited, it keeps the food the cook picked, and its dish follows the new title; the old address still lands.
+  await page.getByRole("link", { name: "Edit recipe" }).click();
+  await expect(page.getByRole("heading", { name: "Edit recipe" })).toBeVisible();
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Garlic Toast");
+  await expect(readingOf("hard cheese").locator(".food")).toHaveText("Parmesan");
+  await page.getByLabel("Title", { exact: true }).fill("Garlic Cheese Toast");
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(page).toHaveURL(/\/dishes\/garlic-cheese-toast$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Garlic Cheese Toast");
+  await page.goto("/dishes/garlic-toast");
+  await expect(page).toHaveURL(/\/dishes\/garlic-cheese-toast$/);
+
+  // Deleted, it is gone, and the journeys after this one start from the demo recipes alone.
+  await page.getByRole("link", { name: "Edit recipe" }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete recipe" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/dishes/garlic-cheese-toast");
+  await expect(page.getByText("No such dish.")).toBeVisible();
 });
 
 test("a serving count the server refuses says why, on the dish page and its card", async () => {
@@ -438,6 +523,7 @@ const pages = [
   // Scaled: the "Amounts scaled" and "Check amounts" step notes show.
   "/dishes/weeknight-tomato-pasta?s=3",
   "/dishes/weeknight-tomato-pasta/card?s=6",
+  "/recipes/new",
   "/plan",
   "/shopping",
   "/account",

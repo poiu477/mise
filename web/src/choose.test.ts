@@ -18,6 +18,7 @@ const v = (id: string, attributes: Record<string, string>, has_steps = true): Va
   yields: [2, 4],
   has_steps,
   attributes,
+  editable: false,
 });
 const opt = (key: string, values: string[]): DishOption => ({
   key,
