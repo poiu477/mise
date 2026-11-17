@@ -14,6 +14,7 @@ import { SetupPage } from "./pages/SetupPage";
 import { AccountPage } from "./pages/AccountPage";
 import { PlanPage } from "./pages/PlanPage";
 import { ShoppingPage } from "./pages/ShoppingPage";
+import { ReviewPage } from "./pages/ReviewPage";
 import { queryClient } from "./api/query";
 import { SessionProvider } from "./session";
 import "./styles.css";
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
       { path: "/login", element: <LoginPage /> },
       { path: "/setup", element: <SetupPage /> },
       { path: "/account", element: <AccountPage /> },
+      { path: "/review", element: <ReviewPage /> },
       { path: "*", element: <NotFound /> },
     ],
   },

@@ -1,6 +1,6 @@
 // The household's journeys through mise in a real browser, on the demo recipes (fixtures/demo-bundle), from an
 // empty install: first-run setup, cooking at any serving count, an old dish address, printing a recipe card,
-// planning a week, shopping (offline too), phone layout, accessibility and signing out. They run in order and share
+// answering the review queue, planning a week, shopping (offline too), phone layout, accessibility and signing out. They run in order and share
 // one browser session, as a person would.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
@@ -211,6 +211,40 @@ test("every demo recipe's card prints on one page", async () => {
   expect(await printed(cards[0])).toBeGreaterThan(1);
   await expect(page.locator(".card-steps li")).toHaveCount(18);
   await context.unroute("**/api/v1/variants/*");
+});
+
+test("an admin accepts a food match from the review queue", async () => {
+  // serve.mjs asks whether "Black Pepper" is right as matched, as matching asks of a name that could mean two foods.
+  await page.goto("/account");
+  await expect(page.getByText("1 waiting.")).toBeVisible();
+  await page.getByRole("link", { name: "Review queue" }).click();
+  await expect(page).toHaveURL(/\/review$/);
+  const item = page
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("heading", { name: "Black Pepper" }) });
+  await expect(item).toContainText("Black Pepper is a food of its own.");
+  await expect(item).toContainText("black pepper or bell pepper");
+
+  // The open queue fits a phone and passes the accessibility scan.
+  await page.setViewportSize({ width: 375, height: 812 });
+  const [scroll, width] = await page.evaluate(() => [
+    document.documentElement.scrollWidth,
+    window.innerWidth,
+  ]);
+  expect(scroll, `the review page is ${scroll}px wide on a ${width}px screen`).toBeLessThanOrEqual(
+    width,
+  );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  const serious = violations
+    .filter((v) => v.impact === "serious" || v.impact === "critical")
+    .flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(" ")}: ${n.failureSummary}`));
+  expect(serious).toEqual([]);
+
+  await item.getByRole("button", { name: "Accept" }).click();
+  await expect(page.getByText("Nothing to review.")).toBeVisible();
+  const queue = await (await page.request.get("/api/v1/review-items")).json();
+  expect(queue.items).toEqual([]);
 });
 
 /** Lines to lengthen a demo recipe's ingredients to a long recipe's. */

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import {
   api,
   errorText,
@@ -13,8 +14,8 @@ import { answer, queryClient } from "../api/query";
 import { useAccount, useSession } from "../session";
 import { WEIGHTS } from "../weights";
 
-/** The account page: who is signed in, the household's list units, password, API tokens and, for admins,
- * kitchen devices, people and households. Needs the server. */
+/** The account page: who is signed in, the household's list units, password, API tokens and, for admins, the
+ * review queue, kitchen devices, people and households. Needs the server. */
 export function AccountPage() {
   const { session, signOut } = useSession();
   if (session.status === "offline")
@@ -42,6 +43,7 @@ export function AccountPage() {
       <ShoppingUnits />
       <PasswordForm me={me} />
       <Tokens />
+      {me.is_admin && <ReviewQueue />}
       {me.is_admin && <KitchenDevices />}
       {me.is_admin && <Admin me={me} />}
     </article>
@@ -263,6 +265,25 @@ function Tokens() {
         <button type="submit">Create token</button>
       </form>
       {error && <p className="form-error">{error}</p>}
+    </section>
+  );
+}
+
+/** For admins: how many questions importing left open, and the way to the review page. */
+function ReviewQueue() {
+  const open = useQuery({
+    queryKey: ["review", useAccount()],
+    queryFn: ({ signal }) => answer(api.GET("/api/v1/review-items", { signal })),
+  }).data?.items.length;
+  return (
+    <section className="panel">
+      <h2>Review</h2>
+      <p className="sub">
+        Questions importing recipes left for a person: which food a name means, what a food is a
+        kind of, whether two recipes are one dish.{" "}
+        {open === undefined ? "" : open === 0 ? "Nothing waiting." : `${open} waiting.`}
+      </p>
+      <Link to="/review">Review queue</Link>
     </section>
   );
 }

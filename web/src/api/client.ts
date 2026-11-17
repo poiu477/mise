@@ -104,6 +104,12 @@ export type TokenInfo = components["schemas"]["TokenInfo"];
 export type KitchenToken = components["schemas"]["KitchenToken"];
 /** An account as an admin sees it on the account page. */
 export type UserInfo = components["schemas"]["UserInfo"];
+/** One open question importing left for an admin: a food match, a food parent or a dish merge. */
+export type ReviewItem = components["schemas"]["ReviewItem"];
+/** What a review item asks: "food_match", "food_parent" or "dish_merge". */
+export type ReviewKind = components["schemas"]["ReviewKind"];
+/** An answer to a review item: accept, reject, or edit with the food it is instead. */
+export type ReviewDecision = components["schemas"]["ReviewDecision"];
 /** A household: the people who share a plan and a shopping list. */
 export type Household = components["schemas"]["Household"];
 /** A household's plan for one week, named by its Monday: the dishes and how many each serves. */

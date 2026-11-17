@@ -1303,3 +1303,38 @@ code {
     overflow-x: auto;
   }
 }
+
+/* The review queue: one card per open item, its answers in a row that wraps on a phone. */
+.review-items {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.review-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.review-item h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+.review-item p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.review-actions button:not(.primary) {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+}
