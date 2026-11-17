@@ -834,7 +834,7 @@ export interface components {
         };
         /** @description A page to import. */
         ImportInput: {
-            /** @description The page's address: "https://recipes.example/leek-soup". */
+            /** @description The page's address, such as `https://recipes.example/leek-soup`. */
             url: string;
         };
         /** @description One recipe from the page, as imported. */

@@ -19,7 +19,7 @@ use crate::{
 /// A page to import.
 #[derive(Deserialize, ToSchema)]
 pub struct ImportInput {
-    /// The page's address: "https://recipes.example/leek-soup".
+    /// The page's address, such as `https://recipes.example/leek-soup`.
     pub url: String,
 }
 

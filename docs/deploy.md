@@ -226,6 +226,20 @@ With `mise.example.com` standing for your address (add `--cacert mise-root.crt` 
 CI runs the first three against the stack's own Caddy with `MISE_TLS=internal` whenever `compose.yaml` or the
 `Caddyfile` changes (the `docker image` job in `.gitlab-ci.yml`).
 
+## 8. Importing from a link
+
+"Import from a link" (and `mise import url`) has the server fetch the page and its photo, so the server, not the
+browser, makes the request. It fetches only from the public internet: an address that is, or whose name resolves to,
+a loopback, private, link-local (where cloud hosts keep their metadata), shared or reserved address is refused, IPv4
+and IPv6 alike, as is a redirect to one; the connection goes to the address that was checked. Only `http` and
+`https`, on ports 80, 443 or 1024 and up; at most 5 redirects, 20 seconds and 5 MB for a page, 30 seconds and 20 MB
+for a photo.
+
+To import from another app on the home network, set `IMPORT_ALLOW_PRIVATE=true` in `.env` and restart the app. That
+lifts the address and port checks for everyone who can sign in, so anyone with an account can then make the server
+fetch from the home network (an admin page, a router) and see whether it answers. Leave it off unless every account
+belongs to people you'd trust with that. The server logs a warning at start while it is on.
+
 ## Commands
 
 The `mise` admin command is in the image: `docker compose exec app mise --help`. Account recovery is
