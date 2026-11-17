@@ -740,10 +740,11 @@ fn encoded(
 }
 
 /// Write `data` at `dest`, making its folder: under another name first, then renamed over, so a crash never
-/// leaves half a file at a path that promises its content.
+/// leaves half a file at a path that promises its content. The other name is this call's alone, so two writers of
+/// one path (the same photo uploaded twice at once) never write into each other's file.
 fn write_beside(dest: &Path, data: &[u8]) -> Result<()> {
     std::fs::create_dir_all(dest.parent().expect("a media path has a parent"))?;
-    let tmp = dest.with_extension("partial");
+    let tmp = dest.with_extension(format!("{}.partial", Uuid::now_v7().simple()));
     std::fs::write(&tmp, data).with_context(|| format!("writing {}", tmp.display()))?;
     std::fs::rename(&tmp, dest).with_context(|| format!("renaming to {}", dest.display()))?;
     Ok(())
