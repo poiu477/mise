@@ -794,6 +794,26 @@ async fn food_search_never_offers_a_food_known_only_from_another_household_s_rec
         .json("GET", "/api/v1/foods?q=secret", &street.home, None)
         .await;
     assert_eq!(names(&ours), Vec::<String>::new());
+    // Nor can a recipe at home name it by its id: for this household there is no such food.
+    let named = json!({
+        "title": "Borrowed", "servings": 2, "steps": [],
+        "ingredients": [{"text": "1 tsp something", "food_id": theirs["items"][0]["id"]}],
+    });
+    let refused = street
+        .send(
+            "POST",
+            "/api/v1/recipes",
+            As::Cookie(&street.home),
+            Some(named.clone()),
+        )
+        .await;
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST, "{}", refused.body);
+    assert_eq!(refused.body["error"], "ingredient 1: no such food");
+    let theirs_again = street.write(&street.next_door, named).await;
+    assert_eq!(
+        theirs_again["ingredients"][0]["food"]["name"],
+        "Aunt May's secret spice"
+    );
 
     for query in ["", "?q=", "?q=%20", &format!("?q={}", "a".repeat(101))] {
         let reply = street

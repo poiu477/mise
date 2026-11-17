@@ -244,16 +244,25 @@ impl Checked {
     }
 }
 
-/// Refuses a recipe that names a food that doesn't exist, saying which line.
-async fn check_foods(tx: &mut Transaction<'_, Postgres>, lines: &[CheckedLine]) -> ApiResult<()> {
+/// Refuses a recipe that names a food that doesn't exist, saying which line. A food the household couldn't have
+/// found by searching (`foods::KNOWN_FOOD`) doesn't exist for it.
+async fn check_foods(
+    tx: &mut Transaction<'_, Postgres>,
+    household: Uuid,
+    lines: &[CheckedLine],
+) -> ApiResult<()> {
     let chosen: Vec<Uuid> = lines.iter().filter_map(|l| l.food_id).collect();
     if chosen.is_empty() {
         return Ok(());
     }
-    let known: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM foods WHERE id = ANY($1)")
-        .bind(&chosen)
-        .fetch_all(&mut **tx)
-        .await?;
+    let known: Vec<Uuid> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT f.id FROM foods f WHERE f.id = ANY($2) AND {}",
+        crate::foods::KNOWN_FOOD
+    )))
+    .bind(household)
+    .bind(&chosen)
+    .fetch_all(&mut **tx)
+    .await?;
     match lines
         .iter()
         .position(|l| l.food_id.is_some_and(|f| !known.contains(&f)))
@@ -466,7 +475,7 @@ pub async fn create(
 ) -> ApiResult<Json<Recipe>> {
     let recipe = check(input)?;
     let mut tx = s.pool.begin().await?;
-    check_foods(&mut tx, &recipe.lines).await?;
+    check_foods(&mut tx, me.household_id, &recipe.lines).await?;
     take_turn(&mut tx).await?;
     let (dish, variant) = (Uuid::now_v7(), Uuid::now_v7());
     let slug = free_slug(&mut tx, &recipe.title, None).await?;
@@ -559,7 +568,7 @@ pub async fn update(
     .await?
     .map(|(dish, slug): (Option<Uuid>, Option<String>)| dish.zip(slug))
     .ok_or(ApiError::NotFound)?;
-    check_foods(&mut tx, &recipe.lines).await?;
+    check_foods(&mut tx, me.household_id, &recipe.lines).await?;
 
     sqlx::query(
         "UPDATE variants SET title = $2, subtitle = $3, description = $4, has_steps = $5, content_hash = $6
@@ -614,6 +623,11 @@ pub async fn update(
     Ok(Json(stored))
 }
 
+/// An image file's bytes, as the API document describes a photo's request body.
+#[derive(ToSchema)]
+#[schema(value_type = String, format = Binary)]
+pub struct PhotoFile(pub Vec<u8>);
+
 /// A photo sent as a request's whole body, with its image type. Asking for an image type is also what keeps another
 /// site from sending a signed-in visitor's browser here: a form can't set it, and a script that does is stopped by
 /// the browser first.
@@ -661,7 +675,7 @@ async fn require_own(s: &AppState, id: Uuid, household: Uuid) -> ApiResult<()> {
 /// is decoded and stored again without the camera's metadata, such as where it was taken. Answers with the recipe.
 #[utoipa::path(
     put, path = "/api/v1/recipes/{id}/photo", operation_id = "set_recipe_photo", tag = "recipes", params(("id" = Uuid, Path)),
-    request_body(content = Vec<u8>, content_type = "image/*", description = "The image file"),
+    request_body(content = PhotoFile, content_type = "image/*", description = "The image file"),
     responses(
         (status = 200, description = "The recipe with its new photo", body = Recipe),
         (status = 400, description = "The id isn't a UUID, the Content-Type isn't an image type, or the body isn't an image mise reads or has too many pixels", body = crate::error::ErrorBody),

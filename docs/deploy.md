@@ -157,6 +157,10 @@ rule that lets only the proxy reach port 8080 does what `127.0.0.1` would.
 - **Nginx Proxy Manager:** a proxy host for `mise.example.com` forwarding to `http://<mise host>:8080`, with an SSL
   certificate and **Force SSL** on.
 
+A recipe's photo is uploaded in one request of up to 20 MB. Caddy and Traefik pass that as they come; nginx and
+Nginx Proxy Manager stop at 1 MB unless told otherwise (`client_max_body_size 20m;` in the `server` block, or in
+the proxy host's custom configuration).
+
 mise sends no HSTS header. Once HTTPS works for good, the proxy can add one, for example Caddy's
 `header Strict-Transport-Security "max-age=31536000"`. Browsers then refuse plain HTTP to that name for a year, so
 add it last.
