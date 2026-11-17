@@ -56,6 +56,7 @@ struct Documented {
     statuses: BTreeSet<u16>,
     /// `security: [{}]`: anyone may call it.
     public: bool,
+    /// It reads a JSON body (a photo's route reads an image instead, and is called on its own below).
     takes_body: bool,
     takes_query: bool,
 }
@@ -79,7 +80,9 @@ fn routes(doc: &Value) -> BTreeMap<Route, Documented> {
                 Documented {
                     statuses,
                     public: op["security"] == json!([{}]),
-                    takes_body: op.get("requestBody").is_some(),
+                    takes_body: op["requestBody"]["content"]
+                        .get("application/json")
+                        .is_some(),
                     takes_query,
                 },
             );
@@ -235,6 +238,13 @@ const SEARCH: (&str, &str) = ("GET", "/api/v1/dishes");
 const DISH_PAGE: (&str, &str) = ("GET", "/api/v1/dishes/{slug}");
 const VERSION: (&str, &str) = ("GET", "/api/v1/variants/{id}");
 const PHOTO: (&str, &str) = ("GET", "/api/v1/media/{id}/{size}");
+const RECIPE_NEW: (&str, &str) = ("POST", "/api/v1/recipes");
+const RECIPE: (&str, &str) = ("GET", "/api/v1/recipes/{id}");
+const RECIPE_CHANGE: (&str, &str) = ("PUT", "/api/v1/recipes/{id}");
+const RECIPE_PHOTO: (&str, &str) = ("PUT", "/api/v1/recipes/{id}/photo");
+const RECIPE_PHOTO_REMOVE: (&str, &str) = ("DELETE", "/api/v1/recipes/{id}/photo");
+const RECIPE_LINES: (&str, &str) = ("POST", "/api/v1/recipes/lines");
+const FOODS: (&str, &str) = ("GET", "/api/v1/foods");
 const PLAN: (&str, &str) = ("GET", "/api/v1/plan");
 const PLAN_ADD: (&str, &str) = ("POST", "/api/v1/plan/entries");
 const PLAN_CHANGE: (&str, &str) = ("PATCH", "/api/v1/plan/entries/{id}");
@@ -700,6 +710,91 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
         "an entry that isn't there",
     )
     .await;
+
+    // Recipes written in the app, and the foods their lines are matched to.
+    let soup = json!({
+        "title": "Leek Soup", "servings": 2,
+        "ingredients": [{"text": "2 leeks, sliced"}], "steps": ["Simmer the leeks."],
+    });
+    let written = c
+        .call(RECIPE_NEW, me, Some(soup.clone()), 200, "a recipe")
+        .await
+        .body["id"]
+        .clone();
+    let recipe = format!("/api/v1/recipes/{}", written.as_str().unwrap());
+    let untitled = json!({"title": "", "servings": 2, "ingredients": [], "steps": []});
+    c.call(RECIPE_NEW, me, Some(untitled), 400, "no title")
+        .await;
+    c.expect(RECIPE, &recipe, me, None, 200, "the recipe").await;
+    c.expect(RECIPE, &fill(RECIPE.1), me, None, 404, "no such recipe")
+        .await;
+    c.expect(
+        RECIPE_CHANGE,
+        &recipe,
+        me,
+        Some(soup.clone()),
+        200,
+        "a change",
+    )
+    .await;
+    let missing = fill(RECIPE_CHANGE.1);
+    c.expect(
+        RECIPE_CHANGE,
+        &missing,
+        me,
+        Some(soup),
+        404,
+        "no such recipe",
+    )
+    .await;
+    let photo = |url: &str, kind: &str, bytes: Vec<u8>| {
+        TestApp::request("PUT", url, me)
+            .header(header::CONTENT_TYPE, kind)
+            .body(Body::from(bytes))
+            .unwrap()
+    };
+    let mut drawn = std::io::Cursor::new(Vec::new());
+    image::RgbImage::from_pixel(8, 6, image::Rgb([200, 90, 40]))
+        .write_to(&mut drawn, image::ImageFormat::Png)
+        .unwrap();
+    let drawn = drawn.into_inner();
+    let recipe_photo = format!("{recipe}/photo");
+    let sent = photo(&recipe_photo, "image/png", drawn.clone());
+    c.expect_request(RECIPE_PHOTO, sent, 200, "a photo").await;
+    let sent = photo(&recipe_photo, "image/png", b"not a photo".to_vec());
+    c.expect_request(RECIPE_PHOTO, sent, 400, "not an image")
+        .await;
+    let sent = photo(&recipe_photo, "image/png", vec![0; (20 << 20) + 1]);
+    c.expect_request(RECIPE_PHOTO, sent, 413, "over 20 MB")
+        .await;
+    let sent = photo(&fill(RECIPE_PHOTO.1), "image/png", drawn);
+    c.expect_request(RECIPE_PHOTO, sent, 404, "no such recipe")
+        .await;
+    c.expect(
+        RECIPE_PHOTO_REMOVE,
+        &recipe_photo,
+        me,
+        None,
+        200,
+        "taking the photo off",
+    )
+    .await;
+    c.expect(
+        RECIPE_PHOTO_REMOVE,
+        &fill(RECIPE_PHOTO_REMOVE.1),
+        me,
+        None,
+        404,
+        "no such recipe",
+    )
+    .await;
+    let lines = json!({"lines": ["2 leeks, sliced"]});
+    c.call(RECIPE_LINES, me, Some(lines), 200, "lines, read")
+        .await;
+    let found = format!("{}?q=leek", FOODS.1);
+    c.expect(FOODS, &found, me, None, 200, "foods by name")
+        .await;
+    c.call(FOODS, me, None, 400, "nothing to look for").await;
 
     // The shopping list.
     let list = format!("/api/v1/shopping?week={WEEK}");

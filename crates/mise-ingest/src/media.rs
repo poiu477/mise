@@ -697,32 +697,16 @@ fn write_web_sizes(
         if (w, h) != (current.width(), current.height()) {
             current = current.resize_exact(w, h, FilterType::CatmullRom);
         }
-        let mut out = Vec::new();
-        let (ext, mime) = if transparent {
-            PngEncoder::new_with_quality(&mut out, CompressionType::Best, PngFilter::Adaptive)
-                .write_image(current.as_bytes(), w, h, current.color().into())?;
-            ("png", "image/png")
-        } else {
-            JpegEncoder::new_with_quality(&mut out, JPEG_QUALITY).write_image(
-                current.as_bytes(),
-                w,
-                h,
-                current.color().into(),
-            )?;
-            ("jpg", "image/jpeg")
-        };
-        let rel = derivative_path(sha256, max_side, ext);
+        let (out, kind) = encoded(&current, transparent, JPEG_QUALITY)?;
+        let rel = derivative_path(sha256, max_side, kind.ext());
         let dest = media_root.join(&rel);
-        std::fs::create_dir_all(dest.parent().expect("derivative path has a parent"))?;
         // Written beside and renamed over: writing in place through a path an earlier run hard-linked to the
         // original would overwrite the original (and the archive file it is linked to).
-        let tmp = dest.with_extension("partial");
-        std::fs::write(&tmp, &out).with_context(|| format!("writing {}", tmp.display()))?;
-        std::fs::rename(&tmp, &dest).with_context(|| format!("renaming to {}", dest.display()))?;
+        write_beside(&dest, &out)?;
         made.push(Derivative {
             max_side: max_side as i32,
             path: rel,
-            mime,
+            mime: kind.mime(),
             bytes: out.len() as i64,
             width: w as i32,
             height: h as i32,
@@ -730,6 +714,39 @@ fn write_web_sizes(
         });
     }
     Ok(made)
+}
+
+/// `image` (RGBA when `transparent`, RGB otherwise) as a PNG or a JPEG of this quality.
+fn encoded(
+    image: &DynamicImage,
+    transparent: bool,
+    jpeg_quality: u8,
+) -> image::ImageResult<(Vec<u8>, ImageKind)> {
+    let (w, h) = (image.width(), image.height());
+    let mut out = Vec::new();
+    if transparent {
+        PngEncoder::new_with_quality(&mut out, CompressionType::Best, PngFilter::Adaptive)
+            .write_image(image.as_bytes(), w, h, image.color().into())?;
+        Ok((out, ImageKind::Png))
+    } else {
+        JpegEncoder::new_with_quality(&mut out, jpeg_quality).write_image(
+            image.as_bytes(),
+            w,
+            h,
+            image.color().into(),
+        )?;
+        Ok((out, ImageKind::Jpeg))
+    }
+}
+
+/// Write `data` at `dest`, making its folder: under another name first, then renamed over, so a crash never
+/// leaves half a file at a path that promises its content.
+fn write_beside(dest: &Path, data: &[u8]) -> Result<()> {
+    std::fs::create_dir_all(dest.parent().expect("a media path has a parent"))?;
+    let tmp = dest.with_extension("partial");
+    std::fs::write(&tmp, data).with_context(|| format!("writing {}", tmp.display()))?;
+    std::fs::rename(&tmp, dest).with_context(|| format!("renaming to {}", dest.display()))?;
+    Ok(())
 }
 
 async fn write_derivatives(
@@ -788,6 +805,130 @@ async fn write_derivatives(
         .await?;
     tx.commit().await?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Uploads
+
+/// The most pixels an uploaded photo may have (50 megapixels, a current phone's largest): decoding takes about
+/// four bytes of memory for each.
+pub const MAX_UPLOAD_PIXELS: u64 = 50_000_000;
+/// JPEG quality of the stored copy of an upload: close enough to the photo taken that the difference doesn't show.
+const UPLOAD_QUALITY: u8 = 90;
+
+/// Why an uploaded photo wasn't stored.
+#[derive(Debug)]
+pub enum UploadError {
+    /// The bytes aren't a JPEG, PNG, WebP or GIF, or don't decode as one.
+    NotAnImage,
+    /// The image has more than [`MAX_UPLOAD_PIXELS`] pixels.
+    TooManyPixels,
+    /// Storing it failed: the disk or the database.
+    Failed(anyhow::Error),
+}
+
+impl From<anyhow::Error> for UploadError {
+    fn from(e: anyhow::Error) -> Self {
+        UploadError::Failed(e)
+    }
+}
+
+/// An upload decoded, encoded again and written under `MEDIA_ROOT`, ready for its rows.
+struct StoredUpload {
+    sha256: String,
+    kind: ImageKind,
+    bytes: i64,
+    width: i32,
+    height: i32,
+    web_sizes: Vec<Derivative>,
+}
+
+/// Stores a photo someone uploaded and makes its web sizes; returns its media id. What is kept is the picture and
+/// nothing else: the image is decoded, turned upright and encoded again (JPEG, or PNG when it has real
+/// transparency), so the camera's metadata (where and when it was taken) and anything else hidden in the file are
+/// gone, and a file that only claims to be an image is refused. The same picture uploaded twice is stored once.
+pub async fn store_upload(
+    pool: &PgPool,
+    media_root: &Path,
+    data: Vec<u8>,
+) -> Result<Uuid, UploadError> {
+    let root = media_root.to_path_buf();
+    let stored = tokio::task::spawn_blocking(move || encode_upload(&root, &data))
+        .await
+        .map_err(|e| UploadError::Failed(e.into()))??;
+
+    let mut tx = pool.begin().await.map_err(anyhow::Error::from)?;
+    // The no-op update makes a photo already stored answer with its id too.
+    let id: Uuid = sqlx::query_scalar(
+        "INSERT INTO media (id, sha256, mime, bytes, width, height, path) VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (sha256) DO UPDATE SET sha256 = excluded.sha256 RETURNING id",
+    )
+    .bind(Uuid::now_v7())
+    .bind(&stored.sha256)
+    .bind(stored.kind.mime())
+    .bind(stored.bytes)
+    .bind(stored.width)
+    .bind(stored.height)
+    .bind(original_path(&stored.sha256, stored.kind.ext()))
+    .fetch_one(&mut *tx)
+    .await
+    .context("inserting the photo")?;
+    for d in &stored.web_sizes {
+        sqlx::query(
+            "INSERT INTO media_derivatives (media_id, max_side, path, mime, bytes, width, height)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (media_id, max_side) DO UPDATE
+             SET path = excluded.path, mime = excluded.mime, bytes = excluded.bytes, width = excluded.width, height = excluded.height",
+        )
+        .bind(id)
+        .bind(d.max_side)
+        .bind(&d.path)
+        .bind(d.mime)
+        .bind(d.bytes)
+        .bind(d.width)
+        .bind(d.height)
+        .execute(&mut *tx)
+        .await
+        .context("inserting the photo's web sizes")?;
+    }
+    tx.commit().await.map_err(anyhow::Error::from)?;
+    Ok(id)
+}
+
+/// Check, decode and encode an upload, and write it and its web sizes under `media_root`.
+fn encode_upload(media_root: &Path, data: &[u8]) -> Result<StoredUpload, UploadError> {
+    let kind = ImageKind::sniff(data).ok_or(UploadError::NotAnImage)?;
+    // The size comes from the header, before anything is decoded: a small file can claim a vast image.
+    let (width, height) = image_dimensions(data, kind).ok_or(UploadError::NotAnImage)?;
+    if u64::from(width) * u64::from(height) > MAX_UPLOAD_PIXELS {
+        return Err(UploadError::TooManyPixels);
+    }
+    let (image, _) = decode(data).map_err(|_| UploadError::NotAnImage)?;
+    let transparent = image.color().has_alpha() && image.to_rgba8().pixels().any(|p| p.0[3] < 255);
+    let image = if transparent {
+        DynamicImage::ImageRgba8(image.into_rgba8())
+    } else {
+        DynamicImage::ImageRgb8(image.into_rgb8())
+    };
+    let (out, kind) = encoded(&image, transparent, UPLOAD_QUALITY)
+        .context("encoding the photo")
+        .map_err(UploadError::Failed)?;
+    let sha256 = hex::encode(Sha256::digest(&out));
+    let dest = media_root.join(original_path(&sha256, kind.ext()));
+    if !dest.exists() {
+        write_beside(&dest, &out)?;
+    }
+    let (width, height) = (image.width() as i32, image.height() as i32);
+    let bytes = out.len() as i64;
+    let web_sizes = write_web_sizes(media_root, &sha256, image, Some((dest, kind, bytes)))?;
+    Ok(StoredUpload {
+        sha256,
+        kind,
+        bytes,
+        width,
+        height,
+        web_sizes,
+    })
 }
 
 #[cfg(test)]

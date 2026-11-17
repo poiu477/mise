@@ -1,0 +1,808 @@
+//! Recipes a household writes itself: create one, read it back as it was written, change it, give it a photo.
+//!
+//! A written recipe is a version like any other (`origin = 'user'`, owned by the household, private to it), so the
+//! dish page, search, the plan and the shopping list treat it as they treat a seed version. It gets a dish of its
+//! own, marked as made by a person, which grouping leaves alone. Ingredient lines arrive as text ("2 cups flour,
+//! sifted") and are read into an amount, a unit, a name and a note (`mise_core::ingredient_line`); each name is
+//! matched to a food exactly as an import's is, unless the request names the food. The line's text is kept, so
+//! reading the recipe back gives what was typed.
+
+use std::collections::HashMap;
+
+use axum::{
+    Extension, Json,
+    body::Bytes,
+    extract::{FromRequest, Request, State},
+    http::{StatusCode, header},
+};
+use mise_core::{
+    food_names::singular_key,
+    ingredient_line::{self, Line},
+    text::slugify,
+};
+use mise_ingest::media::{MAX_UPLOAD_PIXELS, UploadError};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sha2::{Digest, Sha256};
+use sqlx::{Postgres, Transaction};
+use tokio::sync::Semaphore;
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+use crate::{
+    AppState,
+    auth::CurrentUser,
+    error::{ApiError, ApiResult},
+    extract::{JsonBody, Path},
+    media::Image,
+};
+
+/// The longest title and subtitle, in characters.
+const MAX_TITLE: usize = 200;
+/// The longest description and the longest step, in characters.
+const MAX_TEXT: usize = 4000;
+/// The longest ingredient line, in characters.
+const MAX_LINE: usize = 300;
+/// The most ingredient lines a recipe can have.
+const MAX_LINES: usize = 200;
+/// The most steps a recipe can have.
+const MAX_STEPS: usize = 100;
+/// The most servings a recipe can be written for.
+const MAX_SERVINGS: f64 = 1000.0;
+/// The largest photo the server reads: a phone's full-size photo fits with room to spare.
+pub const MAX_PHOTO_BYTES: usize = 20 * 1024 * 1024;
+
+/// Photos being decoded at once. Decoding takes a few bytes of memory for every pixel, so uploads take turns
+/// rather than letting a burst of them use it all.
+static DECODING: Semaphore = Semaphore::const_new(2);
+
+/// The key of the advisory lock a save holds until its transaction ends ("mise dish" in ASCII): saves take turns,
+/// so two recipes with one title can't both take the same address.
+const SAVING_LOCK: i64 = 0x6d69_7365_6469_7368;
+
+/// One ingredient line as typed.
+#[derive(Deserialize, ToSchema)]
+pub struct LineInput {
+    /// The line as a cook writes it: "2 cups flour, sifted", "1 (14 oz) can chickpeas", "salt, to taste".
+    pub text: String,
+    /// The food this line is, when the cook picked it. Left out, the line is matched by its name, and a name no
+    /// food has yet becomes a new food.
+    pub food_id: Option<Uuid>,
+}
+
+/// A recipe as its writer sends it.
+#[derive(Deserialize, ToSchema)]
+pub struct RecipeInput {
+    /// 1 to 200 characters.
+    pub title: String,
+    /// At most 200 characters: "with Garlic and Parmesan".
+    pub subtitle: Option<String>,
+    /// At most 4000 characters.
+    pub description: Option<String>,
+    /// How many servings the amounts are written for: more than 0, at most 1000. Any other serving count is
+    /// worked out from these.
+    pub servings: f64,
+    /// At most 200 lines of at most 300 characters; blank lines are dropped.
+    pub ingredients: Vec<LineInput>,
+    /// At most 100 steps of at most 4000 characters, in order; blank ones are dropped.
+    pub steps: Vec<String>,
+}
+
+/// A food, by id and name.
+#[derive(Serialize, ToSchema, Clone, Debug)]
+pub struct FoodRef {
+    pub id: Uuid,
+    pub name: String,
+}
+
+/// One ingredient line: what was typed, and what mise read from it.
+#[derive(Serialize, ToSchema)]
+pub struct RecipeLine {
+    /// The line as typed.
+    pub text: String,
+    /// The amount read from it, at the recipe's servings; absent for "salt, to taste".
+    pub amount: Option<f64>,
+    /// The unit read from it: "cup", "tablespoon", "ounce", "clove", or "unit" for a bare count ("2 eggs").
+    pub unit: Option<String>,
+    /// The name read from it, which is what gets matched to a food: "flour".
+    pub name: String,
+    /// The rest: "sifted", "14 oz; drained", "to taste".
+    pub note: Option<String>,
+    /// The food the line is matched to. Absent only when reading lines without saving, for a name no food has yet.
+    pub food: Option<FoodRef>,
+}
+
+/// A recipe the household wrote, as it was written.
+#[derive(Serialize, ToSchema)]
+pub struct Recipe {
+    /// The version's id: `/api/v1/variants/{id}` shows it at any serving count.
+    pub id: Uuid,
+    /// The slug of its dish, for `/api/v1/dishes/{slug}`.
+    pub dish_slug: String,
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub description: Option<String>,
+    /// The servings the amounts are written for.
+    pub servings: f64,
+    pub ingredients: Vec<RecipeLine>,
+    pub steps: Vec<String>,
+    pub image: Option<Image>,
+}
+
+/// One ingredient line checked and read.
+struct CheckedLine {
+    text: String,
+    food_id: Option<Uuid>,
+    read: Line,
+}
+
+impl CheckedLine {
+    /// The name to match to a food: the name read from the line, or the whole line when it has none ("2").
+    fn name(&self) -> &str {
+        if self.read.name.is_empty() {
+            &self.text
+        } else {
+            &self.read.name
+        }
+    }
+}
+
+/// A recipe checked: every text trimmed, of a length and kind the database stores, and every line read.
+struct Checked {
+    title: String,
+    subtitle: Option<String>,
+    description: Option<String>,
+    servings: f64,
+    lines: Vec<CheckedLine>,
+    steps: Vec<String>,
+}
+
+/// `text` trimmed, when it is at most `max` characters and has nothing Postgres can't store; `what` names it in the
+/// refusal ("the title").
+fn within(text: &str, max: usize, what: &str) -> ApiResult<String> {
+    let t = text.trim();
+    if t.chars().count() > max || t.contains('\0') {
+        return Err(ApiError::BadRequest(format!(
+            "{what} can have at most {max} characters"
+        )));
+    }
+    Ok(t.to_string())
+}
+
+/// An optional text: absent when left out or blank.
+fn optional(text: Option<&str>, max: usize, what: &str) -> ApiResult<Option<String>> {
+    let t = within(text.unwrap_or_default(), max, what)?;
+    Ok((!t.is_empty()).then_some(t))
+}
+
+/// Ingredient lines trimmed, blank ones dropped, each checked and read.
+fn check_lines(lines: Vec<LineInput>) -> ApiResult<Vec<CheckedLine>> {
+    let lines = lines
+        .into_iter()
+        .enumerate()
+        .map(|(i, l)| {
+            let text = within(&l.text, MAX_LINE, &format!("ingredient {}", i + 1))?;
+            let read = ingredient_line::parse(&text);
+            Ok(CheckedLine {
+                text,
+                food_id: l.food_id,
+                read,
+            })
+        })
+        .filter(|l| !matches!(l, Ok(l) if l.text.is_empty()))
+        .collect::<ApiResult<Vec<_>>>()?;
+    if lines.len() > MAX_LINES {
+        return Err(ApiError::BadRequest(format!(
+            "a recipe can have at most {MAX_LINES} ingredients"
+        )));
+    }
+    Ok(lines)
+}
+
+/// Every field of a recipe checked, in the order a person fills them in.
+fn check(input: RecipeInput) -> ApiResult<Checked> {
+    let title = within(&input.title, MAX_TITLE, "the title")?;
+    if title.is_empty() {
+        return Err(ApiError::BadRequest("give the recipe a title".into()));
+    }
+    if !(input.servings > 0.0 && input.servings <= MAX_SERVINGS) {
+        return Err(ApiError::BadRequest(format!(
+            "servings must be more than 0 and at most {MAX_SERVINGS}"
+        )));
+    }
+    let steps = input
+        .steps
+        .iter()
+        .enumerate()
+        .map(|(i, s)| within(s, MAX_TEXT, &format!("step {}", i + 1)))
+        .filter(|s| !matches!(s, Ok(s) if s.is_empty()))
+        .collect::<ApiResult<Vec<_>>>()?;
+    if steps.len() > MAX_STEPS {
+        return Err(ApiError::BadRequest(format!(
+            "a recipe can have at most {MAX_STEPS} steps"
+        )));
+    }
+    Ok(Checked {
+        title,
+        subtitle: optional(input.subtitle.as_deref(), MAX_TITLE, "the subtitle")?,
+        description: optional(input.description.as_deref(), MAX_TEXT, "the description")?,
+        servings: input.servings,
+        lines: check_lines(input.ingredients)?,
+        steps,
+    })
+}
+
+impl Checked {
+    /// A hash of everything that makes this recipe different from another, as imports keep for their versions.
+    fn content_hash(&self) -> String {
+        let canonical = json!({
+            "title": self.title, "subtitle": self.subtitle, "description": self.description,
+            "servings": self.servings, "steps": self.steps,
+            "ingredients": self.lines.iter().map(|l| (&l.text, l.food_id)).collect::<Vec<_>>(),
+        });
+        hex::encode(Sha256::digest(canonical.to_string().as_bytes()))
+    }
+}
+
+/// Refuses a recipe that names a food that doesn't exist, saying which line.
+async fn check_foods(tx: &mut Transaction<'_, Postgres>, lines: &[CheckedLine]) -> ApiResult<()> {
+    let chosen: Vec<Uuid> = lines.iter().filter_map(|l| l.food_id).collect();
+    if chosen.is_empty() {
+        return Ok(());
+    }
+    let known: Vec<Uuid> = sqlx::query_scalar("SELECT id FROM foods WHERE id = ANY($1)")
+        .bind(&chosen)
+        .fetch_all(&mut **tx)
+        .await?;
+    match lines
+        .iter()
+        .position(|l| l.food_id.is_some_and(|f| !known.contains(&f)))
+    {
+        Some(i) => Err(ApiError::BadRequest(format!(
+            "ingredient {}: no such food",
+            i + 1
+        ))),
+        None => Ok(()),
+    }
+}
+
+/// Waits for any other save to finish; held until this transaction ends.
+async fn take_turn(tx: &mut Transaction<'_, Postgres>) -> ApiResult<()> {
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(SAVING_LOCK)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+/// An address no dish has or used to have, for a dish titled `title`: its slug, or that with "-2", "-3" and so on.
+/// The addresses `dish` itself has or had count as free, so renaming a dish back gives it its old one.
+async fn free_slug(
+    tx: &mut Transaction<'_, Postgres>,
+    title: &str,
+    dish: Option<Uuid>,
+) -> ApiResult<String> {
+    let base = match slugify(title) {
+        s if s.is_empty() => "recipe".to_string(),
+        s => s,
+    };
+    // A slug holds letters, digits and hyphens only, so it is safe as a LIKE pattern.
+    let taken: Vec<String> = sqlx::query_scalar(
+        "SELECT slug FROM dishes WHERE (slug = $1 OR slug LIKE $1 || '-%') AND id IS DISTINCT FROM $2
+         UNION
+         SELECT slug FROM retired_slugs WHERE (slug = $1 OR slug LIKE $1 || '-%') AND dish_id IS DISTINCT FROM $2",
+    )
+    .bind(&base)
+    .bind(dish)
+    .fetch_all(&mut **tx)
+    .await?;
+    let mut slug = base.clone();
+    let mut n = 2;
+    while taken.contains(&slug) {
+        slug = format!("{base}-{n}");
+        n += 1;
+    }
+    Ok(slug)
+}
+
+/// Writes a recipe's yield, lines, amounts and steps (after an edit removed the old ones), then matches the lines
+/// that name no food.
+async fn write_parts(
+    tx: &mut Transaction<'_, Postgres>,
+    variant: Uuid,
+    recipe: &Checked,
+) -> ApiResult<()> {
+    sqlx::query(
+        "INSERT INTO variant_yields (variant_id, servings) VALUES ($1, $2::float8::numeric)",
+    )
+    .bind(variant)
+    .bind(recipe.servings)
+    .execute(&mut **tx)
+    .await?;
+
+    // A line's key is its place from 1, as an imported page's lines are keyed.
+    let keyed: Vec<(String, String)> = recipe
+        .lines
+        .iter()
+        .enumerate()
+        .map(|(i, l)| ((i + 1).to_string(), l.name().to_string()))
+        .collect();
+    for (i, (line, (key, name))) in recipe.lines.iter().zip(&keyed).enumerate() {
+        let id = Uuid::now_v7();
+        sqlx::query(
+            "INSERT INTO ingredient_lines (id, variant_id, line_key, position, raw_name, food_id, note, text)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        )
+        .bind(id)
+        .bind(variant)
+        .bind(key)
+        .bind(i as i32)
+        .bind(name)
+        .bind(line.food_id)
+        .bind(&line.read.note)
+        .bind(&line.text)
+        .execute(&mut **tx)
+        .await?;
+        if let Some(amount) = line.read.amount {
+            sqlx::query(
+                "INSERT INTO line_amounts (line_id, servings, amount, unit)
+                 VALUES ($1, $2::float8::numeric, $3::float8::numeric, $4)",
+            )
+            .bind(id)
+            .bind(recipe.servings)
+            .bind(amount)
+            .bind(line.read.unit_word())
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+    for (i, text) in recipe.steps.iter().enumerate() {
+        let template = mise_ingest::steps::template(text, &recipe.title, &keyed);
+        let template =
+            serde_json::to_string(&template).map_err(|e| ApiError::Internal(e.into()))?;
+        sqlx::query(
+            "INSERT INTO steps (id, variant_id, position, text, template) VALUES ($1, $2, $3, $4, $5::jsonb)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(variant)
+        .bind(i as i32)
+        .bind(text)
+        .bind(template)
+        .execute(&mut **tx)
+        .await?;
+    }
+    mise_ingest::foods::match_foods_in(tx).await?;
+    Ok(())
+}
+
+/// The recipe `id` as it was written, for the household that wrote it; not found for anyone else, and for a
+/// version that wasn't written in the app.
+async fn load(tx: &mut Transaction<'_, Postgres>, id: Uuid, household: Uuid) -> ApiResult<Recipe> {
+    type Row = (
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<f64>,
+        Option<Uuid>,
+    );
+    let (title, subtitle, description, dish_slug, servings, hero): Row = sqlx::query_as(
+        "SELECT v.title, v.subtitle, v.description, d.slug,
+                (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id),
+                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1)
+         FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
+         WHERE v.id = $1 AND v.origin = 'user' AND v.household_id = $2",
+    )
+    .bind(id)
+    .bind(household)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+    type LineRow = (
+        Option<String>,
+        String,
+        Option<String>,
+        Option<f64>,
+        Option<String>,
+        Option<Uuid>,
+        Option<String>,
+    );
+    let ingredients = sqlx::query_as::<_, LineRow>(
+        "SELECT il.text, il.raw_name, il.note, la.amount::float8, la.unit, f.id, f.name
+         FROM ingredient_lines il
+         LEFT JOIN line_amounts la ON la.line_id = il.id
+         LEFT JOIN foods f ON f.id = il.food_id
+         WHERE il.variant_id = $1 ORDER BY il.position",
+    )
+    .bind(id)
+    .fetch_all(&mut **tx)
+    .await?
+    .into_iter()
+    .map(
+        |(text, name, note, amount, unit, food_id, food)| RecipeLine {
+            text: text.unwrap_or_else(|| name.clone()),
+            amount,
+            unit,
+            name,
+            note,
+            food: food_id.zip(food).map(|(id, name)| FoodRef { id, name }),
+        },
+    )
+    .collect();
+    let steps =
+        sqlx::query_scalar("SELECT text FROM steps WHERE variant_id = $1 ORDER BY position")
+            .bind(id)
+            .fetch_all(&mut **tx)
+            .await?;
+    Ok(Recipe {
+        id,
+        dish_slug: dish_slug.unwrap_or_default(),
+        title,
+        subtitle,
+        description,
+        servings: servings.unwrap_or(1.0),
+        ingredients,
+        steps,
+        image: hero.map(Image::new),
+    })
+}
+
+/// Write a recipe. It belongs to the household, which alone can see it, and gets a dish of its own. Answers with
+/// the recipe as stored: each line with what was read from it and the food it is matched to.
+#[utoipa::path(
+    post, path = "/api/v1/recipes", operation_id = "create_recipe", tag = "recipes", request_body = RecipeInput,
+    responses(
+        (status = 200, description = "The recipe, stored", body = Recipe),
+        (status = 400, description = "A field is missing, empty, too long or out of range, a line names a food that doesn't exist, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken,
+        crate::error::TooLarge
+    )
+)]
+pub async fn create(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    JsonBody(input): JsonBody<RecipeInput>,
+) -> ApiResult<Json<Recipe>> {
+    let recipe = check(input)?;
+    let mut tx = s.pool.begin().await?;
+    check_foods(&mut tx, &recipe.lines).await?;
+    take_turn(&mut tx).await?;
+    let (dish, variant) = (Uuid::now_v7(), Uuid::now_v7());
+    let slug = free_slug(&mut tx, &recipe.title, None).await?;
+    // The dish names its version and the version its dish; the first of the two checks waits for the commit.
+    sqlx::query(
+        "INSERT INTO dishes (id, title, subtitle, slug, content_type, default_variant_id, origin)
+         VALUES ($1, $2, $3, $4, 'recipe', $5, 'user')",
+    )
+    .bind(dish)
+    .bind(&recipe.title)
+    .bind(&recipe.subtitle)
+    .bind(&slug)
+    .bind(variant)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO variants (id, dish_id, dish_pinned, origin, household_id, title, subtitle, description,
+                               published_at, has_steps, meta, content_hash)
+         VALUES ($1, $2, true, 'user', $3, $4, $5, $6, now(), $7, '{\"content_type\": \"recipe\"}', $8)",
+    )
+    .bind(variant)
+    .bind(dish)
+    .bind(me.household_id)
+    .bind(&recipe.title)
+    .bind(&recipe.subtitle)
+    .bind(&recipe.description)
+    .bind(!recipe.steps.is_empty())
+    .bind(recipe.content_hash())
+    .execute(&mut *tx)
+    .await?;
+    write_parts(&mut tx, variant, &recipe).await?;
+    let stored = load(&mut tx, variant, me.household_id).await?;
+    tx.commit().await?;
+    Ok(Json(stored))
+}
+
+/// A recipe the household wrote, as it was written, for editing. Another household's recipe is not found, as if it
+/// didn't exist, and so is a version that wasn't written in the app.
+#[utoipa::path(
+    get, path = "/api/v1/recipes/{id}", operation_id = "get_recipe", tag = "recipes", params(("id" = Uuid, Path)),
+    responses(
+        (status = 200, description = "The recipe as written", body = Recipe),
+        (status = 400, description = "The id isn't a UUID", body = crate::error::ErrorBody),
+        (status = 404, description = "No such recipe, or not one this household wrote", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::KitchenDevice
+    )
+)]
+pub async fn get(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Recipe>> {
+    let mut tx = s.pool.begin().await?;
+    Ok(Json(load(&mut tx, id, me.household_id).await?))
+}
+
+/// Change a recipe the household wrote: the whole recipe is replaced by the one sent. Its dish takes the new title,
+/// and a new address when the title changed (the old address still finds it). Answers with the recipe as stored.
+#[utoipa::path(
+    put, path = "/api/v1/recipes/{id}", operation_id = "update_recipe", tag = "recipes", params(("id" = Uuid, Path)),
+    request_body = RecipeInput,
+    responses(
+        (status = 200, description = "The recipe, changed", body = Recipe),
+        (status = 400, description = "The id isn't a UUID, a field is missing, empty, too long or out of range, a line names a food that doesn't exist, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        (status = 404, description = "No such recipe, or not one this household wrote", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken,
+        crate::error::TooLarge
+    )
+)]
+pub async fn update(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Path(id): Path<Uuid>,
+    JsonBody(input): JsonBody<RecipeInput>,
+) -> ApiResult<Json<Recipe>> {
+    let recipe = check(input)?;
+    let mut tx = s.pool.begin().await?;
+    take_turn(&mut tx).await?;
+    // The dish follows the recipe only when it is the recipe's own: one a person made that opens on this version.
+    let own_dish: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT d.id, d.slug FROM variants v
+         LEFT JOIN dishes d ON d.id = v.dish_id AND d.origin = 'user' AND d.default_variant_id = v.id
+         WHERE v.id = $1 AND v.origin = 'user' AND v.household_id = $2 FOR UPDATE OF v",
+    )
+    .bind(id)
+    .bind(me.household_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .map(|(dish, slug): (Option<Uuid>, Option<String>)| dish.zip(slug))
+    .ok_or(ApiError::NotFound)?;
+    check_foods(&mut tx, &recipe.lines).await?;
+
+    sqlx::query(
+        "UPDATE variants SET title = $2, subtitle = $3, description = $4, has_steps = $5, content_hash = $6
+         WHERE id = $1",
+    )
+    .bind(id)
+    .bind(&recipe.title)
+    .bind(&recipe.subtitle)
+    .bind(&recipe.description)
+    .bind(!recipe.steps.is_empty())
+    .bind(recipe.content_hash())
+    .execute(&mut *tx)
+    .await?;
+    // Amounts go with their lines, and a step's photos with the step.
+    for delete in [
+        "DELETE FROM variant_yields WHERE variant_id = $1",
+        "DELETE FROM ingredient_lines WHERE variant_id = $1",
+        "DELETE FROM steps WHERE variant_id = $1",
+    ] {
+        sqlx::query(delete).bind(id).execute(&mut *tx).await?;
+    }
+    if let Some((dish, old_slug)) = own_dish {
+        let slug = free_slug(&mut tx, &recipe.title, Some(dish)).await?;
+        sqlx::query(
+            "UPDATE dishes SET title = $2, subtitle = $3, slug = $4, updated_at = now() WHERE id = $1",
+        )
+        .bind(dish)
+        .bind(&recipe.title)
+        .bind(&recipe.subtitle)
+        .bind(&slug)
+        .execute(&mut *tx)
+        .await?;
+        if slug != old_slug {
+            // The old address still finds the dish; the one it holds again is no longer a former one.
+            sqlx::query(
+                "INSERT INTO retired_slugs (slug, dish_id) VALUES ($1, $2)
+                 ON CONFLICT (slug) DO UPDATE SET dish_id = excluded.dish_id, retired_at = now()",
+            )
+            .bind(&old_slug)
+            .bind(dish)
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query("DELETE FROM retired_slugs WHERE slug = $1")
+                .bind(&slug)
+                .execute(&mut *tx)
+                .await?;
+        }
+    }
+    write_parts(&mut tx, id, &recipe).await?;
+    let stored = load(&mut tx, id, me.household_id).await?;
+    tx.commit().await?;
+    Ok(Json(stored))
+}
+
+/// A photo sent as a request's whole body, with its image type. Asking for an image type is also what keeps another
+/// site from sending a signed-in visitor's browser here: a form can't set it, and a script that does is stopped by
+/// the browser first.
+pub struct PhotoBody(pub Bytes);
+
+impl<S: Send + Sync> FromRequest<S> for PhotoBody {
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let is_image = req
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.trim_start().to_ascii_lowercase().starts_with("image/"));
+        if !is_image {
+            return Err(ApiError::BadRequest(
+                "send the photo as the body, with its image type as the Content-Type".into(),
+            ));
+        }
+        Bytes::from_request(req, state)
+            .await
+            .map(PhotoBody)
+            .map_err(|e| match e.status() {
+                StatusCode::PAYLOAD_TOO_LARGE => ApiError::PayloadTooLarge,
+                _ => ApiError::BadRequest(e.body_text()),
+            })
+    }
+}
+
+/// Refuses a recipe the household didn't write, before any work is done for it.
+async fn require_own(s: &AppState, id: Uuid, household: Uuid) -> ApiResult<()> {
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM variants WHERE id = $1 AND origin = 'user' AND household_id = $2",
+    )
+    .bind(id)
+    .bind(household)
+    .fetch_optional(&s.pool)
+    .await?
+    .map(|_| ())
+    .ok_or(ApiError::NotFound)
+}
+
+/// Give a recipe the household wrote its photo, replacing any it had. The body is the image itself (JPEG, PNG,
+/// WebP or GIF, at most 20 MB and 50 megapixels) with its type as the `Content-Type`. Only the picture is kept: it
+/// is decoded and stored again without the camera's metadata, such as where it was taken. Answers with the recipe.
+#[utoipa::path(
+    put, path = "/api/v1/recipes/{id}/photo", operation_id = "set_recipe_photo", tag = "recipes", params(("id" = Uuid, Path)),
+    request_body(content = Vec<u8>, content_type = "image/*", description = "The image file"),
+    responses(
+        (status = 200, description = "The recipe with its new photo", body = Recipe),
+        (status = 400, description = "The id isn't a UUID, the Content-Type isn't an image type, or the body isn't an image mise reads or has too many pixels", body = crate::error::ErrorBody),
+        (status = 404, description = "No such recipe, or not one this household wrote", body = crate::error::ErrorBody),
+        (status = 413, description = "The photo is over 20 MB", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken
+    )
+)]
+pub async fn set_photo(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Path(id): Path<Uuid>,
+    PhotoBody(photo): PhotoBody,
+) -> ApiResult<Json<Recipe>> {
+    require_own(&s, id, me.household_id).await?;
+    let media = {
+        let _turn = DECODING
+            .acquire()
+            .await
+            .map_err(|e| ApiError::Internal(e.into()))?;
+        mise_ingest::media::store_upload(&s.pool, &s.media_root, photo.into()).await
+    }
+    .map_err(|e| match e {
+        UploadError::NotAnImage => ApiError::BadRequest(
+            "that isn't a photo mise can read: send a JPEG, PNG, WebP or GIF".into(),
+        ),
+        UploadError::TooManyPixels => ApiError::BadRequest(format!(
+            "that photo is too large: at most {} megapixels",
+            MAX_UPLOAD_PIXELS / 1_000_000
+        )),
+        UploadError::Failed(e) => ApiError::Internal(e),
+    })?;
+    let mut tx = s.pool.begin().await?;
+    sqlx::query("DELETE FROM variant_media WHERE variant_id = $1 AND role = 'hero'")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query(
+        "INSERT INTO variant_media (variant_id, media_id, role, position) VALUES ($1, $2, 'hero', 0)",
+    )
+    .bind(id)
+    .bind(media)
+    .execute(&mut *tx)
+    .await?;
+    let stored = load(&mut tx, id, me.household_id).await?;
+    tx.commit().await?;
+    Ok(Json(stored))
+}
+
+/// Take the photo off a recipe the household wrote. Answers with the recipe; one without a photo stays as it is.
+#[utoipa::path(
+    delete, path = "/api/v1/recipes/{id}/photo", operation_id = "remove_recipe_photo", tag = "recipes", params(("id" = Uuid, Path)),
+    responses(
+        (status = 200, description = "The recipe without a photo", body = Recipe),
+        (status = 400, description = "The id isn't a UUID", body = crate::error::ErrorBody),
+        (status = 404, description = "No such recipe, or not one this household wrote", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken
+    )
+)]
+pub async fn remove_photo(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Recipe>> {
+    let mut tx = s.pool.begin().await?;
+    let stored = load(&mut tx, id, me.household_id).await?;
+    sqlx::query("DELETE FROM variant_media WHERE variant_id = $1 AND role = 'hero'")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(Json(Recipe {
+        image: None,
+        ..stored
+    }))
+}
+
+/// Ingredient lines to read without saving anything.
+#[derive(Deserialize, ToSchema)]
+pub struct LinesInput {
+    /// At most 200 lines of at most 300 characters; blank lines are dropped.
+    pub lines: Vec<String>,
+}
+
+/// Ingredient lines, read.
+#[derive(Serialize, ToSchema)]
+pub struct LinesRead {
+    pub lines: Vec<RecipeLine>,
+}
+
+/// Read ingredient lines as saving a recipe would, without saving: what each line's amount, unit, name and note
+/// are, and the food its name matches. An editor shows these as the cook types. A line whose name no food has yet
+/// comes back without a food; saving the recipe makes one.
+#[utoipa::path(
+    post, path = "/api/v1/recipes/lines", operation_id = "read_recipe_lines", tag = "recipes", request_body = LinesInput,
+    responses(
+        (status = 200, description = "Each line, read", body = LinesRead),
+        (status = 400, description = "There are too many lines, one is too long, or the body isn't JSON of the right shape", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken,
+        crate::error::TooLarge
+    )
+)]
+pub async fn read_lines(
+    State(s): State<AppState>,
+    JsonBody(input): JsonBody<LinesInput>,
+) -> ApiResult<Json<LinesRead>> {
+    let lines = check_lines(
+        input
+            .lines
+            .into_iter()
+            .map(|text| LineInput {
+                text,
+                food_id: None,
+            })
+            .collect(),
+    )?;
+    // Foods are found by the same key the matcher uses, so what shows here is what saving will choose.
+    let keys: Vec<String> = lines.iter().map(|l| singular_key(l.name())).collect();
+    let foods: HashMap<String, FoodRef> = sqlx::query_as::<_, (String, Uuid, String)>(
+        "SELECT a.alias, f.id, f.name FROM food_aliases a JOIN foods f ON f.id = a.food_id WHERE a.alias = ANY($1)",
+    )
+    .bind(&keys)
+    .fetch_all(&s.pool)
+    .await?
+    .into_iter()
+    .map(|(alias, id, name)| (alias, FoodRef { id, name }))
+    .collect();
+    let lines = lines
+        .into_iter()
+        .zip(keys)
+        .map(|(l, key)| RecipeLine {
+            name: l.name().to_string(),
+            amount: l.read.amount,
+            unit: l.read.unit_word(),
+            note: l.read.note,
+            food: foods.get(&key).cloned(),
+            text: l.text,
+        })
+        .collect();
+    Ok(Json(LinesRead { lines }))
+}
