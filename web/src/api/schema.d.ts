@@ -219,6 +219,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import the recipes on a web page into the household. The server fetches the page, which must be on the public
+         *     internet (unless the install sets `IMPORT_ALLOW_PRIVATE`), and reads its schema.org Recipe data; each recipe
+         *     becomes a version only this household sees, grouped into a dish like any other. Importing a page whose recipe
+         *     hasn't changed changes nothing; a changed one becomes a new version.
+         */
+        post: operations["import_url"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/kitchen-tokens": {
         parameters: {
             query?: never;
@@ -762,7 +784,7 @@ export interface components {
          * @description What kind of error a response is, named for programs: stable across releases, whatever the message says.
          * @enum {string}
          */
-        ErrorCode: "not_found" | "bad_request" | "unauthorized" | "bad_credentials" | "forbidden" | "method_not_allowed" | "conflict" | "account_changed" | "payload_too_large" | "too_many_requests" | "internal";
+        ErrorCode: "not_found" | "bad_request" | "unauthorized" | "bad_credentials" | "forbidden" | "method_not_allowed" | "conflict" | "account_changed" | "payload_too_large" | "too_many_requests" | "internal" | "site_failed";
         ExtraChange: {
             checked: boolean;
         };
@@ -804,6 +826,34 @@ export interface components {
             original: string;
             /** @description Longest side at most 400 px. */
             small: string;
+        };
+        /** @description What importing a page did. */
+        Import: {
+            /** @description Each recipe on the page, in page order; most pages have one. */
+            recipes: components["schemas"]["ImportedRecipe"][];
+        };
+        /** @description A page to import. */
+        ImportInput: {
+            /** @description The page's address: "https://recipes.example/leek-soup". */
+            url: string;
+        };
+        /** @description One recipe from the page, as imported. */
+        ImportedRecipe: {
+            /** @description The slug of the dish it joined, for `/api/v1/dishes/{slug}`. */
+            dish_slug: string;
+            /**
+             * @description Why the recipe's photo wasn't kept, when it has one that wasn't: "its photo couldn't be kept: the site took
+             *     too long to answer".
+             */
+            photo_problem?: string | null;
+            title: string;
+            /** @description The household had already imported this recipe as it is now, so nothing changed. */
+            unchanged: boolean;
+            /**
+             * Format: uuid
+             * @description The version made of it: `/api/v1/variants/{id}` shows it at any serving count.
+             */
+            variant_id: string;
         };
         Ingredient: {
             allergens: string[];
@@ -1893,6 +1943,93 @@ export interface operations {
             };
             /** @description The server failed; the details are in its log */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    import_url: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportInput"];
+            };
+        };
+        responses: {
+            /** @description The page's recipes, imported */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Import"];
+                };
+            };
+            /** @description The address isn't a web link mise fetches (not http or https, a private or local address, a port of another service), there's no site at it, or the page isn't a page, is too large or holds no recipe; or the body isn't JSON of the right shape */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The body is over 2 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The site didn't answer, took too long, redirected too often or answered with an error */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

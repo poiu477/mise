@@ -2,6 +2,7 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
 import { api } from "../api/client";
 import { answer } from "../api/query";
+import { useSession } from "../session";
 
 const PAGE = 24;
 const TYPES = [
@@ -14,6 +15,9 @@ const TYPES = [
  * recipes by default), 24 at a time with "Show more". */
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
+  const { session } = useSession();
+  // Importing needs the server and an account: not offline, and not on a kitchen device.
+  const canImport = session.status === "in" && !session.me.kitchen;
   const q = params.get("q") ?? "";
   const ingredient = params.get("ingredient") ?? "";
   const type = params.get("type") ?? "recipe";
@@ -86,6 +90,11 @@ export function SearchPage() {
               ? `${total.toLocaleString()} dishes`
               : "Loading…"}
         </p>
+        {canImport && (
+          <Link to="/import" className="import-link">
+            Import from a link
+          </Link>
+        )}
       </div>
 
       <ul className="grid">

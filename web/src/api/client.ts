@@ -92,6 +92,8 @@ export type Variant = components["schemas"]["Variant"];
 export type Ingredient = components["schemas"]["Ingredient"];
 /** One cooking step, with flags for wording or amounts worth a second look at this size. */
 export type Step = components["schemas"]["Step"];
+/** One recipe a page import made: its version, its dish's slug, and whether anything was left out. */
+export type ImportedRecipe = components["schemas"]["ImportedRecipe"];
 /** A stored photo, with links to its original, large and small copies. */
 export type Image = components["schemas"]["Image"];
 /** How people can sign in here (password, single sign-on), and whether first-run setup is still to do. */

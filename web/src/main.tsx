@@ -8,6 +8,7 @@ import { Layout } from "./components/Layout";
 import { SearchPage } from "./pages/SearchPage";
 import { DishPage } from "./pages/DishPage";
 import { CardPage } from "./pages/CardPage";
+import { ImportPage } from "./pages/ImportPage";
 import { NotFound } from "./pages/NotFound";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
       { path: "/", element: <SearchPage /> },
       { path: "/dishes/:slug", element: <DishPage /> },
       { path: "/dishes/:slug/card", element: <CardPage /> },
+      { path: "/import", element: <ImportPage /> },
       { path: "/plan", element: <PlanPage /> },
       { path: "/shopping", element: <ShoppingPage /> },
       { path: "/login", element: <LoginPage /> },
