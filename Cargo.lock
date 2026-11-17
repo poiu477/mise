@@ -1771,6 +1771,7 @@ dependencies = [
  "mise-core",
  "mise-db",
  "rayon",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2 0.11.1",
