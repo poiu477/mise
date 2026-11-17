@@ -13,3 +13,4 @@ pub mod options;
 pub mod prune;
 pub mod schema_org;
 pub mod steps;
+pub mod web;

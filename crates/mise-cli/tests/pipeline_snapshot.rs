@@ -87,6 +87,7 @@ async fn demo_bundle_through_every_stage_matches_the_snapshots() {
     let state = AppState {
         pool: pool.clone(),
         media_root: PathBuf::from("./no-media"),
+        fetcher: Arc::new(mise_ingest::fetch::Fetcher::new(false)),
         auth: Arc::new(Auth::new(AuthConfig {
             local: true,
             oidc: None,

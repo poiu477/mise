@@ -254,6 +254,8 @@ pub struct Fetcher {
     lookup: Box<dyn Fn(String, u16) -> Lookup + Send + Sync>,
     page_deadline: Duration,
     image_deadline: Duration,
+    /// Exact addresses (address and port) let through as if public: see [`Fetcher::allowing`].
+    allowed_addrs: Vec<SocketAddr>,
     /// Addresses a test's own server listens on, let through as if public so the checks around them still run.
     #[cfg(test)]
     trusted: Vec<IpAddr>,
@@ -267,6 +269,7 @@ impl Fetcher {
             lookup: Box::new(system_lookup),
             page_deadline: PAGE_DEADLINE,
             image_deadline: IMAGE_DEADLINE,
+            allowed_addrs: Vec::new(),
             #[cfg(test)]
             trusted: Vec::new(),
         }
@@ -277,6 +280,14 @@ impl Fetcher {
         let allow = std::env::var("IMPORT_ALLOW_PRIVATE")
             .is_ok_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "true" | "1"));
         Fetcher::new(allow)
+    }
+
+    /// This fetcher, also letting requests through to these exact addresses (address and port) as if they were
+    /// public, every other check unchanged: for tests that serve pages from this machine. Another port on the same
+    /// address is still refused.
+    pub fn allowing(mut self, addrs: Vec<SocketAddr>) -> Fetcher {
+        self.allowed_addrs = addrs;
+        self
     }
 
     /// Whether private addresses are allowed (`IMPORT_ALLOW_PRIVATE`).
@@ -311,12 +322,14 @@ impl Fetcher {
     }
 
     /// Whether a request may go to this address.
-    fn allowed(&self, ip: IpAddr) -> bool {
+    fn allowed(&self, ip: IpAddr, port: u16) -> bool {
         #[cfg(test)]
         if self.trusted.contains(&ip) {
             return true;
         }
-        self.allow_private || is_public(ip)
+        self.allow_private
+            || is_public(ip)
+            || self.allowed_addrs.contains(&SocketAddr::new(ip, port))
     }
 
     /// Checks one address before anything is sent to it, and resolves its host: the host as the request will name
@@ -349,11 +362,11 @@ impl Fetcher {
         let not_public = || FetchError::NotPublic { host: name.clone() };
         match host {
             Host::Ipv4(ip) => self
-                .allowed(ip.into())
+                .allowed(ip.into(), port)
                 .then(|| (name.clone(), Vec::new()))
                 .ok_or_else(not_public),
             Host::Ipv6(ip) => self
-                .allowed(ip.into())
+                .allowed(ip.into(), port)
                 .then(|| (name.clone(), Vec::new()))
                 .ok_or_else(not_public),
             Host::Domain(domain) => {
@@ -364,7 +377,7 @@ impl Fetcher {
                     .ok_or_else(|| FetchError::NoSuchHost { host: name.clone() })?;
                 // One address that isn't public refuses the host: a name that answers with both is not one to
                 // pick the good half of.
-                if !addrs.iter().all(|a| self.allowed(a.ip())) {
+                if !addrs.iter().all(|a| self.allowed(a.ip(), port)) {
                     return Err(not_public());
                 }
                 Ok((name.clone(), addrs))

@@ -399,6 +399,19 @@ async fn a_name_with_no_address_is_not_a_site() {
 }
 
 #[tokio::test]
+async fn an_address_let_through_lets_through_only_that_port() {
+    let site = Site::serving(vec![("/soup", page("soup"))]).await;
+    let f = Fetcher::new(false).allowing(vec![site.addr]);
+    assert_eq!(f.page(&site.url("/soup")).await.unwrap().html, "soup");
+    let other = format!("http://127.0.0.1:{}/", site.addr.port() + 1);
+    let refused = checked(&f, &other).await.unwrap_err();
+    assert!(
+        matches!(refused, FetchError::NotPublic { .. }),
+        "{refused:?}"
+    );
+}
+
+#[tokio::test]
 async fn a_page_is_fetched_with_its_address() {
     let site = Site::serving(vec![("/soup", page("<title>Leek soup</title>"))]).await;
     let fetched = fetcher().page(&site.url("/soup")).await.unwrap();
