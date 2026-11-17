@@ -1,18 +1,20 @@
-//! Loading dish decisions (docs/curation.md): which recipe records belong in one dish, and which pairs a person
-//! looked at and kept apart. The file is the source of truth: applying it replaces the table.
+//! Dish decisions (docs/curation.md): which recipe records belong in one dish, and which pairs a person looked at
+//! and kept apart. A decisions file is the source of truth when it is applied: applying it replaces the table. The
+//! web app's review page records one decision at a time ([`record`]), and [`export`] writes the table back out as
+//! such a file.
 
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use serde::Deserialize;
-use sqlx::PgPool;
+use serde::{Deserialize, Serialize};
+use sqlx::{PgPool, Postgres, Transaction};
 
 /// One record: the source it came from and its id there.
-#[derive(Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 pub struct Record(pub String, pub String);
 
 /// A decision about one pair of records: `{"decision": "merge", "a": [...], "b": [...], "note": "renamed"}`.
-#[derive(Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Decision {
     /// "merge" (the two belong in one dish) or "keep_apart" (looked at; don't propose the pair again).
     pub decision: String,
@@ -24,6 +26,7 @@ pub struct Decision {
     #[serde(default = "user")]
     pub by: String,
     /// Why, in a few words: "renamed: same recipe".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
 }
 
@@ -93,27 +96,7 @@ pub async fn apply_file(pool: &PgPool, path: &Path) -> Result<ApplyStats> {
             "keep_apart" => stats.keep_apart += 1,
             other => bail!("unknown decision {other:?} (expected merge or keep_apart)"),
         }
-        // One row per unordered pair, so the same pair decided twice keeps the later decision.
-        let (a, b) = if (&d.a.0, &d.a.1) <= (&d.b.0, &d.b.1) {
-            (&d.a, &d.b)
-        } else {
-            (&d.b, &d.a)
-        };
-        sqlx::query(
-            "INSERT INTO dish_decisions (a_source, a_external, b_source, b_external, decision, decided_by, note)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (a_source, a_external, b_source, b_external)
-             DO UPDATE SET decision = EXCLUDED.decision, decided_by = EXCLUDED.decided_by, note = EXCLUDED.note",
-        )
-        .bind(&a.0)
-        .bind(&a.1)
-        .bind(&b.0)
-        .bind(&b.1)
-        .bind(&d.decision)
-        .bind(&d.by)
-        .bind(&d.note)
-        .execute(&mut *tx)
-        .await?;
+        record(&mut tx, d).await?;
     }
     stats.unknown_records = sqlx::query_scalar::<_, i64>(
         "SELECT count(*) FROM dish_decisions dd WHERE NOT EXISTS (
@@ -127,4 +110,64 @@ pub async fn apply_file(pool: &PgPool, path: &Path) -> Result<ApplyStats> {
     .await? as usize;
     tx.commit().await?;
     Ok(stats)
+}
+
+/// Records one decision beside those already there, inside the caller's transaction; a pair decided before takes
+/// the new decision. `mise group-dishes` honours it from its next run.
+pub async fn record(tx: &mut Transaction<'_, Postgres>, d: &Decision) -> Result<()> {
+    // One row per unordered pair, so the same pair decided twice keeps the later decision.
+    let (a, b) = if d.a <= d.b {
+        (&d.a, &d.b)
+    } else {
+        (&d.b, &d.a)
+    };
+    sqlx::query(
+        "INSERT INTO dish_decisions (a_source, a_external, b_source, b_external, decision, decided_by, note)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (a_source, a_external, b_source, b_external)
+         DO UPDATE SET decision = EXCLUDED.decision, decided_by = EXCLUDED.decided_by, note = EXCLUDED.note",
+    )
+    .bind(&a.0)
+    .bind(&a.1)
+    .bind(&b.0)
+    .bind(&b.1)
+    .bind(&d.decision)
+    .bind(&d.by)
+    .bind(&d.note)
+    .execute(&mut **tx)
+    .await
+    .context("recording a dish decision")?;
+    Ok(())
+}
+
+/// Every recorded decision, as a decisions file holds them (`mise dish apply` loads it back), in a fixed order.
+pub async fn export(pool: &PgPool) -> Result<Vec<Decision>> {
+    type Row = (
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+    );
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT decision, a_source, a_external, b_source, b_external, decided_by, note FROM dish_decisions
+         ORDER BY a_source, a_external, b_source, b_external",
+    )
+    .fetch_all(pool)
+    .await
+    .context("reading dish decisions")?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(decision, a_source, a_external, b_source, b_external, by, note)| Decision {
+                decision,
+                a: Record(a_source, a_external),
+                b: Record(b_source, b_external),
+                by,
+                note,
+            },
+        )
+        .collect())
 }

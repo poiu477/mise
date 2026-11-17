@@ -10,6 +10,8 @@ pub enum DishCommand {
     Apply { file: std::path::PathBuf },
     /// Load how often each version has been had (docs/curation.md), replacing what was recorded. Run group-dishes after.
     Prefer { file: std::path::PathBuf },
+    /// Write the recorded decisions to FILE, as `apply` reads them (docs/curation.md).
+    Export { file: std::path::PathBuf },
 }
 
 pub async fn run(pool: &PgPool, cmd: DishCommand) -> Result<()> {
@@ -21,6 +23,11 @@ pub async fn run(pool: &PgPool, cmd: DishCommand) -> Result<()> {
         DishCommand::Prefer { file } => {
             let versions = mise_ingest::dish_decisions::apply_preferred(pool, &file).await?;
             tracing::info!(versions, "preferred versions recorded");
+        }
+        DishCommand::Export { file } => {
+            let decisions = mise_ingest::dish_decisions::export(pool).await?;
+            crate::write_json(&file, serde_json::to_value(&decisions)?)?;
+            tracing::info!(decisions = decisions.len(), file = %file.display(), "dish decisions written");
         }
     }
     Ok(())

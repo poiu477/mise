@@ -22,6 +22,8 @@ pub enum FoodCommand {
         #[arg(long = "alias")]
         aliases: Vec<String>,
     },
+    /// FOOD is right as it stands: it becomes yours, and matching stops asking about it.
+    Keep { food: String },
     /// Make FOOD a kind of PARENT.
     SetParent { food: String, parent: String },
     /// Make FOOD top-level.
@@ -53,6 +55,8 @@ pub enum FoodCommand {
     },
     /// Apply a JSON file of operations (see docs/curation.md), all or nothing.
     Apply { file: std::path::PathBuf },
+    /// Write the hand edits this database holds to FILE, as operations `apply` reads (see docs/curation.md).
+    Export { file: std::path::PathBuf },
 }
 
 pub async fn run(pool: &PgPool, cmd: FoodCommand) -> Result<()> {
@@ -64,6 +68,13 @@ pub async fn run(pool: &PgPool, cmd: FoodCommand) -> Result<()> {
             }
             return Ok(());
         }
+        FoodCommand::Export { file } => {
+            let ops = curate::export(pool).await?;
+            crate::write_json(&file, serde_json::to_value(&ops)?)?;
+            tracing::info!(operations = ops.len(), file = %file.display(), "food edits written");
+            return Ok(());
+        }
+        FoodCommand::Keep { food } => Op::Keep { food },
         FoodCommand::Add {
             name,
             parent,
