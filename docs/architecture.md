@@ -15,7 +15,7 @@ web/ (React PWA) ──HTTP──> mise-api (axum) ──> mise-core (pure logic
 | `mise-core` | Pure logic, no I/O: quantities and units, scaling, rounding into standard measures, step-text templates, shopping totals, dish titles, food names | serde, regex |
 | `mise-db` | The connection pool and the embedded migrations | sqlx |
 | `mise-ingest` | Getting data in: seed bundles, schema.org Recipe data from web pages and files, food matching, curation files, dish grouping and decisions, options, media, step parsing, pruning | core, db |
-| `mise-api` | The REST API and `mise-server` binary: auth, dishes, versions, media, plan, shopping; OpenAPI via utoipa | core, db |
+| `mise-api` | The REST API and `mise-server` binary: auth, dishes, versions, media, plan, shopping, review queues; OpenAPI via utoipa | core, db, ingest |
 | `mise-cli` | The `mise` binary: wraps ingest, plus food/dish/user commands and the gate and scaling reports | core, db, ingest |
 
 ## Data model
@@ -43,7 +43,9 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
   any serving count.
 - **Media.** Content-addressed `media` (by hash) with `media_derivatives` (web sizes) and links to variants, steps
   and foods.
-- **Review.** `review_items` queue doubtful merges, unmatched names and conflicting evidence for a person.
+- **Review.** `review_items` queue doubtful merges, unmatched names and conflicting evidence for a person. An admin
+  answers food matches, food parents and dish merges on the web app's review page (`mise-api`'s `review` module),
+  which applies the same curation operation or dish decision as the `mise` command would.
 - **Accounts.** `households` (the sharing boundary), `users`, `user_identities` (OIDC), `sessions`, `api_tokens`,
   `kitchen_tokens` (a kitchen device's one-time link, then its cookie).
 - **Planning.** `plan_entries` (a version and serving count in a household's week, named by its Monday);

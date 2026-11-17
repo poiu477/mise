@@ -154,19 +154,6 @@ override it.
 - **Done when:** API tests cover each level, the partner link both ways, the cap, and a withdrawn share with an
   existing fork.
 
-### T32 · Review queues in the web app
-
-Food matches, food parents and doubtful dish merges wait in `review_items`, answered today only with `mise`
-commands and the gate report.
-
-- An admin page listing open items by kind, with the proposal and its confidence, to accept, reject or edit. A
-  decision is stored the way the `mise` commands store it (food edits make the food `origin = user`; dish decisions
-  go in `dish_decisions`), so a re-run keeps it; `mise food export` and `mise dish export` write them back out as
-  curation files.
-- **Touches:** `crates/mise-api/src/` (a new module), `crates/mise-cli/src/` (the exports), `web/src/`.
-- **Done when:** API tests decide one item of each kind and show a re-run of the stage keeps the decision; the
-  exports round-trip through `apply`; a browser journey accepts a food match.
-
 ## Needs a decision first
 
 Each of these waits on a question in status.md's "Open questions" or on Paul.
@@ -208,8 +195,8 @@ Phase 3, still to build:
 - Nextcloud Tasks (the list as CalDAV to-dos) and Calendar (the plan as events or an iCal feed).
 - Days in the plan (meals belong to a week today).
 
-Phase 4, kitchen and imports, is broken into T23 to T32 under Ready: kitchen mode, import from a link and from
-files, the editor and forks, sharing, and review queues in the web app (recipes owned by a household, T22, and
-printable cards, T33, are done). Its gate is T24's kitchen journey and T25's 20 sample pages (that half passes since T25).
+Phase 4, kitchen and imports, is broken into T23 to T31 under Ready: kitchen mode, import from a link and from
+files, the editor and forks, and sharing (recipes owned by a household, T22, printable cards, T33, and review queues
+in the web app, T32, are done). Its gate is T24's kitchen journey and T25's 20 sample pages (that half passes since T25).
 
 Break a phase item into Ready tasks, in the shape above, before starting it.
