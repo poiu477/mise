@@ -313,7 +313,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A photo. `size` is `400`, `1200` or `original`; a size the photo was never made in falls back to the original. */
+        /**
+         * A photo. `size` is `400`, `1200` or `original`; a size the photo was never made in falls back to the original.
+         *     A photo is served only to a household that can see a version using it; a food's picture is served to everyone.
+         *     Another household's photo is not found, as if it didn't exist.
+         */
         get: operations["get_media"];
         put?: never;
         post?: never;
@@ -2206,7 +2210,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description No such photo, or its file is missing */
+            /** @description No such photo, not one a version this household can see uses, or its file is missing */
             404: {
                 headers: {
                     [name: string]: unknown;

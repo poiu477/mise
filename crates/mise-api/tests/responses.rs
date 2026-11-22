@@ -608,6 +608,15 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
         .execute(&app.pool)
         .await
         .unwrap();
+    // A photo is served only when a version the household can see uses it: it is the dish's version's.
+    sqlx::query(
+        "INSERT INTO variant_media (variant_id, media_id, role) VALUES ($1::uuid, $2, 'hero')",
+    )
+    .bind(dish["default_variant"].as_str().unwrap())
+    .bind(photo)
+    .execute(&app.pool)
+    .await
+    .unwrap();
     c.expect(
         PHOTO,
         &format!("/api/v1/media/{photo}/original"),

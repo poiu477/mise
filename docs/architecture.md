@@ -42,7 +42,8 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
 - **Steps.** `steps` hold the published text and, after `mise parse-steps`, a template (JSON) that can be rendered at
   any serving count.
 - **Media.** Content-addressed `media` (by hash) with `media_derivatives` (web sizes) and links to variants, steps
-  and foods.
+  and foods. A photo has no owner of its own: it is the versions' that use it, and a food's picture is everyone's
+  (taken only from versions no household owns).
 - **Review.** `review_items` queue doubtful merges, unmatched names and conflicting evidence for a person.
 - **Accounts.** `households` (the sharing boundary), `users`, `user_identities` (OIDC), `sessions`, `api_tokens`,
   `kitchen_tokens` (a kitchen device's one-time link, then its cookie).
@@ -98,7 +99,10 @@ else a session cookie (`mise_session`), else a kitchen device's cookie (`mise_ki
 their `household_id`, and every planning query is scoped by it. Recipe queries (search, the dish page, a version, the
 plan and the shopping list) read only the versions `visible_to` that household: another household's version answers
 404, like one that doesn't exist, and a dish two households share shows each its own share of versions and option
-choices. A kitchen device has no account: its `CurrentUser` carries its kitchen token's id, its household and
+choices. A photo (`/media`) follows the versions that use it: it is served to a household that can see one of them,
+a food's picture to everyone, and any other answers the 404 of a photo that doesn't exist. Photos are sent
+`Cache-Control: private`, so no shared cache answers in the server's place. A kitchen device has no account: its
+`CurrentUser` carries its kitchen token's id, its household and
 `Via::Kitchen`, so its reads go through the same household scoping, and `require_auth` refuses it every route but the
 few `auth::kitchen::may` lists (reading `/me`, the plan, dishes, versions and photos) before any handler runs; `/me`
 answers it with `kitchen: true` and no username, email or household name. Its cookie comes from a one-time link an
@@ -141,8 +145,9 @@ Offline: `public/sw.js` keeps the app's files and recipe data (network first, ca
 and never caches account data. It reads the API's old and new addresses alike, so a page still running the app from
 before the move to `/api/v1` keeps working through it. The shopping list keeps its own copy in `offline.ts`: each
 week's list as last seen, plus ticks and hand-added items made without a connection, sent in order once the server
-answers. Everything kept on the device is per account and cleared on sign-out. Service workers need HTTPS on a phone
-(or localhost).
+answers. Everything kept on the device is per account and cleared on sign-out: the list's copy, and the recipes and
+photos the service worker kept, which it serves without asking the server and so also forgets when another household
+signs in on the same browser. Service workers need HTTPS on a phone (or localhost).
 
 ## Deployment
 
