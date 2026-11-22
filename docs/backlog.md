@@ -144,6 +144,21 @@ commands and the gate report.
 - **Done when:** API tests decide one item of each kind and show a re-run of the stage keeps the decision; the
   exports round-trip through `apply`; a browser journey accepts a food match.
 
+### T34 · Dates and times without chrono
+
+chrono is unmaintained (RUSTSEC-2026-0543, accepted in `deny.toml` until this and openidconnect allow otherwise).
+
+- Move mise's own code from chrono to `time` (already a dependency of `mise-api`) or `jiff`, whichever reads more
+  plainly in the week and plan code: `mise-core`, `mise-ingest`, `mise-api`, `mise-cli`, and sqlx's and utoipa's
+  `chrono` features for their `time` ones. Weeks are named by their Monday and plans are dates, so most of it is
+  `NaiveDate`.
+- chrono stays in `Cargo.lock` through `oauth2` and `openidconnect` until they drop it; say so in the merge request,
+  and keep the `deny.toml` entry until `cargo tree -i chrono` shows only them.
+- **Touches:** every crate's dates (`plan.rs`, `shopping.rs`, `week` handling, the gate report), every `Cargo.toml`.
+- **Needs:** nothing else in flight in `crates/mise-api/src/plan.rs` or `shopping.rs`.
+- **Done when:** `cargo tree -i chrono -e normal` lists only `oauth2` and `openidconnect`; the API document's date and
+  time formats are unchanged (`web/scripts/check-openapi.mjs` and a diff of `web/src/api/schema.d.ts` show it).
+
 ## Needs a decision first
 
 Each of these waits on a question in status.md's "Open questions" or on Paul.
