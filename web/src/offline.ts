@@ -111,6 +111,24 @@ export function forgetDevice(store: Store = browserStore) {
   for (const k of store.keys()) if (k.startsWith(PREFIX)) store.remove(k);
 }
 
+/** Whether `me` is of another household than the account this device remembers (one whose session ended
+ * without signing out, or a kitchen device's household when an account signs in on it). The recipes and photos
+ * kept for offline use were that household's, so they are forgotten before this one's are kept. */
+export function anotherHousehold(me: Me, store: Store = browserStore): boolean {
+  const last = rememberedMe(store);
+  return !!last && last.household.id !== me.household.id;
+}
+
+/** Has the service worker forget the recipes and photos it kept for offline use (`public/sw.js`). They are a
+ * household's: the server serves each only to a household that may see it, and a kept copy is served without
+ * asking. Without a service worker (plain HTTP, development) nothing was kept. */
+export function forgetKeptRecipes() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.ready
+    .then((registration) => registration.active?.postMessage("forget"))
+    .catch(() => {});
+}
+
 /** One account's copy of its lists and its waiting changes. */
 export function deviceCopy(user: string, store: Store = browserStore) {
   const listKey = (week: string) => `${PREFIX}${user}:list:${week}`;

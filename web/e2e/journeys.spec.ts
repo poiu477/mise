@@ -537,7 +537,23 @@ test("pages have no serious accessibility problems", async () => {
   }
 });
 
+/** The API answers the service worker holds for offline use: recipes and photos, by address. */
+const keptAnswers = () =>
+  page.evaluate(async () => {
+    const kept: string[] = [];
+    for (const name of await caches.keys()) {
+      const requests = await (await caches.open(name)).keys();
+      kept.push(
+        ...requests.map((r) => new URL(r.url).pathname).filter((p) => p.startsWith("/api")),
+      );
+    }
+    return kept;
+  });
+
 test("signing out leaves nothing of the household on the device", async () => {
+  // The journeys so far left recipes kept for offline use.
+  await page.goto("/");
+  await expect.poll(keptAnswers).not.toEqual([]);
   await page.goto("/account");
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
@@ -545,4 +561,7 @@ test("signing out leaves nothing of the household on the device", async () => {
     Object.keys(localStorage).filter((k) => k.startsWith("mise:")),
   );
   expect(kept).toEqual([]);
+  // Nor the recipes and photos kept for offline use: they are the household's, and the next person to sign in
+  // here may be of another.
+  await expect.poll(keptAnswers).toEqual([]);
 });

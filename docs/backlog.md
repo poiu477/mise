@@ -109,8 +109,8 @@ status.md if it changed either.
   and matched to a food, with the match returned so the editor can show and correct it), steps with references to
   ingredients, and photos (uploaded, checked with the `image` crate, size-limited, stored like the others). Own
   versions use the `user` source and `origin = 'user'`, and belong to the household (T22: `variants.household_id`).
-  A photo of an own version is served only to households that can see a version using it: today `/media` serves
-  any photo by id to anyone signed in, which was harmless while every photo came from the seed.
+  `/media` already serves a photo only to households that can see a version using it, so an uploaded photo needs
+  only its `variant_media` link.
 - **Touches:** `crates/mise-api/src/` (a new module), `crates/mise-ingest/src/` (reusing the line parser and
   matcher), `web/src/api/schema.d.ts` (regenerated).
 - **Needs:** T22.

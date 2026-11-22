@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ShoppingList } from "./api/client";
+import type { Me, ShoppingList } from "./api/client";
 import {
   addition,
+  anotherHousehold,
   deviceCopy,
   forgetDevice,
   isLocal,
@@ -70,21 +71,34 @@ const tick = (key: string, checked: boolean, week = WEEK): Change => ({
   checked,
 });
 
+/** The account `id` of household `household`, as `/api/v1/me` describes it. */
+const account = (id = "me", household = "h"): Me => ({
+  id,
+  username: "paul",
+  display_name: "Paul",
+  email: null,
+  is_admin: true,
+  has_password: true,
+  household: { id: household, name: "Home" },
+  kitchen: false,
+});
+
 /** Signed in on this device as `id`, as the session does after `/api/v1/me` answers. */
-const signedIn = (store: Store, id = "me") =>
-  rememberMe(
-    {
-      id,
-      username: "paul",
-      display_name: "Paul",
-      email: null,
-      is_admin: true,
-      has_password: true,
-      household: { id: "h", name: "Home" },
-      kitchen: false,
-    },
-    store,
-  );
+const signedIn = (store: Store, id = "me") => rememberMe(account(id), store);
+
+describe("recipes and photos kept for offline use", () => {
+  it("are another household's only when one was last signed in here and never signed out", () => {
+    const store = memory();
+    // Nobody is remembered on a new device, or after signing out, which forgets the kept copies itself.
+    expect(anotherHousehold(account(), store)).toBe(false);
+    signedIn(store);
+    expect(anotherHousehold(account("me"), store)).toBe(false);
+    expect(anotherHousehold(account("someone at home"), store)).toBe(false);
+    expect(anotherHousehold(account("neighbour", "next door"), store)).toBe(true);
+    forgetDevice(store);
+    expect(anotherHousehold(account("neighbour", "next door"), store)).toBe(false);
+  });
+});
 
 describe("the device copy", () => {
   it("keeps each week's list and the waiting changes, per account", () => {

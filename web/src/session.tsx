@@ -10,7 +10,13 @@ import {
   type Me,
 } from "./api/client";
 import { queryClient } from "./api/query";
-import { forgetDevice, rememberedMe, rememberMe } from "./offline";
+import {
+  anotherHousehold,
+  forgetDevice,
+  forgetKeptRecipes,
+  rememberedMe,
+  rememberMe,
+} from "./offline";
 
 /** Where the app stands with the server and who is signed in. */
 export type Session =
@@ -55,7 +61,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
     const me = await api.GET("/api/v1/me").catch(() => null);
     if (mine !== latest.current) return LOADING;
-    if (me?.data) rememberMe(me.data);
+    if (me?.data) {
+      // The last account here never signed out, and this one is another household's: its kept recipes go first.
+      if (anotherHousehold(me.data)) forgetKeptRecipes();
+      rememberMe(me.data);
+    }
     actAs(me?.data?.id ?? null);
     return me?.data ? { status: "in", info, me: me.data } : { status: "out", info };
   }, []);
@@ -77,6 +87,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await api.POST("/api/v1/auth/logout").catch(() => null);
     forgetDevice();
+    forgetKeptRecipes();
     actAs(null);
     await refresh();
     // Nothing of the household stays in memory either.
