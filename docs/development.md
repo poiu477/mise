@@ -181,6 +181,23 @@ runner's `config.toml`:
 Then tag the runner `docker-socket` (Admin, CI/CD, Runners), leaving "Run untagged jobs" on so it takes the other
 jobs too. A fork's pipeline needs a runner set up the same way for this one job.
 
+A Docker runner's disk fills unless something prunes it, and no job does that for the host. The security scanners'
+images sit on tags GitLab moves every day or two (`gitlab-advanced-sast:2` is 1.1 GB), and each pull leaves the
+old copy behind as a `<none>` image; on a 50 GB runner that filled the disk in under two weeks (2026-11). Each
+runner host runs this from cron, in `/etc/cron.d/docker-prune`:
+
+```text
+# Old scanner images left behind when their tags move (no run uses them again), daily.
+15 4 * * * root docker image prune -f >/dev/null 2>&1
+# Build cache not used in a week; anything a recent run touched stays.
+45 4 * * * root docker builder prune -f --filter until=168h >/dev/null 2>&1
+```
+
+Images are pruned by whether a tag still points at them, not by age: an image's age is when it was built upstream,
+so a time limit would delete `rust:1.99.1-bookworm` while every job still uses it. Build cache is pruned by when it
+was last used. This is the runner hosts' setup rather than mise's, and belongs in the household's systems
+documentation once that exists; it is here until then.
+
 Security scanning comes from two places. The project's security configuration profiles (Secure, Security configuration;
 not in `.gitlab-ci.yml`) add GitLab Advanced SAST, dependency scanning and secret detection to every merge request and
 push to `main`. Advanced SAST doesn't read Rust, so the pipeline's own `rust sast` job runs Semgrep's Rust rules
