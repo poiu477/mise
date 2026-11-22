@@ -90,6 +90,9 @@ What a reviewer can rely on today:
   the list reloads a moment later.
 - Dish slugs are one namespace for the whole install, so a household's own dish can push another household's dish
   of the same name to `-2`, hinting that a dish by that name exists. Nothing else of it shows.
+- Asked for a plan or a list with no `week`, the API answers for the current week by UTC. That isn't the viewer's
+  week while their date and UTC's fall either side of a Monday's start (Sunday evening in the Americas, early
+  Monday in Asia). The web app always names its own week, by the viewer's calendar; another client must do the same.
 - A browser keeps a photo it was served (for a year: a media id never changes its bytes), so a household that stops
   seeing a version, once sharing (T31) can be withdrawn, may still see its photo in a browser that already had it.
   The server refuses it from then on, and signing out forgets the copies the web app kept.
