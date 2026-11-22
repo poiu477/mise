@@ -1,6 +1,6 @@
 // The household's journeys through mise in a real browser, on the demo recipes (fixtures/demo-bundle), from an
 // empty install: first-run setup, cooking at any serving count, an old dish address, printing a recipe card,
-// planning a week, shopping (offline too), phone layout, accessibility and signing out. They run in order and share
+// planning a week, shopping (offline too), a kitchen screen, phone layout, accessibility and signing out. They run in order and share
 // one browser session, as a person would.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
@@ -387,6 +387,103 @@ test("a list left open in one tab keeps saving after another tab signs in", asyn
   await expect(shoppingItem("Black Beans").getByRole("checkbox")).toBeChecked();
   await context.setOffline(false);
   await expect(page.getByRole("status")).toHaveCount(0, { timeout: 15_000 });
+});
+
+test("a kitchen screen steps through the week's first dish and times a step", async ({
+  browser,
+}) => {
+  // Robin, an admin, adds a kitchen screen on the account page and gets its one-time link.
+  await page.goto("/account");
+  const devices = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Kitchen devices" }),
+  });
+  await devices.getByLabel("Name").fill("Kitchen Echo");
+  await devices.getByRole("button", { name: "Add device" }).click();
+  const link = await devices.locator("code").textContent();
+  expect(link).toContain("/api/v1/auth/kitchen?code=");
+
+  // The screen in the kitchen: 1280 × 800, a browser of its own, and a clock the journey can move on.
+  const kitchen = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await kitchen.clock.install({ time: new Date() });
+  const screen = await kitchen.newPage();
+  await screen.goto(link!);
+  await expect(screen).toHaveURL(/\/kitchen$/);
+  await expect(screen.getByRole("heading", { name: "This week", exact: true })).toBeVisible();
+  await expect(screen.getByRole("navigation", { name: "Main" })).toHaveCount(0);
+
+  // This week's first planned dish, at the 2 servings planned: everything it takes, then the steps.
+  const first = screen.locator(".kitchen-dishes li").first();
+  await expect(first).toContainText("Weeknight Tomato Pasta");
+  await expect(first).toContainText("2 servings");
+  await first.getByRole("link").click();
+  await expect(screen.getByRole("heading", { level: 1 })).toHaveText("Weeknight Tomato Pasta");
+  const all = screen.getByRole("region", { name: "Ingredients" });
+  expect(await amountsIn(all)).toMatchObject({ Spaghetti: "6 oz", "Yellow Onion": "1 onion" });
+  await screen.getByRole("button", { name: "Start cooking" }).click();
+  await expect(screen.getByText("Step 1 of 5")).toBeVisible();
+
+  // A swipe to the left moves on a step; the step shows what it uses, with its amounts.
+  const text = await screen.locator(".kitchen-text").boundingBox();
+  const [x, y] = [text!.x + text!.width / 2, text!.y + text!.height / 2];
+  await screen.mouse.move(x, y);
+  await screen.mouse.down();
+  await screen.mouse.move(x - 240, y, { steps: 6 });
+  await screen.mouse.up();
+  await expect(screen.getByText("Step 2 of 5")).toBeVisible();
+  expect(await amountsIn(screen.getByRole("region", { name: "In this step" }))).toEqual({
+    Garlic: "2 cloves",
+    "Yellow Onion": "1 onion",
+    "Red Pepper Flakes": "1 pinch",
+    "Olive Oil": "1 TBSP",
+  });
+
+  // "5-6 minutes" in the step starts a timer at the range's lower end, and it counts down.
+  await screen.getByRole("button", { name: "Start a timer for 5-6 minutes" }).click();
+  const timer = screen.getByRole("region", { name: "Timers" }).getByRole("listitem");
+  await expect(timer).toContainText("Step 2: 5-6 minutes");
+  await expect(timer.getByRole("timer")).toHaveText("5:00");
+  await screen.clock.runFor(3000);
+  await expect(timer.getByRole("timer")).toHaveText("4:57");
+
+  // It keeps counting on the next step (the arrow keys move too), and the view has no serious accessibility
+  // problems, timer and all.
+  await screen.keyboard.press("ArrowRight");
+  await expect(screen.getByText("Step 3 of 5")).toBeVisible();
+  await expect(timer.getByRole("timer")).toHaveText("4:57");
+  const { violations } = await new AxeBuilder({ page: screen }).analyze();
+  const serious = violations
+    .filter((v) => v.impact === "serious" || v.impact === "critical")
+    .flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(" ")}: ${n.failureSummary}`));
+  expect(serious).toEqual([]);
+
+  // At five minutes it rings, says to check and how long the step allows, and stops when told.
+  await screen.clock.runFor(5 * 60_000);
+  await expect(screen.getByRole("alert")).toHaveText(
+    "5 minutes are up. Check it: the step allows up to 1 minute more.",
+  );
+  await timer.getByRole("button", { name: "Stop Step 2: 5-6 minutes" }).click();
+  await expect(screen.getByRole("region", { name: "Timers" })).toHaveCount(0);
+
+  // On to the last step, and done goes back to the week.
+  await screen.getByRole("button", { name: "Next" }).click();
+  await screen.getByRole("button", { name: "Next" }).click();
+  await expect(screen.getByText("Step 5 of 5")).toBeVisible();
+  await screen.getByRole("button", { name: "Done" }).click();
+  await expect(screen).toHaveURL(/\/kitchen$/);
+
+  // The step view fits a phone too, and a kitchen screen opens nothing but kitchen mode.
+  await screen.setViewportSize({ width: 375, height: 812 });
+  await first.getByRole("link").click();
+  await screen.getByRole("button", { name: "Start cooking" }).click();
+  await expect(screen.getByText("Step 1 of 5")).toBeVisible();
+  const [scroll, width] = await screen.evaluate(() => [
+    document.documentElement.scrollWidth,
+    window.innerWidth,
+  ]);
+  expect(scroll).toBeLessThanOrEqual(width);
+  await screen.goto("/shopping");
+  await expect(screen).toHaveURL(/\/kitchen$/);
+  await kitchen.close();
 });
 
 test("work queued as one person never lands on whoever signs in after them", async () => {

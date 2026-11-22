@@ -15,7 +15,8 @@ import { useSession } from "../session";
 const OPEN = ["/login", "/setup"];
 
 /** The frame round every page. It waits for the session, sends people to setup or sign-in when they need it, and
- * shows the top bar and an offline notice around the page. */
+ * shows the top bar and an offline notice around the page. Kitchen mode has its own frame, and a kitchen device
+ * opens nothing else: the rest of the app reads what it may not (the shopping list, the account). */
 export function Layout() {
   const { session } = useSession();
   const location = useLocation();
@@ -38,6 +39,10 @@ export function Layout() {
       <Navigate to={back && back.startsWith("/") && !back.startsWith("//") ? back : "/"} replace />
     );
   }
+  const me = session.status === "in" || session.status === "offline" ? session.me : null;
+  const inKitchen = location.pathname === "/kitchen" || location.pathname.startsWith("/kitchen/");
+  if (me?.kitchen && !inKitchen) return <Navigate to="/kitchen" replace />;
+  if (inKitchen) return <Outlet />;
   if (onOpenPage) {
     return (
       <main className="content open">
@@ -109,6 +114,7 @@ function TopBar() {
         <nav className="mainnav" aria-label="Main">
           <NavLink to="/plan">Plan</NavLink>
           <NavLink to="/shopping">Shopping</NavLink>
+          <NavLink to="/kitchen">Kitchen</NavLink>
         </nav>
       )}
       {me && (
