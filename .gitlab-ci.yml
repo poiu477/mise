@@ -300,12 +300,11 @@ docker image:
         || { echo "The session cookie isn't Secure"; exit 1; }
   after_script:
     - '[ "$CI_JOB_STATUS" = success ] || docker compose logs --no-color'
-    # Leave the runner's Docker as it was: this job's containers, volumes and image go; build cache older than a week
-    # goes too, so the cache can't fill the disk.
+    # Leave the runner's Docker as it was: this job's containers, volumes and image go. The build cache stays for the
+    # next run; the runner host prunes it, and old images, from cron (docs/development.md, CI runners).
     - docker rm --force "$PROBE" || true
     - docker compose down --volumes --remove-orphans || true
     - docker image rm --force "$MISE_IMAGE" || true
-    - docker builder prune --force --filter until=168h || true
 
 rust sast:
   # GitLab Advanced SAST doesn't read Rust, so this runs Semgrep's Rust rules and writes GitLab's SAST format. The
