@@ -52,6 +52,7 @@ A screen in the kitchen, such as an Echo Show, whose browser can't sign in comfo
 **Account → Kitchen devices** with a name and gets a link, shown once: open it on the device within the hour. It
 works once, and sets a cookie on the device that lasts 400 days from its last use. The device reads the household's
 plan, dishes, versions and photos and nothing else: no shopping list, accounts, names or emails, and no changes.
+It opens kitchen mode, the week's dishes a step at a time, and nothing else of the app.
 **Revoke** signs it out at its next request. A browser signed in to an account stays signed in when a kitchen link
 is opened in it, and acts as that account until it signs out. Open the link on the device itself: an app that
 previews links may open it first, and then it no longer works.

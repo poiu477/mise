@@ -113,6 +113,9 @@ on, versions everyone sees.
 - `step_amounts.rs`: step text parsed into parts (text, amounts linked to ingredient lines, worded alternatives,
   notes for larger yields) and rendered for a serving count, flagging amounts to check. Pan-sauce water keeps a
   fixed boil-off share once per pan. The rules and their evidence are in [scaling-rules.md](scaling-rules.md).
+- `step_times.rs`: the times a step asks for ("8-10 minutes", "1 hour 15 minutes", "a minute more"), with where
+  the text says them, the seconds a timer runs (a range's lower end) and a range's upper end. The API sends them with
+  each step, for kitchen mode's timers.
 - `shopping.rs`: `Measures::total()` adds a line's needs exactly, weights in a `WeightUnit` (lb + oz, oz, lb, metric),
   converting across units only where the food's density or item sizes say how; `gather()` puts kinds of a food on
   its line; `foods_to_mark()` and `all_marked()` turn ticks on lines into ticks on foods and back; `SECTIONS` is the
@@ -180,10 +183,13 @@ out, `account_changed` re-checks who is signed in). Pages load through TanStack 
 answers per page, reloads them when a page comes back into view and keeps one account's data apart from another's.
 `session.tsx` knows who is signed in (or, offline, who last was); `components/Layout.tsx` gates pages on it. Pages:
 search, dish (options, servings, add to plan), recipe card (one version and serving count laid out to print on a
-page), the recipe editor, plan, shopping, account, sign-in and first-run setup. The editor (`EditorPage.tsx`,
-with its rules in `editor.ts`) takes ingredients one to a line and steps one to a line, shows how the server
-reads each ingredient line as the cook types (asked once typing pauses) with the food it counts as, and lets
-the cook pick another; a pick belongs to the exact line it was made for, so changing the line's text drops it. `choose.ts` holds which version and serving count a
+page), the recipe editor, plan, shopping, account, sign-in and first-run setup, and kitchen mode
+(`pages/KitchenPage.tsx`: the week's dishes, then a dish a step at a time, with timers from
+`components/Timers.tsx` and the screen kept awake), which is all a kitchen device opens. The editor
+(`EditorPage.tsx`, with its rules in `editor.ts`) takes ingredients one to a line and steps one to a line, shows
+how the server reads each ingredient line as the cook types (asked once typing pauses) with the food it counts
+as, and lets the cook pick another; a pick belongs to the exact line it was made for, so changing the line's text
+drops it. `kitchen.ts` splits a step round its times and finds the ingredients it names. `choose.ts` holds which version and serving count a
 dish's address opens on, for the dish page and its card alike, and `recipe.ts` words a version's time, difficulty and
 allergens for both.
 

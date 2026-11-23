@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use axum::{Extension, Json, extract::State};
 use mise_core::servings;
 use mise_core::step_amounts::{self, Context, Template};
+use mise_core::step_times;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
@@ -52,7 +53,33 @@ pub struct Step {
     pub check: bool,
     /// The step names a yield mise could not place, so it reads as published: check its amounts.
     pub check_amounts: bool,
+    /// The times the step asks for, in the order its text gives them, for starting timers.
+    pub times: Vec<StepTime>,
     pub images: Vec<Image>,
+}
+
+/// A time a step asks for: "8-10 minutes" in "simmer until thick, 8-10 minutes".
+#[derive(Serialize, ToSchema)]
+pub struct StepTime {
+    /// The time as the step's text has it, to find it there: "8-10 minutes".
+    pub text: String,
+    /// How long to set a timer for, in seconds: the time itself, or the lower end of a range (480 for "8-10
+    /// minutes"), which is when to start checking.
+    pub seconds: u32,
+    /// The upper end of a range, in seconds (600 for "8-10 minutes"); absent for a single time.
+    pub until_seconds: Option<u32>,
+}
+
+/// The times in a step's text as it reads at the requested yield.
+fn times_in(text: &str) -> Vec<StepTime> {
+    step_times::find(text)
+        .into_iter()
+        .map(|t| StepTime {
+            text: text[t.start..t.end].to_string(),
+            seconds: t.seconds,
+            until_seconds: t.until,
+        })
+        .collect()
 }
 
 #[derive(Serialize, ToSchema)]
@@ -259,6 +286,7 @@ pub async fn get(
             };
             Step {
                 position: *position,
+                times: times_in(&r.text),
                 text: r.text,
                 scaled: r.scaled,
                 check: r.check,

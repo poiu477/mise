@@ -11,4 +11,5 @@ pub mod quantity;
 pub mod servings;
 pub mod shopping;
 pub mod step_amounts;
+pub mod step_times;
 pub mod text;
