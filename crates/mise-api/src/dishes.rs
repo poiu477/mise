@@ -178,6 +178,8 @@ pub struct VariantSummary {
     #[schema(value_type = std::collections::HashMap<String, String>)]
     pub attributes: serde_json::Value,
     pub image: Option<Image>,
+    /// This household wrote the version in the app, so it can change it at `/api/v1/recipes/{id}`.
+    pub editable: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -239,11 +241,12 @@ pub async fn get(
         Ok(DishOption { key, label, choices, default })
     })
     .collect::<ApiResult<Vec<_>>>()?;
-    let variants = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<DateTime<Utc>>, bool, Option<Vec<f64>>, serde_json::Value, Option<Uuid>)>(
+    let variants = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<DateTime<Utc>>, bool, Option<Vec<f64>>, serde_json::Value, Option<Uuid>, bool)>(
         "SELECT v.id, v.title, v.subtitle, v.published_at, v.has_steps,
                 (SELECT array_agg(y.servings::float8 ORDER BY y.servings) FROM variant_yields y WHERE y.variant_id = v.id),
                 coalesce((SELECT jsonb_object_agg(a.key, a.value) FROM variant_attributes a WHERE a.variant_id = v.id), '{}'),
-                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1)
+                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1),
+                v.origin = 'user' AND v.household_id IS NOT DISTINCT FROM $2
          FROM variants v WHERE v.dish_id = $1 AND visible_to(v, $2) ORDER BY v.published_at DESC NULLS LAST",
     )
     .bind(id)
@@ -251,7 +254,7 @@ pub async fn get(
     .fetch_all(&s.pool)
     .await?
     .into_iter()
-    .map(|(id, title, subtitle, published_at, has_steps, yields, attributes, hero)| VariantSummary {
+    .map(|(id, title, subtitle, published_at, has_steps, yields, attributes, hero, editable)| VariantSummary {
         id,
         title,
         subtitle,
@@ -260,6 +263,7 @@ pub async fn get(
         has_steps,
         attributes,
         image: hero.map(Image::new),
+        editable,
     })
     .collect::<Vec<_>>();
     // Options are derived across all of a dish's versions; where some are another household's, they are recounted

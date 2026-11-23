@@ -196,6 +196,7 @@ export function DishPage() {
         <Link to={`/dishes/${dish.slug}/card?${cardParams(dish, params, chosen.id, servings)}`}>
           Print a recipe card
         </Link>
+        {chosen.editable && <Link to={`/recipes/${chosen.id}/edit`}>Edit recipe</Link>}
       </p>
       {v && !v.official && <ScaledNotice v={v} servings={servings} />}
 

@@ -107,24 +107,12 @@ status.md if it changed either.
 - **Done when:** a test per format imports its fixture to the expected records; a browser journey uploads one file
   and opens the dish.
 
-### T29 · Write a recipe: the editor
-
-- A page to write and edit a recipe on the recipes API (`/api/v1/recipes`): ingredient lines typed as text, each
-  showing what was read from it and the food it matched (`POST /api/v1/recipes/lines` reads lines without
-  saving) and letting you pick another (`GET /api/v1/foods?q=`, sent back as the line's `food_id`), steps, the
-  servings it is written for, photo upload; usable on a 375 px phone.
-- Deleting a recipe: `DELETE /api/v1/recipes/{id}`, which the API doesn't have yet (a planned recipe leaves the
-  plan with it, and its dish goes when it was the dish's only version), and a button for it in the editor.
-- **Touches:** `web/src/` (new pages), `web/e2e/`, `crates/mise-api/src/recipes.rs` (the delete route).
-- **Done when:** a browser journey writes a recipe from nothing, corrects one food match, adds a photo, saves, and
-  opens it at another serving count; an API test deletes a recipe, planned and unplanned, and refuses another
-  household's delete; the axe scan and the 375 px check pass on the editor.
-
 ### T30 · Forks: your own version of any dish
 
 - "Make my own version" on any version you can see copies it into the household (`parent_variant_id` keeps the
-  lineage, and the dish page names the original and its author) and opens it in the editor. A fork joins the same
-  dish as one of its versions.
+  lineage, and the dish page names the original and its author) and opens it in the editor
+  (`web/src/pages/EditorPage.tsx`, which edits any version the dish page marks `editable`). A fork joins the same
+  dish as one of its versions, pinned there as a written recipe is pinned in its own.
 - **Touches:** `crates/mise-api/src/`, `web/src/`.
 - **Needs:** T29.
 - **Done when:** API tests fork a seed version and one of the household's own, and show the original is unchanged

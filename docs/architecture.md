@@ -137,7 +137,8 @@ lists every status it can answer: its own, and the shared sets in `error.rs` (`S
 list answer with the whole plan or list, so the client never has to merge.
 
 Recipes a household writes itself live under `/api/v1/recipes` (`recipes.rs`): create, read back as typed, replace,
-and set or remove the photo. Only the household that wrote a recipe can read it there or change it; for anyone
+delete, and set or remove the photo. A deleted recipe leaves every plan it was on, and its dish goes with it when
+it was the dish's only version. The dish page's versions each say whether the household can edit them (`editable`). Only the household that wrote a recipe can read it there or change it; for anyone
 else, and for a version that wasn't written in the app, the answer is the 404 of a recipe that doesn't exist. A
 save is one transaction, and saves take turns under an advisory lock, so two recipes with one title never take the
 same address. The recipe's dish follows its title: a new title gives it a new slug and retires the old one, which
@@ -165,7 +166,10 @@ out, `account_changed` re-checks who is signed in). Pages load through TanStack 
 answers per page, reloads them when a page comes back into view and keeps one account's data apart from another's.
 `session.tsx` knows who is signed in (or, offline, who last was); `components/Layout.tsx` gates pages on it. Pages:
 search, dish (options, servings, add to plan), recipe card (one version and serving count laid out to print on a
-page), plan, shopping, account, sign-in and first-run setup. `choose.ts` holds which version and serving count a
+page), the recipe editor, plan, shopping, account, sign-in and first-run setup. The editor (`EditorPage.tsx`,
+with its rules in `editor.ts`) takes ingredients one to a line and steps one to a line, shows how the server
+reads each ingredient line as the cook types (asked once typing pauses) with the food it counts as, and lets
+the cook pick another; a pick belongs to the exact line it was made for, so changing the line's text drops it. `choose.ts` holds which version and serving count a
 dish's address opens on, for the dish page and its card alike, and `recipe.ts` words a version's time, difficulty and
 allergens for both.
 

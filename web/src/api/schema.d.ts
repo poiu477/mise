@@ -492,7 +492,11 @@ export interface paths {
          */
         put: operations["update_recipe"];
         post?: never;
-        delete?: never;
+        /**
+         * Delete a recipe the household wrote, for good. It leaves every plan it was on, and its dish goes with it when
+         *     it was the dish's only version. A version copied from it stays, no longer naming it as its original.
+         */
+        delete: operations["delete_recipe"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1194,6 +1198,8 @@ export interface components {
             attributes: {
                 [key: string]: string;
             };
+            /** @description This household wrote the version in the app, so it can change it at `/api/v1/recipes/{id}`. */
+            editable: boolean;
             has_steps: boolean;
             /** Format: uuid */
             id: string;
@@ -3279,6 +3285,80 @@ export interface operations {
             };
             /** @description The body is over 2 MB */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recipe is gone */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id isn't a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such recipe, or not one this household wrote */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };

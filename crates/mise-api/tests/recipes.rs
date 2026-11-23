@@ -827,3 +827,87 @@ async fn food_search_never_offers_a_food_known_only_from_another_household_s_rec
         assert_eq!(reply.status, StatusCode::BAD_REQUEST, "{query:?}");
     }
 }
+
+#[tokio::test]
+async fn a_deleted_recipe_is_gone_from_its_dish_search_and_the_plan() {
+    let street = test_app!(Street::new());
+    let me = As::Cookie(&street.home);
+    let planned = street.write(&street.home, dal()).await;
+    let mut other = dal();
+    other["title"] = json!("Leek Soup");
+    let unplanned = street.write(&street.home, other).await;
+    let entry = json!({"week": "2027-01-04", "variant_id": planned["id"], "servings": 2});
+    let plan = street
+        .json("POST", "/api/v1/plan/entries", &street.home, Some(entry))
+        .await;
+    assert_eq!(plan["entries"].as_array().unwrap().len(), 1);
+
+    // Next door can't delete it, and nothing happens to it.
+    let path = |recipe: &Value| format!("/api/v1/recipes/{}", recipe["id"].as_str().unwrap());
+    let refused = street
+        .send(
+            "DELETE",
+            &path(&planned),
+            As::Cookie(&street.next_door),
+            None,
+        )
+        .await;
+    assert_eq!(refused.status, StatusCode::NOT_FOUND, "{}", refused.body);
+    assert_eq!(
+        street
+            .json("GET", &path(&planned), &street.home, None)
+            .await,
+        planned
+    );
+
+    for recipe in [&planned, &unplanned] {
+        let gone = street.send("DELETE", &path(recipe), me, None).await;
+        assert_eq!(gone.status, StatusCode::NO_CONTENT, "{}", gone.body);
+        let again = street.send("DELETE", &path(recipe), me, None).await;
+        assert_eq!(again.status, StatusCode::NOT_FOUND);
+        for address in [
+            path(recipe),
+            format!("/api/v1/variants/{}", recipe["id"].as_str().unwrap()),
+            format!("/api/v1/dishes/{}", recipe["dish_slug"].as_str().unwrap()),
+        ] {
+            let reply = street.send("GET", &address, me, None).await;
+            assert_eq!(reply.status, StatusCode::NOT_FOUND, "{address}");
+        }
+    }
+    let found = street
+        .json("GET", "/api/v1/dishes?q=lentil", &street.home, None)
+        .await;
+    assert_eq!(found["total"], 0, "{found}");
+    let plan = street
+        .json("GET", "/api/v1/plan?week=2027-01-04", &street.home, None)
+        .await;
+    assert_eq!(
+        plan["entries"],
+        json!([]),
+        "the planned recipe left the plan"
+    );
+    let dishes: i64 = sqlx::query_scalar("SELECT count(*) FROM dishes WHERE origin = 'user'")
+        .fetch_one(&street.pool)
+        .await
+        .unwrap();
+    assert_eq!(dishes, 0, "each recipe's own dish went with it");
+    // The address is free again for the next recipe of that name.
+    let rewritten = street.write(&street.home, dal()).await;
+    assert_eq!(rewritten["dish_slug"], "red-lentil-dal");
+}
+
+#[tokio::test]
+async fn the_dish_page_says_which_versions_the_household_can_edit() {
+    let street = test_app!(Street::new());
+    street.write(&street.home, dal()).await;
+    let own = street
+        .json("GET", "/api/v1/dishes/red-lentil-dal", &street.home, None)
+        .await;
+    assert_eq!(own["variants"][0]["editable"], true);
+    let demo = street
+        .json("GET", "/api/v1/dishes/black-bean-tacos", &street.home, None)
+        .await;
+    for version in demo["variants"].as_array().unwrap() {
+        assert_eq!(version["editable"], false, "{version}");
+    }
+}
