@@ -94,6 +94,14 @@ export type Ingredient = components["schemas"]["Ingredient"];
 export type Step = components["schemas"]["Step"];
 /** One recipe a page import made: its version, its dish's slug, and whether anything was left out. */
 export type ImportedRecipe = components["schemas"]["ImportedRecipe"];
+/** A recipe the household wrote, as it was typed, with what was read from each ingredient line. */
+export type Recipe = components["schemas"]["Recipe"];
+/** A recipe as the editor sends it: its text, and the food picked for a line when one was. */
+export type RecipeInput = components["schemas"]["RecipeInput"];
+/** One ingredient line as typed, with the amount, unit, name and note read from it and the food it matched. */
+export type RecipeLine = components["schemas"]["RecipeLine"];
+/** A food by id and name, to say which food an ingredient line is. */
+export type FoodRef = components["schemas"]["FoodRef"];
 /** A stored photo, with links to its original, large and small copies. */
 export type Image = components["schemas"]["Image"];
 /** How people can sign in here (password, single sign-on), and whether first-run setup is still to do. */

@@ -241,6 +241,7 @@ const PHOTO: (&str, &str) = ("GET", "/api/v1/media/{id}/{size}");
 const RECIPE_NEW: (&str, &str) = ("POST", "/api/v1/recipes");
 const RECIPE: (&str, &str) = ("GET", "/api/v1/recipes/{id}");
 const RECIPE_CHANGE: (&str, &str) = ("PUT", "/api/v1/recipes/{id}");
+const RECIPE_REMOVE: (&str, &str) = ("DELETE", "/api/v1/recipes/{id}");
 const RECIPE_PHOTO: (&str, &str) = ("PUT", "/api/v1/recipes/{id}/photo");
 const RECIPE_PHOTO_REMOVE: (&str, &str) = ("DELETE", "/api/v1/recipes/{id}/photo");
 const RECIPE_LINES: (&str, &str) = ("POST", "/api/v1/recipes/lines");
@@ -794,6 +795,10 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
         "no such recipe",
     )
     .await;
+    c.expect(RECIPE_REMOVE, &recipe, me, None, 204, "deleting the recipe")
+        .await;
+    c.expect(RECIPE_REMOVE, &recipe, me, None, 404, "deleting it again")
+        .await;
     let lines = json!({"lines": ["2 leeks, sliced"]});
     c.call(RECIPE_LINES, me, Some(lines), 200, "lines, read")
         .await;

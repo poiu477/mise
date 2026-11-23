@@ -1322,3 +1322,128 @@ code {
 .import-link {
   white-space: nowrap;
 }
+/* Writing a recipe */
+.write-link {
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-weight: 600;
+  padding: 6px 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.card-link a + a {
+  margin-left: 16px;
+}
+.editor {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.editor h1 {
+  font-size: 26px;
+}
+.form textarea {
+  font: inherit;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  resize: vertical;
+}
+.form textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.servings-field input {
+  max-width: 140px;
+}
+.readings {
+  margin-top: -4px;
+}
+.reading-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.reading-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+.reading-list > li:first-child {
+  border-top: 0;
+}
+.readings .reading {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.readings .food {
+  color: var(--muted);
+}
+.form .readings button,
+.form .editor-photo button {
+  font-size: 13px;
+  padding: 5px 12px;
+}
+.food-picker {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0 6px;
+}
+.food-picker label {
+  align-self: stretch;
+}
+.food-picker ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.food-picker li {
+  border: 0;
+  padding: 0;
+}
+.editor-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.editor-photo label {
+  align-self: stretch;
+}
+.editor-photo img {
+  display: block;
+  max-width: min(100%, 320px);
+  height: auto;
+  border-radius: 10px;
+}
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin-top: 8px;
+}
+.form .editor-actions button.danger {
+  margin-left: auto;
+  color: #b3261e;
+}
