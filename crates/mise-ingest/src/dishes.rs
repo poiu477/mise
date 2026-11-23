@@ -6,9 +6,10 @@
 //! `dish_decisions` override all of this: decided merges are applied last, and decided pairs are not queued
 //! again. Variants pinned by a person, and dishes a person made, are never touched.
 //!
-//! A household's own versions (imports, forks, recipes written in the app) group like any others, with one limit:
-//! they may join a dish everyone sees, but never a dish only another household can see. A dish everyone sees takes its
-//! name and the version it opens on from the versions everyone sees, so nothing of a household's own shows through it.
+//! A household's own imported versions group like any others, with one limit: they may join a dish everyone sees, but
+//! never a dish only another household can see. A dish everyone sees takes its name and the version it opens on from
+//! the versions everyone sees, so nothing of a household's own shows through it. A recipe written in the app is not
+//! grouped at all: the API puts it in a dish a person made, pinned there.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 

@@ -4,6 +4,7 @@
 
 pub mod dish_titles;
 pub mod food_names;
+pub mod ingredient_line;
 pub mod media;
 pub mod proteins;
 pub mod quantity;

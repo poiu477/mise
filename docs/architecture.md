@@ -6,16 +6,18 @@ and what else was weighed, is in the [architecture decision records](adr/README.
 
 ```text
 web/ (React PWA) ──HTTP──> mise-api (axum) ──> mise-core (pure logic)
-                                 │                  ▲
-                                 └──> mise-db ──> Postgres <── mise-ingest <── mise-cli (`mise`)
+                             │   │                  ▲
+                             │   └──> mise-ingest <─┼── mise-cli (`mise`)
+                             │             │        │
+                             └──> mise-db ──> Postgres
 ```
 
 | Crate | Holds | Depends on |
 | --- | --- | --- |
-| `mise-core` | Pure logic, no I/O: quantities and units, scaling, rounding into standard measures, step-text templates, shopping totals, dish titles, food names | serde, regex |
+| `mise-core` | Pure logic, no I/O: quantities and units, scaling, rounding into standard measures, step-text templates, ingredient lines read from text, shopping totals, dish titles, food names | serde, regex |
 | `mise-db` | The connection pool and the embedded migrations | sqlx |
 | `mise-ingest` | Getting data in: seed bundles, schema.org Recipe data from web pages and files, food matching, curation files, dish grouping and decisions, options, media, step parsing, pruning | core, db |
-| `mise-api` | The REST API and `mise-server` binary: auth, dishes, versions, media, plan, shopping; OpenAPI via utoipa | core, db |
+| `mise-api` | The REST API and `mise-server` binary: auth, dishes, versions, recipes written in the app, media, plan, shopping; OpenAPI via utoipa | core, db, ingest |
 | `mise-cli` | The `mise` binary: wraps ingest, plus food/dish/user commands and the gate and scaling reports | core, db, ingest |
 
 ## Data model
@@ -31,9 +33,12 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
   `variant_yields` are the serving counts a version was published for. `dish_options` (protein, portion, version) are
   derived from the differences between a dish's variants. `dish_decisions` (merge, keep apart) and
   `preferred_versions` (how often each version was had) steer grouping and the default version. `retired_slugs` keep
-  the addresses a dish used to have, so a renamed dish still opens from an old link.
+  the addresses a dish used to have, so a renamed dish still opens from an old link. A recipe written in the app
+  is a variant with `origin = 'user'` and no source record, in a dish of its own (`dishes.origin = 'user'`, the
+  variant `dish_pinned`), which grouping leaves alone.
 - **Ingredients.** Each `ingredient_line` belongs to a variant and points at one `food`; `line_amounts` hold its
   amount at each published yield. `shipped = false` marks pantry lines (salt, oil) the household is expected to have.
+  `text` keeps a line as it was typed ("2 cups flour, sifted") for a recipe written in the app.
 - **Foods.** A single-parent tree (`foods.parent_id`) with `food_aliases`, `food_relations` and `food_facts`. Free-form
   properties live in `foods.props`: `count_unit` and `count_size` (how "1 unit" reads), `store_section`,
   `default_flexibility`, `shop_as_one` (its kinds share a shopping line). `food_measures` hold what a food's amounts
@@ -63,6 +68,13 @@ Web pages and other apps' files will come in through the same stages. `schema_or
 schema.org Recipe data (JSON-LD, or microdata when a page has none) into records shaped like a bundle's variant
 lines, without fetching anything; the sample pages in `fixtures/web-pages/` show what each kind of markup gives.
 
+A recipe written in the app (`mise-api`'s `recipes.rs`) skips the bundle and goes through the same pieces in one
+transaction: each ingredient line is read from its text by `mise_core::ingredient_line`, the lines that name no
+food are matched by `foods::match_foods_in` (the matching stage itself, which takes turns under an advisory lock so
+two saves never make one food twice), and each step becomes a template through `steps::template`. Its photo goes
+through `media::store_upload`: decoded, turned upright, encoded again and stored by the hash of what was encoded,
+with its web sizes made at once, so nothing of the uploaded file but the picture is kept.
+
 **Grouping** joins variants into dishes: records the source marks as cloned from each other first, then similar
 titles; chains of small changes that drift into a different dish are split; protein swaps of one dish are joined.
 Doubtful merges go to review, and recorded decisions always win. A dish keeps its id from run to run, and its slug
@@ -77,6 +89,9 @@ on, versions everyone sees.
   `Quantity::measured()` rounds a derived amount **up** into standard measures: one cup, spoon or pinch where that is
   at most 5% over, else the fewest measures that come closest ("1 tsp + 1 pinch"); weights to the next ½ oz, counts
   to the next half. `exact()` prints an amount as it is, for the shopping list.
+- `ingredient_line.rs`: one ingredient line as a cook writes it, read into an amount, a unit, the food's name and
+  a note: "1 (14 oz) can diced tomatoes, drained" is 1 can of "diced tomatoes", noted "14 oz; drained". A range
+  gives its lower end, a bare number counts the food, and a line it can't take apart is all name.
 - `servings.rs`: the amount at any serving count. A published yield is used exactly; between yields amounts are
   interpolated, outside them scaled from the nearest; `keep_consistent` drops published amounts that would shrink as
   servings grow. `line_text` words an ingredient line; `line_quantity` gives the number the shopping list adds up.
@@ -120,6 +135,19 @@ lists every status it can answer: its own, and the shared sets in `error.rs` (`S
 `TooLarge`, `ServerError`) for what the middleware, the body extractor and a failing server answer;
 `tests/responses.rs` checks each route gives all of them and nothing else. Endpoints that change a plan or a
 list answer with the whole plan or list, so the client never has to merge.
+
+Recipes a household writes itself live under `/api/v1/recipes` (`recipes.rs`): create, read back as typed, replace,
+and set or remove the photo. Only the household that wrote a recipe can read it there or change it; for anyone
+else, and for a version that wasn't written in the app, the answer is the 404 of a recipe that doesn't exist. A
+save is one transaction, and saves take turns under an advisory lock, so two recipes with one title never take the
+same address. The recipe's dish follows its title: a new title gives it a new slug and retires the old one, which
+still finds it. A photo is sent as the request's whole body with an image `Content-Type` (which a form on another
+site can't set), read up to 20 MB on that route alone, checked from its header to be at most 50 megapixels before
+anything is decoded, and decoded two at a time. `POST /api/v1/recipes/lines` reads lines without saving, for an
+editor to show as the cook types, and `GET /api/v1/foods` (`foods.rs`) searches the foods to pick from. Foods are
+shared by the whole install and matching makes one for any new ingredient name, so the search offers a household
+only foods mise was given or a person edited, and matched foods that a version it can see uses: a name typed into
+one household's private recipe is never offered to another.
 
 The shopping list is never stored: `shopping::build` works it out from the week's plan on each request and lays the
 stored marks, extras, staples and unit choices on top. Lines are grouped by food, and kinds of a food join its line

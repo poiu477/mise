@@ -86,6 +86,10 @@ status.md if it changed either.
   refused unless `IMPORT_ALLOW_PRIVATE=true`), parses it with T25, stores the raw record under the `web` source,
   and runs the shared stages (match foods, group dishes, derive options, parse steps). The recipe belongs to the
   importing household (T22). Importing the same unchanged page again changes nothing.
+- A page's ingredient lines are text ("2 cups flour, sifted"). Read each with `mise_core::ingredient_line`, as a
+  recipe written in the app is (`crates/mise-api/src/recipes.rs`): the name it reads is the line's `raw_name`,
+  with its note, its amount at the page's yield, and the line as written in `ingredient_lines.text`. The page's
+  photo goes through `mise_ingest::media::store_upload`, which keeps the picture and drops everything else.
 - **Touches:** `crates/mise-ingest/src/`, `crates/mise-cli/src/`, `crates/mise-api/src/` (a new module),
   `web/src/`, `docs/`.
 - **Needs:** T22, T25.
@@ -103,28 +107,18 @@ status.md if it changed either.
 - **Done when:** a test per format imports its fixture to the expected records; a browser journey uploads one file
   and opens the dish.
 
-### T28 · Write a recipe: the API
-
-- Create and update a household's own versions: title, yields, ingredient lines (each parsed with the line parser
-  and matched to a food, with the match returned so the editor can show and correct it), steps with references to
-  ingredients, and photos (uploaded, checked with the `image` crate, size-limited, stored like the others). Own
-  versions use the `user` source and `origin = 'user'`, and belong to the household (T22: `variants.household_id`).
-  `/media` already serves a photo only to households that can see a version using it, so an uploaded photo needs
-  only its `variant_media` link.
-- **Touches:** `crates/mise-api/src/` (a new module), `crates/mise-ingest/src/` (reusing the line parser and
-  matcher), `web/src/api/schema.d.ts` (regenerated).
-- **Needs:** T22.
-- **Done when:** API tests create a recipe, edit it, add a photo, refuse a non-image and an oversize file, refuse
-  another household's edit, and find the recipe in search and on its dish page.
-
 ### T29 · Write a recipe: the editor
 
-- A page to write and edit a recipe on T28's API: ingredient lines typed as text, each showing the food it matched
-  (and letting you pick another), steps, yields, photo upload; usable on a 375 px phone.
-- **Touches:** `web/src/` (new pages), `web/e2e/`.
-- **Needs:** T28.
+- A page to write and edit a recipe on the recipes API (`/api/v1/recipes`): ingredient lines typed as text, each
+  showing what was read from it and the food it matched (`POST /api/v1/recipes/lines` reads lines without
+  saving) and letting you pick another (`GET /api/v1/foods?q=`, sent back as the line's `food_id`), steps, the
+  servings it is written for, photo upload; usable on a 375 px phone.
+- Deleting a recipe: `DELETE /api/v1/recipes/{id}`, which the API doesn't have yet (a planned recipe leaves the
+  plan with it, and its dish goes when it was the dish's only version), and a button for it in the editor.
+- **Touches:** `web/src/` (new pages), `web/e2e/`, `crates/mise-api/src/recipes.rs` (the delete route).
 - **Done when:** a browser journey writes a recipe from nothing, corrects one food match, adds a photo, saves, and
-  opens it at another serving count; the axe scan and the 375 px check pass on the editor.
+  opens it at another serving count; an API test deletes a recipe, planned and unplanned, and refuses another
+  household's delete; the axe scan and the 375 px check pass on the editor.
 
 ### T30 · Forks: your own version of any dish
 

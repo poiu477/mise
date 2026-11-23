@@ -32,6 +32,17 @@ pub struct ParseStats {
     pub unparsed: usize,
 }
 
+/// One step's text as a template it can be rendered from at any serving count: its amounts linked to the version's
+/// ingredient `lines` (each a line's key and name), in a version titled `title`. A soup's or a rice dish's steps
+/// drop the boil-off rule, since their water is the dish, whatever the step says.
+pub fn template(text: &str, title: &str, lines: &[(String, String)]) -> step_amounts::Template {
+    let mut t = step_amounts::parse(text, lines);
+    if step_amounts::not_a_pan_sauce(title) {
+        t.drop_boil_off();
+    }
+    t
+}
+
 /// Parses every step's published text again into a template it can render at any serving count, linking
 /// amounts to the ingredient lines they measure out, and stores the templates. Steps of soups and rice dishes
 /// drop the boil-off rule, since their water is the dish.
@@ -55,14 +66,7 @@ pub async fn parse_steps(pool: &PgPool) -> Result<ParseStats> {
     let empty = Vec::new();
     let parsed: Vec<(Uuid, step_amounts::Template)> = steps
         .par_iter()
-        .map(|(id, v, text, title)| {
-            let mut t = step_amounts::parse(text, lines.get(v).unwrap_or(&empty));
-            // A soup's or a rice dish's water is the dish, whatever the step says.
-            if step_amounts::not_a_pan_sauce(title) {
-                t.drop_boil_off();
-            }
-            (*id, t)
-        })
+        .map(|(id, v, text, title)| (*id, template(text, title, lines.get(v).unwrap_or(&empty))))
         .collect();
 
     let mut stats = ParseStats {
