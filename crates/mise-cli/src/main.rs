@@ -116,6 +116,15 @@ enum Command {
     },
 }
 
+/// Writes `value` to `file` as indented JSON ending in a newline, as the curation files are kept. To a file, not
+/// standard output, which the log shares.
+fn write_json(file: &std::path::Path, value: serde_json::Value) -> anyhow::Result<()> {
+    use anyhow::Context;
+    let mut text = serde_json::to_string_pretty(&value)?;
+    text.push('\n');
+    std::fs::write(file, text).with_context(|| format!("writing {}", file.display()))
+}
+
 #[derive(Subcommand)]
 enum ImportCommand {
     /// Fetch a web page and import each recipe on it (schema.org Recipe data) into a household, which alone sees

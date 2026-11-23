@@ -1,5 +1,6 @@
 // Starts mise for the browser journeys: a fresh `mise_e2e` database on the dev Postgres (or the server in
-// DATABASE_URL), the demo bundle imported and curated (plus one retired dish address), then mise-server on 127.0.0.1:8095 serving web/dist.
+// DATABASE_URL), the demo bundle imported and curated (plus one retired dish address and one question for the review
+// queue), then mise-server on 127.0.0.1:8095 serving web/dist.
 // A small site on 127.0.0.1:8096 serves the sample recipe pages (fixtures/web-pages, written for mise) for the
 // import journey; mise-server may fetch from it because IMPORT_ALLOW_PRIVATE is on here, as it never is by default.
 // Playwright runs this as its webServer and stops it when the tests end; each start drops and rebuilds the
@@ -45,6 +46,15 @@ const db = new pg.Client({ connectionString: url });
 await db.connect();
 await db.query(
   "INSERT INTO retired_slugs (slug, dish_id) SELECT 'tomato-pasta', id FROM dishes WHERE slug = 'weeknight-tomato-pasta'",
+);
+// A question for the review queue, as matching asks it of a name that could mean two foods. The demo recipes leave
+// none of their own.
+await db.query(
+  `INSERT INTO review_items (id, kind, subject, proposal, confidence)
+   SELECT gen_random_uuid(), 'food_match',
+          jsonb_build_object('food_id', id, 'name', name, 'recipe_uses', 1, 'all_uses', 1),
+          '{"note": "black pepper or bell pepper (as a pantry item it is usually black pepper)"}', 0.3
+   FROM foods WHERE name = 'Black Pepper'`,
 );
 await db.end();
 

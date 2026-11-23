@@ -16,6 +16,7 @@ import { SetupPage } from "./pages/SetupPage";
 import { AccountPage } from "./pages/AccountPage";
 import { PlanPage } from "./pages/PlanPage";
 import { ShoppingPage } from "./pages/ShoppingPage";
+import { ReviewPage } from "./pages/ReviewPage";
 import { KitchenCook, KitchenFrame, KitchenPlan } from "./pages/KitchenPage";
 import { queryClient } from "./api/query";
 import { SessionProvider } from "./session";
@@ -38,6 +39,7 @@ const router = createBrowserRouter([
       { path: "/login", element: <LoginPage /> },
       { path: "/setup", element: <SetupPage /> },
       { path: "/account", element: <AccountPage /> },
+      { path: "/review", element: <ReviewPage /> },
       {
         path: "/kitchen",
         element: <KitchenFrame />,

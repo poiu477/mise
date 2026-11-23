@@ -16,7 +16,8 @@ dotenvy = "0.15.7"
 hex = "0.4.3"
 mise-core = { version = "0.1.0", path = "../mise-core" }
 mise-db = { version = "0.1.0", path = "../mise-db" }
-# Writing a recipe reads its lines, matches foods, parses steps and stores photos as an import does.
+# Writing a recipe reads its lines, matches foods, parses steps and stores photos as an import does, and the review
+# queues answer with the same curation operations and dish decisions as the `mise` command.
 mise-ingest = { version = "0.1.0", path = "../mise-ingest" }
 openidconnect = { version = "4.1.0", features = ["reqwest"] }
 rand = "0.10.3"

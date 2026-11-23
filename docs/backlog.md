@@ -107,19 +107,6 @@ override it.
 - **Done when:** API tests cover each level, the partner link both ways, the cap, and a withdrawn share with an
   existing fork.
 
-### T32 · Review queues in the web app
-
-Food matches, food parents and doubtful dish merges wait in `review_items`, answered today only with `mise`
-commands and the gate report.
-
-- An admin page listing open items by kind, with the proposal and its confidence, to accept, reject or edit. A
-  decision is stored the way the `mise` commands store it (food edits make the food `origin = user`; dish decisions
-  go in `dish_decisions`), so a re-run keeps it; `mise food export` and `mise dish export` write them back out as
-  curation files.
-- **Touches:** `crates/mise-api/src/` (a new module), `crates/mise-cli/src/` (the exports), `web/src/`.
-- **Done when:** API tests decide one item of each kind and show a re-run of the stage keeps the decision; the
-  exports round-trip through `apply`; a browser journey accepts a food match.
-
 ### T34 · Dates and times without chrono
 
 chrono is unmaintained (RUSTSEC-2026-0543, accepted in `deny.toml` until this and openidconnect allow otherwise).
@@ -176,9 +163,9 @@ Phase 3, still to build:
 - Nextcloud Tasks (the list as CalDAV to-dos) and Calendar (the plan as events or an iCal feed).
 - Days in the plan (meals belong to a week today).
 
-Phase 4, kitchen and imports, is broken into T23 to T32 under Ready: import from files, forks, sharing, and
-review queues in the web app (recipes owned by a household, T22, kitchen mode, T24, import from a link, T26,
-writing recipes and the editor, T28 and T29, and printable cards, T33, are done). Its gate, T24's kitchen
-journey and T25's 20 sample pages, passes.
+Phase 4, kitchen and imports, is broken into T22 to T33 under Ready: import from files, forks and sharing are left
+(recipes owned by a household, T22, kitchen mode, T24, import from a link, T26, writing recipes and the editor, T28
+and T29, review queues in the web app, T32, and printable cards, T33, are done). Its gate, T24's kitchen journey
+and T25's 20 sample pages, passes.
 
 Break a phase item into Ready tasks, in the shape above, before starting it.

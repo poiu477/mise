@@ -546,6 +546,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/review-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The open review items (admins only). */
+        get: operations["list_review_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review-items/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer one item (admins only), stored as the `mise` commands store it. Answers with the queue as it now stands:
+         *     one food decision can answer other items about the same food.
+         */
+        post: operations["decide_review_item"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/shopping": {
         parameters: {
             query?: never;
@@ -753,6 +790,30 @@ export interface components {
             items: components["schemas"]["DishSummary"][];
             /** Format: int64 */
             total: number;
+        };
+        /** @description The two sides of a doubtful dish merge, and how alike grouping found them. */
+        DishPair: {
+            /** @description The version it was copied from, and its dish. */
+            copied_from: components["schemas"]["DishRef"];
+            /**
+             * Format: double
+             * @description How many of the shipped ingredients they share, 0 to 1.
+             */
+            shipped_overlap: number;
+            /**
+             * Format: double
+             * @description How alike the titles are, 0 to 1.
+             */
+            title_similarity: number;
+            /** @description The copy. */
+            version: components["schemas"]["DishRef"];
+        };
+        /** @description One dish of a doubtful merge. */
+        DishRef: {
+            /** @description The address of the dish it is in now, when it still is in one. */
+            dish_slug?: string | null;
+            /** @description The version's title, cleaned as dishes are named: "Pepper Steak Skillet". */
+            title: string;
         };
         DishSummary: {
             content_type: string;
@@ -1109,6 +1170,55 @@ export interface components {
             /** @description The unit read from it: "cup", "tablespoon", "ounce", "clove", or "unit" for a bare count ("2 eggs"). */
             unit?: string | null;
         };
+        /** @description An answer to one item. */
+        ReviewDecision: {
+            decision: components["schemas"]["Verdict"];
+            /** @description Why, in a few words, kept with the decision: "renamed: same recipe". */
+            note?: string | null;
+            /** @description With `edit` on a food: the food it is a kind of, by name ("Tomato"). */
+            parent?: string | null;
+            /** @description With `edit` on a food: the food it is the same as, by name ("Black Pepper"); the two become one. */
+            same_as?: string | null;
+        };
+        /** @description One open item in the queue. */
+        ReviewItem: {
+            /**
+             * Format: float
+             * @description How sure the pipeline was, 0 to 1; items it was least sure of, or that touch few recipes, are low.
+             */
+            confidence?: number | null;
+            /** Format: date-time */
+            created_at: string;
+            dishes?: components["schemas"]["DishPair"] | null;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ReviewKind"];
+            /**
+             * @description Why it asks, when the pipeline said: "black pepper or bell pepper (as a pantry item it is usually black
+             *     pepper)".
+             */
+            note?: string | null;
+            /** @description What the pipeline proposes, as a sentence: "Garden Tomato is a kind of Tomato". */
+            proposal: string;
+            /**
+             * Format: int64
+             * @description For a food: how many recipe ingredient lines use it.
+             */
+            recipe_uses?: number | null;
+            /** @description What it asks about: the food's name, or the copied version's title. */
+            subject: string;
+            /** @description The answers this item takes. */
+            verdicts: components["schemas"]["Verdict"][];
+        };
+        /**
+         * @description What a review item asks.
+         * @enum {string}
+         */
+        ReviewKind: "food_match" | "food_parent" | "dish_merge";
+        /** @description Every open item, food matches first, then food parents, then dish merges; the surest first within each. */
+        ReviewQueue: {
+            items: components["schemas"]["ReviewItem"][];
+        };
         SetupRequest: {
             display_name?: string | null;
             /** @description Name for the first household (default "Home"). */
@@ -1279,6 +1389,11 @@ export interface components {
             /** @description Serving counts with published amounts. */
             yields: number[];
         };
+        /**
+         * @description An answer to a review item.
+         * @enum {string}
+         */
+        Verdict: "accept" | "reject" | "edit";
         /**
          * @description How weights read: "1 lb 14 oz", "30 oz", "1⅞ lb" or "850 g".
          * @enum {string}
@@ -3680,6 +3795,172 @@ export interface operations {
             };
             /** @description `X-Mise-Account` names another account than the one signed in */
             412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_review_items: {
+        parameters: {
+            query?: {
+                /** @description Only items of this kind (default: every kind). */
+                kind?: components["schemas"]["ReviewKind"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The open items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewQueue"];
+                };
+            };
+            /** @description `kind` isn't one of the kinds asked here */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not an admin, or called from a kitchen device */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    decide_review_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDecision"];
+            };
+        };
+        responses: {
+            /** @description Decided; the open items left */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewQueue"];
+                };
+            };
+            /** @description The id isn't a UUID; the answer isn't one this kind of item takes; a food named doesn't exist, or the change would make a loop; or the body isn't JSON of the right shape */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not an admin, or called with a read-only API token or from a kitchen device */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such item */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The item was decided already */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The body is over 2 MB */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

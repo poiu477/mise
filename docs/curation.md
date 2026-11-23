@@ -8,6 +8,7 @@ rebuilt database can be brought back to the same state.
 | Op | Fields | Effect |
 | --- | --- | --- |
 | `add` | `name`, `parent`?, `kind`? (`food`, `brand`, `variety`, `cut`, `form`, `proprietary`), `aliases`? | Create a food |
+| `keep` | `food` | The food is right as it stands: it becomes yours, and matching stops asking about it |
 | `set_parent` | `food`, `parent` | Make `food` a kind of `parent` |
 | `unparent` | `food` | Make `food` top-level |
 | `alias` | `food`, `alias` | Another name for the same food |
@@ -46,6 +47,30 @@ A density alone never turns "2 cloves" into spoons: only an item size does. Both
   {"op": "add", "name": "Kerrygold Garlic & Herb Butter", "parent": "Garlic Herb Butter", "kind": "brand"}
 ]
 ```
+
+## Writing curation back out
+
+`mise food export <file>` writes the hand edits a database holds as a curation file: every food that is yours
+(`add`), names given by hand (`merge` when recipes use the name, `alias` otherwise), where each of your foods sits
+(`set_parent` or `unparent`, parents first), properties and measures. Applied to a database rebuilt from the same
+recipes, it brings the food model back; applied to the one it came from, it changes nothing. Two edits leave nothing
+to read back, so keep them in a hand-written file: `unrelate`, and `unparent` on a food from a bundle's knowledge.
+
+`mise dish export <file>` writes the recorded dish decisions as a decisions file for `mise dish apply`.
+
+## Answering the review queue
+
+Importing leaves questions in `review_items`. An admin answers them on the web app's review page (Account, then
+Review queue), each stored the way the commands here store it, so re-running a stage keeps it:
+
+| Question | Accept | Reject | Something else |
+| --- | --- | --- | --- |
+| Food match: a name that could mean two foods ("pepper") | `keep` | | `merge` into the food it is, or `set_parent` |
+| Food parent: "Garden Tomato" a kind of "Tomato"? | `set_parent` | `keep` | `set_parent` to another food, or `merge` |
+| Dish merge: a copy unlike its original | a `merge` decision | a `keep_apart` decision | |
+
+A dish decision shows once dishes are grouped again (`mise group-dishes`, then `mise derive-options`). Export after
+answering to keep the decisions with your curation files.
 
 ## Dish decisions
 

@@ -11,6 +11,7 @@ pub mod imports;
 pub mod media;
 pub mod plan;
 pub mod recipes;
+pub mod review;
 pub mod shopping;
 pub mod variants;
 
@@ -58,6 +59,7 @@ pub struct AppState {
         plan::get, plan::add, plan::update, plan::remove,
         shopping::get, shopping::mark, shopping::add_extra, shopping::update_extra, shopping::remove_extra, shopping::add_staple, shopping::remove_staple,
         shopping::settings, shopping::update_settings, shopping::set_food_weights,
+        review::list, review::decide,
     ),
     tags(
         (name = "dishes", description = "Browse and search dishes"), (name = "media", description = "Photos"),
@@ -66,6 +68,7 @@ pub struct AppState {
         (name = "auth", description = "Signing in"), (name = "account", description = "The signed-in account"),
         (name = "admin", description = "Accounts and households (admins)"),
         (name = "kitchen", description = "Kitchen devices: a one-time link sets a cookie that reads the plan and recipes"),
+        (name = "review", description = "What the import pipeline left for an admin to decide: food matches, food parents, dish merges"),
     ),
     modifiers(&Security)
 )]
@@ -251,6 +254,8 @@ fn api_routes() -> Router<AppState> {
         )
         .route("/pantry-staples", post(shopping::add_staple))
         .route("/pantry-staples/{food_id}", delete(shopping::remove_staple))
+        .route("/review-items", get(review::list))
+        .route("/review-items/{id}/decision", post(review::decide))
 }
 
 /// The API, and the built web app in `web_dir` for every other path when given.

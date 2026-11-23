@@ -265,6 +265,8 @@ const KITCHEN_TOKENS: (&str, &str) = ("GET", "/api/v1/kitchen-tokens");
 const NEW_KITCHEN: (&str, &str) = ("POST", "/api/v1/kitchen-tokens");
 const REVOKE_KITCHEN: (&str, &str) = ("DELETE", "/api/v1/kitchen-tokens/{id}");
 const OPEN_KITCHEN: (&str, &str) = ("GET", "/api/v1/auth/kitchen");
+const REVIEW: (&str, &str) = ("GET", "/api/v1/review-items");
+const DECIDE: (&str, &str) = ("POST", "/api/v1/review-items/{id}/decision");
 const HEALTH: (&str, &str) = ("GET", "/api/v1/health");
 const SSO_START: (&str, &str) = ("GET", "/api/auth/oidc/start");
 const SSO_CALLBACK: (&str, &str) = ("GET", "/api/auth/oidc/callback");
@@ -513,6 +515,62 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
     let device = device.split(';').next().unwrap().to_string();
     c.expect(OPEN_KITCHEN, &link, As::Nobody, None, 303, "a used link")
         .await;
+
+    // Review queues: admins only. The demo recipes leave nothing to review, so one item is made as matching makes
+    // them.
+    let item = uuid::Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO review_items (id, kind, subject, proposal, confidence)
+         SELECT $1, 'food_match', jsonb_build_object('food_id', id, 'name', name), '{\"note\": \"which pepper?\"}', 0.3
+         FROM foods WHERE name = 'Black Pepper'",
+    )
+    .bind(item)
+    .execute(&app.pool)
+    .await
+    .unwrap();
+    c.call(REVIEW, me, None, 200, "the review queue").await;
+    c.call(REVIEW, cook, None, 403, "not an admin").await;
+    let decide = format!("/api/v1/review-items/{item}/decision");
+    let accept = json!({"decision": "accept"});
+    c.expect(
+        DECIDE,
+        &decide,
+        cook,
+        Some(accept.clone()),
+        403,
+        "not an admin",
+    )
+    .await;
+    let reject = json!({"decision": "reject"});
+    c.expect(
+        DECIDE,
+        &decide,
+        me,
+        Some(reject),
+        400,
+        "an answer it doesn't take",
+    )
+    .await;
+    c.expect(DECIDE, &decide, me, Some(accept.clone()), 200, "an answer")
+        .await;
+    c.expect(
+        DECIDE,
+        &decide,
+        me,
+        Some(accept.clone()),
+        409,
+        "answered again",
+    )
+    .await;
+    c.expect(
+        DECIDE,
+        &fill(DECIDE.1),
+        me,
+        Some(accept),
+        404,
+        "an item that isn't there",
+    )
+    .await;
     c.call(LOGOUT, cook, None, 204, "signing out").await;
 
     // Signing in.
