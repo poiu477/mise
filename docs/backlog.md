@@ -79,23 +79,6 @@ status.md if it changed either.
   this week's first planned dish, steps through it, starts a timer from a step and sees it count down; the axe scan
   passes on the view.
 
-### T26 · Import from a link
-
-- `mise import url <url>` and `POST /api/v1/imports` with an "Import from a link" form in the web app. The server
-  fetches the page and its photo (timeouts, a size limit, a redirect limit, and private and loopback addresses
-  refused unless `IMPORT_ALLOW_PRIVATE=true`), parses it with T25, stores the raw record under the `web` source,
-  and runs the shared stages (match foods, group dishes, derive options, parse steps). The recipe belongs to the
-  importing household (T22). Importing the same unchanged page again changes nothing.
-- A page's ingredient lines are text ("2 cups flour, sifted"). Read each with `mise_core::ingredient_line`, as a
-  recipe written in the app is (`crates/mise-api/src/recipes.rs`): the name it reads is the line's `raw_name`,
-  with its note, its amount at the page's yield, and the line as written in `ingredient_lines.text`. The page's
-  photo goes through `mise_ingest::media::store_upload`, which keeps the picture and drops everything else.
-- **Touches:** `crates/mise-ingest/src/`, `crates/mise-cli/src/`, `crates/mise-api/src/` (a new module),
-  `web/src/`, `docs/`.
-- **Needs:** T22, T25.
-- **Done when:** API tests import fixture pages served by a local test server, refuse a private address, and show a
-  repeat import is a no-op; a browser journey imports a page and opens the new dish.
-
 ### T27 · Import from files
 
 - Export files from other apps through the same records and shared stages as T26: schema.org JSON, Nextcloud
@@ -205,8 +188,8 @@ Phase 3, still to build:
 - Nextcloud Tasks (the list as CalDAV to-dos) and Calendar (the plan as events or an iCal feed).
 - Days in the plan (meals belong to a week today).
 
-Phase 4, kitchen and imports, is broken into T23 to T32 under Ready: kitchen mode, import from a link and from
-files, the editor and forks, sharing, and review queues in the web app (recipes owned by a household, T22, and
-printable cards, T33, are done). Its gate is T24's kitchen journey and T25's 20 sample pages (that half passes since T25).
+Phase 4, kitchen and imports, is broken into T23 to T32 under Ready: kitchen mode, import from files, the editor
+and forks, sharing, and review queues in the web app (recipes owned by a household, T22, import from a link, T26,
+and printable cards, T33, are done). Its gate is T24's kitchen journey and T25's 20 sample pages (that half passes since T25).
 
 Break a phase item into Ready tasks, in the shape above, before starting it.

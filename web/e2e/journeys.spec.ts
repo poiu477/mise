@@ -1,7 +1,7 @@
 // The household's journeys through mise in a real browser, on the demo recipes (fixtures/demo-bundle), from an
 // empty install: first-run setup, cooking at any serving count, an old dish address, writing a recipe, printing a
-// recipe card,
-// planning a week, shopping (offline too), phone layout, accessibility and signing out. They run in order and share
+// recipe card, planning a week, shopping (offline too), importing a recipe from a link, phone layout,
+// accessibility and signing out. They run in order and share
 // one browser session, as a person would.
 //
 // The browser is in New York on a Sunday evening, when the date by UTC is already Monday. The app plans and shops
@@ -593,7 +593,35 @@ const pages = [
   "/plan",
   "/shopping",
   "/account",
+  "/import",
 ];
+
+test("a recipe imported from a link opens as a dish of the household's own", async () => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Import from a link" }).click();
+  await expect(page).toHaveURL(/\/import$/);
+  const link = page.getByLabel("Link to a recipe page");
+  // A page with no recipe says so. (Refused addresses are API tests: this server allows private ones.)
+  await link.fill("http://127.0.0.1:8096/web-pages/no-recipe.html");
+  await page.getByRole("button", { name: "Import" }).click();
+  await expect(page.getByRole("alert")).toContainText("no recipe found");
+
+  await link.fill("http://127.0.0.1:8096/web-pages/no-image.html");
+  await page.getByRole("button", { name: "Import" }).click();
+  await expect(page).toHaveURL(/\/dishes\/five-minute-hummus\?v=/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Five-Minute Hummus");
+  await expect(amountOf("tahini")).toHaveText("3 TBSP");
+
+  // The same page again changes nothing: it says so, and the dish is the one already there.
+  await page.goto("/import");
+  await page
+    .getByLabel("Link to a recipe page")
+    .fill("http://127.0.0.1:8096/web-pages/no-image.html");
+  await page.getByRole("button", { name: "Import" }).click();
+  await expect(page).toHaveURL(/\/dishes\/five-minute-hummus\?v=/);
+  const found = await (await page.request.get("/api/v1/dishes?q=hummus")).json();
+  expect(found.total).toBe(1);
+});
 
 test("every page fits a phone without sideways scrolling", async () => {
   await page.setViewportSize({ width: 375, height: 812 });

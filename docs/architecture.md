@@ -25,7 +25,8 @@ web/ (React PWA) ──HTTP──> mise-api (axum) ──> mise-core (pure logic
 Migrations in `migrations/` are the schema of record; each file starts with a comment saying what it adds.
 
 - **Sources and records.** A `source` (a seed bundle, the web, a file, a person) supplies `source_records`, kept
-  verbatim so imports can be re-processed. Each record becomes a `variant`.
+  verbatim so imports can be re-processed. Each record becomes a `variant`. A record a household imported (a web
+  page) belongs to it (`household_id`), like the version made of it; a bundle's belongs to none.
 - **Dishes and variants.** A `dish` is what people choose; its `variants` are the published or forked versions.
   A variant belongs to one household (`household_id`, with a `visibility`, only `private` so far) or, for seed and
   bundle versions, to none; the SQL function `visible_to(variant, household)` says whether a household can see it,
@@ -64,9 +65,22 @@ A seed bundle (see [seed-bundle.md](seed-bundle.md)) is built offline from a pri
 `food apply` (curation file), `dish apply` and `dish prefer` (decisions and preferred versions), `group-dishes`,
 `derive-options`, `parse-steps`, `ingest-media`. Every stage is re-runnable and leaves what a person decided alone.
 
-Web pages and other apps' files will come in through the same stages. `schema_org::read_page` and `read_json` turn
-schema.org Recipe data (JSON-LD, or microdata when a page has none) into records shaped like a bundle's variant
-lines, without fetching anything; the sample pages in `fixtures/web-pages/` show what each kind of markup gives.
+Web pages come in through the same stages (other apps' files will too, T27). `schema_org::read_page` and
+`read_json` turn schema.org Recipe data (JSON-LD, or microdata when a page has none) into records shaped like a
+bundle's variant lines, without fetching anything; the sample pages in `fixtures/web-pages/` show what each kind of
+markup gives. `web::import_url` (behind `POST /api/v1/imports` and `mise import url`) fetches the page with
+`fetch::Fetcher`, keeps each recipe as a `web` source record owned by the importing household, and makes a version
+of it owned by the same household: lines read with `mise_core::ingredient_line` (kept as written in `text`), steps
+parsed as they are stored, the photo fetched and stored as an upload is, foods matched in the same transaction, then
+`group-dishes` and `derive-options` run (one import at a time). An unchanged page changes nothing; a changed one is a
+new version whose parent is the previous.
+
+`fetch::Fetcher` refuses what an import must not reach: anything but `http` and `https`, credentials in the link,
+ports below 1024 other than 80 and 443, and any host that is or resolves to an address off the public internet
+(`fetch::is_public`: loopback, private, link-local, shared, documentation and reserved ranges, IPv4-mapped and NAT64
+IPv6 judged by the IPv4 inside). It resolves the host once and connects only to the addresses it checked, follows
+redirects itself (each checked, at most 5), and limits time, size and content type. `IMPORT_ALLOW_PRIVATE=true`
+lifts the address and port checks.
 
 A recipe written in the app (`mise-api`'s `recipes.rs`) skips the bundle and goes through the same pieces in one
 transaction: each ingredient line is read from its text by `mise_core::ingredient_line`, the lines that name no
@@ -129,7 +143,7 @@ queued work never lands in another household, and the app re-checks who is signe
 `ApiResult<T>`; `error.rs` maps errors to the right status and one JSON body, `{ "error": "…", "code": "…" }`: a
 sentence to show people, and a stable name for programs (`not_found`, `bad_request`, `unauthorized`,
 `bad_credentials`, `forbidden`, `method_not_allowed`, `conflict`, `account_changed`, `payload_too_large`,
-`too_many_requests`, `internal`). `extract.rs` wraps axum's extractors so bad input answers in that shape too, and
+`too_many_requests`, `internal`, and `site_failed`: a page being imported didn't answer). `extract.rs` wraps axum's extractors so bad input answers in that shape too, and
 the router does the same for an unknown address and a method a route doesn't take. Each route's `#[utoipa::path]`
 lists every status it can answer: its own, and the shared sets in `error.rs` (`SignedIn`, `ReadOnlyToken`,
 `TooLarge`, `ServerError`) for what the middleware, the body extractor and a failing server answer;

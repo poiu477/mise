@@ -19,6 +19,14 @@ impl TestApp {
         Some(app)
     }
 
+    /// As `with_demo`, with imports also let through to these sites on this machine, and to nothing else that
+    /// isn't public.
+    pub async fn with_demo_fetching(sites: Vec<std::net::SocketAddr>) -> Option<TestApp> {
+        let app = TestApp::start_fetching(None, Some(MediaDir::create()), sites).await?;
+        app.load_demo().await;
+        Some(app)
+    }
+
     /// Import the demo bundle and run every stage after it: match foods, apply the curation file, group dishes,
     /// derive options, parse steps. Panics, naming the stage, if one fails.
     pub async fn load_demo(&self) {

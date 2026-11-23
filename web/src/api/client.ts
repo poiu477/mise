@@ -92,6 +92,8 @@ export type Variant = components["schemas"]["Variant"];
 export type Ingredient = components["schemas"]["Ingredient"];
 /** One cooking step, with flags for wording or amounts worth a second look at this size. */
 export type Step = components["schemas"]["Step"];
+/** One recipe a page import made: its version, its dish's slug, and whether anything was left out. */
+export type ImportedRecipe = components["schemas"]["ImportedRecipe"];
 /** A recipe the household wrote, as it was typed, with what was read from each ingredient line. */
 export type Recipe = components["schemas"]["Recipe"];
 /** A recipe as the editor sends it: its text, and the food picked for a line when one was. */

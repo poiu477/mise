@@ -7,6 +7,7 @@ pub mod dishes;
 pub mod error;
 pub mod extract;
 pub mod foods;
+pub mod imports;
 pub mod media;
 pub mod plan;
 pub mod recipes;
@@ -38,6 +39,8 @@ pub struct AppState {
     /// Where stored photos and their web-size copies live (MEDIA_ROOT).
     pub media_root: PathBuf,
     pub auth: std::sync::Arc<auth::Auth>,
+    /// Fetches pages and photos to import (`IMPORT_ALLOW_PRIVATE`).
+    pub fetcher: std::sync::Arc<mise_ingest::fetch::Fetcher>,
 }
 
 #[derive(OpenApi)]
@@ -46,6 +49,7 @@ pub struct AppState {
     paths(
         health, dishes::list, dishes::get, variants::get, media::get,
         recipes::create, recipes::get, recipes::update, recipes::delete, recipes::set_photo, recipes::remove_photo, recipes::read_lines,
+        imports::create,
         foods::search,
         auth::routes::config, auth::routes::setup, auth::routes::login, auth::routes::logout, auth::oidc::start, auth::oidc::callback,
         auth::routes::me, auth::routes::change_password, auth::routes::list_tokens, auth::routes::create_token, auth::routes::delete_token,
@@ -225,6 +229,7 @@ fn api_routes() -> Router<AppState> {
                 // A photo is far larger than the JSON every other route reads.
                 .layer(DefaultBodyLimit::max(recipes::MAX_PHOTO_BYTES)),
         )
+        .route("/imports", post(imports::create))
         .route("/foods", get(foods::search))
         .route("/plan", get(plan::get))
         .route("/plan/entries", post(plan::add))

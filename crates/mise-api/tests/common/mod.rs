@@ -11,6 +11,7 @@
 #![allow(dead_code)]
 
 pub mod demo;
+pub mod site;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -123,8 +124,17 @@ impl TestApp {
     }
 
     /// Make and migrate the database, then build the router with local sign-in, `oidc` if given, and photos read
-    /// from `media` (or a folder that doesn't exist).
+    /// from `media` (or a folder that doesn't exist). Imports fetch from the public internet only.
     async fn start(oidc: Option<OidcConfig>, media: Option<MediaDir>) -> Option<TestApp> {
+        TestApp::start_fetching(oidc, media, Vec::new()).await
+    }
+
+    /// As `start`, with imports also let through to these exact addresses on this machine (a test's own sites).
+    async fn start_fetching(
+        oidc: Option<OidcConfig>,
+        media: Option<MediaDir>,
+        sites: Vec<std::net::SocketAddr>,
+    ) -> Option<TestApp> {
         let db = Database::create().await?;
         let pool = mise_db::connect(&db.url()).await.unwrap();
         mise_db::migrate(&pool).await.unwrap();
@@ -141,6 +151,7 @@ impl TestApp {
             pool: pool.clone(),
             media_root: media_root.clone(),
             auth: Arc::new(Auth::new(config)),
+            fetcher: Arc::new(mise_ingest::fetch::Fetcher::new(false).allowing(sites)),
         };
         Some(TestApp {
             router: mise_api::router(state, None),

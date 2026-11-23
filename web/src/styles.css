@@ -1304,6 +1304,24 @@ code {
   }
 }
 
+/* Import from a link. */
+.import-page {
+  max-width: 560px;
+}
+.import-page h1 {
+  font-size: 24px;
+  margin: 0 0 6px;
+}
+.imported {
+  margin: 16px 0 0;
+  padding-left: 20px;
+}
+.imported li + li {
+  margin-top: 8px;
+}
+.import-link {
+  white-space: nowrap;
+}
 /* Writing a recipe */
 .write-link {
   border: 1px solid var(--accent);

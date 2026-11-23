@@ -16,8 +16,9 @@ const TYPES = [
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
   const { session } = useSession();
-  // Writing needs the server and an account: not offline, and not on a kitchen device.
-  const canWrite = session.status === "in" && !session.me.kitchen;
+  // Adding a recipe, written or imported, needs the server and an account: not offline, and not on a kitchen
+  // device.
+  const canAdd = session.status === "in" && !session.me.kitchen;
   const q = params.get("q") ?? "";
   const ingredient = params.get("ingredient") ?? "";
   const type = params.get("type") ?? "recipe";
@@ -90,9 +91,14 @@ export function SearchPage() {
               ? `${total.toLocaleString()} dishes`
               : "Loading…"}
         </p>
-        {canWrite && (
+        {canAdd && (
           <Link to="/recipes/new" className="write-link">
             Write a recipe
+          </Link>
+        )}
+        {canAdd && (
+          <Link to="/import" className="import-link">
+            Import from a link
           </Link>
         )}
       </div>

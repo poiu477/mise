@@ -57,9 +57,9 @@ pub const MAX_PHOTO_BYTES: usize = 20 * 1024 * 1024;
 /// rather than letting a burst of them use it all.
 static DECODING: Semaphore = Semaphore::const_new(2);
 
-/// The key of the advisory lock a save holds until its transaction ends ("mise dish" in ASCII): saves take turns,
-/// so two recipes with one title can't both take the same address.
-const SAVING_LOCK: i64 = 0x6d69_7365_6469_7368;
+/// The lock a save holds until its transaction ends: saves take turns with each other and with grouping, so two
+/// dishes can't both take the same address.
+const SAVING_LOCK: i64 = mise_ingest::dishes::DISH_LOCK;
 
 /// One ingredient line as typed.
 #[derive(Deserialize, ToSchema)]

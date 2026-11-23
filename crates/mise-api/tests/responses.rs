@@ -13,7 +13,7 @@ use axum::{
     body::Body,
     http::{Request, header},
 };
-use common::{As, Reply, TestApp};
+use common::{As, Reply, TestApp, site::Site};
 use serde_json::{Value, json};
 
 /// A made-up id, for what isn't there.
@@ -245,6 +245,7 @@ const RECIPE_REMOVE: (&str, &str) = ("DELETE", "/api/v1/recipes/{id}");
 const RECIPE_PHOTO: (&str, &str) = ("PUT", "/api/v1/recipes/{id}/photo");
 const RECIPE_PHOTO_REMOVE: (&str, &str) = ("DELETE", "/api/v1/recipes/{id}/photo");
 const RECIPE_LINES: (&str, &str) = ("POST", "/api/v1/recipes/lines");
+const IMPORT: (&str, &str) = ("POST", "/api/v1/imports");
 const FOODS: (&str, &str) = ("GET", "/api/v1/foods");
 const PLAN: (&str, &str) = ("GET", "/api/v1/plan");
 const PLAN_ADD: (&str, &str) = ("POST", "/api/v1/plan/entries");
@@ -276,7 +277,12 @@ fn sign_in_body(route: (&str, &str)) -> Option<Value> {
 
 #[tokio::test]
 async fn every_route_answers_only_with_the_statuses_it_documents() {
-    let app = test_app!(TestApp::with_demo());
+    // A site on this machine to import from, the only address that isn't public that imports may reach.
+    let site = Site::start().await;
+    let page = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/web-pages/no-image.html");
+    site.serve("/hummus", "text/html", std::fs::read(page).unwrap());
+    let app = test_app!(TestApp::with_demo_fetching(vec![site.addr]));
     let doc = app
         .read(raw(
             "GET",
@@ -795,6 +801,14 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
         .await;
     let lines = json!({"lines": ["2 leeks, sliced"]});
     c.call(RECIPE_LINES, me, Some(lines), 200, "lines, read")
+        .await;
+    let link = json!({"url": site.url("/hummus")});
+    c.call(IMPORT, me, Some(link), 200, "a page imported").await;
+    let private = json!({"url": "http://10.0.0.1/recipe"});
+    c.call(IMPORT, me, Some(private), 400, "a private address")
+        .await;
+    let gone = json!({"url": site.url("/gone")});
+    c.call(IMPORT, me, Some(gone), 502, "a page the site doesn't have")
         .await;
     let found = format!("{}?q=leek", FOODS.1);
     c.expect(FOODS, &found, me, None, 200, "foods by name")
