@@ -17,11 +17,13 @@ import { AccountPage } from "./pages/AccountPage";
 import { PlanPage } from "./pages/PlanPage";
 import { ShoppingPage } from "./pages/ShoppingPage";
 import { ReviewPage } from "./pages/ReviewPage";
+import { KitchenCook, KitchenFrame, KitchenPlan } from "./pages/KitchenPage";
 import { queryClient } from "./api/query";
 import { SessionProvider } from "./session";
 import "./styles.css";
 
-/** Every page and its path, inside the shared layout; anything else is "Nothing here". */
+/** Every page and its path, inside the shared layout; anything else is "Nothing here". Kitchen mode has a frame of
+ * its own, without the top bar. */
 const router = createBrowserRouter([
   {
     element: <Layout />,
@@ -38,6 +40,14 @@ const router = createBrowserRouter([
       { path: "/setup", element: <SetupPage /> },
       { path: "/account", element: <AccountPage /> },
       { path: "/review", element: <ReviewPage /> },
+      {
+        path: "/kitchen",
+        element: <KitchenFrame />,
+        children: [
+          { index: true, element: <KitchenPlan /> },
+          { path: ":variant", element: <KitchenCook /> },
+        ],
+      },
       { path: "*", element: <NotFound /> },
     ],
   },

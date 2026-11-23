@@ -66,18 +66,6 @@ status.md if it changed either.
   it.
 
 
-### T24 · Kitchen mode
-
-- A kitchen view of a planned dish for a 1280 × 800 screen: one step at a time in large type, the step's ingredients
-  with amounts at the planned servings, swipe or tap to move, the screen kept awake (Screen Wake Lock API, which
-  needs HTTPS: deploy.md section 7). A time in the step ("bake 10 to 12 minutes") is a button that starts a timer,
-  with an alarm in the page; a range starts at its lower end and says when to check.
-- Finding times in step text is pure logic: a function in `mise-core` with unit tests and doc examples.
-- **Touches:** `crates/mise-core/src/` (step times), `web/src/` (a new page and route), `web/e2e/`.
-- **Needs:** T23.
-- **Done when:** this phase's gate, half one: a browser journey at 1280 × 800 signs in with a kitchen token, opens
-  this week's first planned dish, steps through it, starts a timer from a step and sees it count down; the axe scan
-  passes on the view.
 
 ### T27 · Import from files
 
@@ -175,8 +163,9 @@ Phase 3, still to build:
 - Nextcloud Tasks (the list as CalDAV to-dos) and Calendar (the plan as events or an iCal feed).
 - Days in the plan (meals belong to a week today).
 
-Phase 4, kitchen and imports, is broken into T23 to T31 under Ready: kitchen mode, import from files, the editor
-and forks, and sharing (recipes owned by a household, T22, import from a link, T26, printable cards, T33, and review
-queues in the web app, T32, are done). Its gate is T24's kitchen journey and T25's 20 sample pages (that half passes since T25).
+Phase 4, kitchen and imports, is broken into T22 to T33 under Ready: import from files, forks and sharing are left
+(recipes owned by a household, T22, kitchen mode, T24, import from a link, T26, writing recipes and the editor, T28
+and T29, review queues in the web app, T32, and printable cards, T33, are done). Its gate, T24's kitchen journey
+and T25's 20 sample pages, passes.
 
 Break a phase item into Ready tasks, in the shape above, before starting it.

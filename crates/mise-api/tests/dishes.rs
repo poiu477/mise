@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, ops::Deref};
 
 use axum::http::StatusCode;
 use common::{As, TestApp};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 /// The demo install with its owner signed in.
 struct Demo {
@@ -351,6 +351,30 @@ async fn a_version_at_a_published_yield_reads_as_published() {
         step(&pasta, 3)["text"],
         "Meanwhile, cook the spaghetti until al dente, 9-11 minutes. Reserve 1 cup cooking water, then drain."
     );
+}
+
+#[tokio::test]
+async fn a_step_lists_the_times_it_asks_for() {
+    let demo = test_app!(Demo::new());
+    let pasta = demo.version("weeknight-tomato-pasta", "2").await;
+    // A range sets its timer for the lower end and keeps the upper; a single time has no upper end. Each comes
+    // as the text has it, in reading order.
+    assert_eq!(
+        step(&pasta, 1)["times"],
+        json!([
+            { "text": "5-6 minutes", "seconds": 300, "until_seconds": 360 },
+            { "text": "1 minute", "seconds": 60, "until_seconds": null },
+        ])
+    );
+    // Amounts are not times: "1 TBSP olive oil" in the same step starts no timer, and a step with no time
+    // lists none.
+    assert_eq!(step(&pasta, 0)["times"], json!([]));
+    for s in pasta["steps"].as_array().expect("steps") {
+        let text = s["text"].as_str().expect("a step's text");
+        for t in s["times"].as_array().expect("times") {
+            assert!(text.contains(t["text"].as_str().expect("a time's text")));
+        }
+    }
 }
 
 #[tokio::test]

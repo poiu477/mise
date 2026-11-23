@@ -24,3 +24,12 @@ export function allergens(v: Variant): string[] {
 export function servingsText(n: number): string {
   return `${n} ${n === 1 ? "serving" : "servings"}`;
 }
+
+/** Step text tidied for reading: spacing evened out, and the space put back where the source joined paragraphs
+ * and lost it ("…tender.Drain" → "…tender. Drain"). */
+export function tidyStep(s: string): string {
+  return s
+    .replace(/\s+/g, " ")
+    .replace(/([a-z0-9)%])\.([A-Z][a-z])/g, "$1. $2")
+    .trim();
+}

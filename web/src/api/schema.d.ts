@@ -1286,6 +1286,24 @@ export interface components {
             /** @description Some amount in this step was derived for this yield. */
             scaled: boolean;
             text: string;
+            /** @description The times the step asks for, in the order its text gives them, for starting timers. */
+            times: components["schemas"]["StepTime"][];
+        };
+        /** @description A time a step asks for: "8-10 minutes" in "simmer until thick, 8-10 minutes". */
+        StepTime: {
+            /**
+             * Format: int32
+             * @description How long to set a timer for, in seconds: the time itself, or the lower end of a range (480 for "8-10
+             *     minutes"), which is when to start checking.
+             */
+            seconds: number;
+            /** @description The time as the step's text has it, to find it there: "8-10 minutes". */
+            text: string;
+            /**
+             * Format: int32
+             * @description The upper end of a range, in seconds (600 for "8-10 minutes"); absent for a single time.
+             */
+            until_seconds?: number | null;
         };
         TokenInfo: {
             /** Format: date-time */
