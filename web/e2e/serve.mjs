@@ -1,11 +1,14 @@
 // Starts mise for the browser journeys: a fresh `mise_e2e` database on the dev Postgres (or the server in
 // DATABASE_URL), the demo bundle imported and curated (plus one retired dish address and one question for the review
 // queue), then mise-server on 127.0.0.1:8095 serving web/dist.
+// A small site on 127.0.0.1:8096 serves the sample recipe pages (fixtures/web-pages, written for mise) for the
+// import journey; mise-server may fetch from it because IMPORT_ALLOW_PRIVATE is on here, as it never is by default.
 // Playwright runs this as its webServer and stops it when the tests end; each start drops and rebuilds the
 // database, so every run begins from an empty install. Needs `cargo build -p mise-cli -p mise-api` and
 // `npm run build` first.
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,6 +58,19 @@ await db.query(
 );
 await db.end();
 
+// The sample pages, by name: /web-pages/no-image.html. Nothing else.
+const pages = path.join(root, "fixtures", "web-pages");
+const site = http.createServer((req, res) => {
+  const name = /^\/web-pages\/([a-z-]+\.html)$/.exec(req.url ?? "")?.[1];
+  try {
+    const body = readFileSync(path.join(pages, name ?? "missing"));
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(body);
+  } catch {
+    res.writeHead(404).end();
+  }
+});
+site.listen(8096, "127.0.0.1");
+
 const child = spawn(bin("mise-server"), [], {
   cwd: root,
   stdio: "inherit",
@@ -64,7 +80,11 @@ const child = spawn(bin("mise-server"), [], {
     MISE_WEB_DIR: path.join(root, "web", "dist"),
     MEDIA_ROOT: mkdtempSync(path.join(tmpdir(), "mise-e2e-media-")),
     AUTH_MODES: "local",
+    IMPORT_ALLOW_PRIVATE: "true",
   },
 });
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => child.kill(signal));
-child.on("exit", (code) => process.exit(code ?? 0));
+child.on("exit", (code) => {
+  site.close();
+  process.exit(code ?? 0);
+});

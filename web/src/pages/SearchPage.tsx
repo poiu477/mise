@@ -2,6 +2,7 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
 import { api } from "../api/client";
 import { answer } from "../api/query";
+import { useSession } from "../session";
 
 const PAGE = 24;
 const TYPES = [
@@ -14,6 +15,10 @@ const TYPES = [
  * recipes by default), 24 at a time with "Show more". */
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
+  const { session } = useSession();
+  // Adding a recipe, written or imported, needs the server and an account: not offline, and not on a kitchen
+  // device.
+  const canAdd = session.status === "in" && !session.me.kitchen;
   const q = params.get("q") ?? "";
   const ingredient = params.get("ingredient") ?? "";
   const type = params.get("type") ?? "recipe";
@@ -86,6 +91,16 @@ export function SearchPage() {
               ? `${total.toLocaleString()} dishes`
               : "Loading…"}
         </p>
+        {canAdd && (
+          <Link to="/recipes/new" className="write-link">
+            Write a recipe
+          </Link>
+        )}
+        {canAdd && (
+          <Link to="/import" className="import-link">
+            Import from a link
+          </Link>
+        )}
       </div>
 
       <ul className="grid">
@@ -111,7 +126,7 @@ export function SearchPage() {
         <p className="empty">
           {q || ingredient
             ? "No dishes match. Try fewer words."
-            : "No dishes yet. Import a seed bundle or add a recipe to get started."}
+            : "No dishes yet. Import a seed bundle or write a recipe to get started."}
         </p>
       )}
       {found.hasNextPage && (

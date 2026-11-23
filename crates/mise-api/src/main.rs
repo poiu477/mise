@@ -1,7 +1,8 @@
 //! `mise-server`: the API (and, when built, the web app) on one port.
 //!
 //! Settings come from the environment (see .env.example): DATABASE_URL, MEDIA_ROOT, MISE_BIND, MISE_WEB_DIR
-//! (the built web app, default ./web/dist when present) and MISE_MIGRATE (run migrations at start, default on).
+//! (the built web app, default ./web/dist when present), MISE_MIGRATE (run migrations at start, default on) and
+//! IMPORT_ALLOW_PRIVATE (let imports fetch from private and local addresses, default off).
 //!
 //! `mise-server openapi` prints the OpenAPI document and exits, without a database (the web app's types are
 //! generated from it).
@@ -52,7 +53,13 @@ async fn main() -> anyhow::Result<()> {
         pool,
         media_root: media_root.clone(),
         auth: std::sync::Arc::new(mise_api::auth::Auth::new(auth)),
+        fetcher: std::sync::Arc::new(mise_ingest::fetch::Fetcher::from_env()),
     };
+    if state.fetcher.allows_private() {
+        tracing::warn!(
+            "IMPORT_ALLOW_PRIVATE is on: imports may fetch from private and local addresses"
+        );
+    }
     let app = mise_api::router(state, web_dir.as_deref());
     if let Some(dir) = &web_dir {
         tracing::info!(web_dir = %dir.display(), "serving the web app");

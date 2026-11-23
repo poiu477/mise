@@ -164,6 +164,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/foods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search the foods by name, to pick the one an ingredient line means. Answers with the foods every household
+         *     knows and those this household's recipes use, never one known only from another household's recipe.
+         */
+        get: operations["search_foods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -193,6 +213,28 @@ export interface paths {
         put?: never;
         /** Add a household (admins only). */
         post: operations["create_household"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import the recipes on a web page into the household. The server fetches the page, which must be on the public
+         *     internet (unless the install sets `IMPORT_ALLOW_PRIVATE`), and reads its schema.org Recipe data; each recipe
+         *     becomes a version only this household sees, grouped into a dish like any other. Importing a page whose recipe
+         *     hasn't changed changes nothing; a changed one becomes a new version.
+         */
+        post: operations["import_url"];
         delete?: never;
         options?: never;
         head?: never;
@@ -313,7 +355,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A photo. `size` is `400`, `1200` or `original`; a size the photo was never made in falls back to the original. */
+        /**
+         * A photo. `size` is `400`, `1200` or `original`; a size the photo was never made in falls back to the original.
+         *     A photo is served only to a household that can see a version using it; a food's picture is served to everyone.
+         *     Another household's photo is not found, as if it didn't exist.
+         */
         get: operations["get_media"];
         put?: never;
         post?: never;
@@ -407,6 +453,97 @@ export interface paths {
         head?: never;
         /** Change a planned dish's serving count. Answers with the week's plan. */
         patch: operations["update_plan_entry"];
+        trace?: never;
+    };
+    "/api/v1/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write a recipe. It belongs to the household, which alone can see it, and gets a dish of its own. Answers with
+         *     the recipe as stored: each line with what was read from it and the food it is matched to.
+         */
+        post: operations["create_recipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read ingredient lines as saving a recipe would, without saving: what each line's amount, unit, name and note
+         *     are, and the food its name matches. An editor shows these as the cook types. A line whose name no food has yet
+         *     comes back without a food; saving the recipe makes one.
+         */
+        post: operations["read_recipe_lines"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A recipe the household wrote, as it was written, for editing. Another household's recipe is not found, as if it
+         *     didn't exist, and so is a version that wasn't written in the app.
+         */
+        get: operations["get_recipe"];
+        /**
+         * Change a recipe the household wrote: the whole recipe is replaced by the one sent. Its dish takes the new title,
+         *     and a new address when the title changed (the old address still finds it). Answers with the recipe as stored.
+         */
+        put: operations["update_recipe"];
+        post?: never;
+        /**
+         * Delete a recipe the household wrote, for good. It leaves every plan it was on, and its dish goes with it when
+         *     it was the dish's only version. A version copied from it stays, no longer naming it as its original.
+         */
+        delete: operations["delete_recipe"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{id}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Give a recipe the household wrote its photo, replacing any it had. The body is the image itself (JPEG, PNG,
+         *     WebP or GIF, at most 20 MB and 50 megapixels) with its type as the `Content-Type`. Only the picture is kept: it
+         *     is decoded and stored again without the camera's metadata, such as where it was taken. Answers with the recipe.
+         */
+        put: operations["set_recipe_photo"];
+        post?: never;
+        /** Take the photo off a recipe the household wrote. Answers with the recipe; one without a photo stays as it is. */
+        delete: operations["remove_recipe_photo"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/review-items": {
@@ -712,9 +849,19 @@ export interface components {
          * @description What kind of error a response is, named for programs: stable across releases, whatever the message says.
          * @enum {string}
          */
-        ErrorCode: "not_found" | "bad_request" | "unauthorized" | "bad_credentials" | "forbidden" | "method_not_allowed" | "conflict" | "account_changed" | "payload_too_large" | "too_many_requests" | "internal";
+        ErrorCode: "not_found" | "bad_request" | "unauthorized" | "bad_credentials" | "forbidden" | "method_not_allowed" | "conflict" | "account_changed" | "payload_too_large" | "too_many_requests" | "internal" | "site_failed";
         ExtraChange: {
             checked: boolean;
+        };
+        /** @description Foods matching a search, the closest names first. */
+        FoodList: {
+            items: components["schemas"]["FoodRef"][];
+        };
+        /** @description A food, by id and name. */
+        FoodRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
         };
         FoodWeights: {
             /** Format: uuid */
@@ -744,6 +891,34 @@ export interface components {
             original: string;
             /** @description Longest side at most 400 px. */
             small: string;
+        };
+        /** @description What importing a page did. */
+        Import: {
+            /** @description Each recipe on the page, in page order; most pages have one. */
+            recipes: components["schemas"]["ImportedRecipe"][];
+        };
+        /** @description A page to import. */
+        ImportInput: {
+            /** @description The page's address, such as `https://recipes.example/leek-soup`. */
+            url: string;
+        };
+        /** @description One recipe from the page, as imported. */
+        ImportedRecipe: {
+            /** @description The slug of the dish it joined, for `/api/v1/dishes/{slug}`. */
+            dish_slug: string;
+            /**
+             * @description Why the recipe's photo wasn't kept, when it has one that wasn't: "its photo couldn't be kept: the site took
+             *     too long to answer".
+             */
+            photo_problem?: string | null;
+            title: string;
+            /** @description The household had already imported this recipe as it is now, so nothing changed. */
+            unchanged: boolean;
+            /**
+             * Format: uuid
+             * @description The version made of it: `/api/v1/variants/{id}` shows it at any serving count.
+             */
+            variant_id: string;
         };
         Ingredient: {
             allergens: string[];
@@ -787,6 +962,26 @@ export interface components {
         LeftOut: {
             key: string;
             name: string;
+        };
+        /** @description One ingredient line as typed. */
+        LineInput: {
+            /**
+             * Format: uuid
+             * @description The food this line is, when the cook picked it. Left out, the line is matched by its name, and a name no
+             *     food has yet becomes a new food.
+             */
+            food_id?: string | null;
+            /** @description The line as a cook writes it: "2 cups flour, sifted", "1 (14 oz) can chickpeas", "salt, to taste". */
+            text: string;
+        };
+        /** @description Ingredient lines to read without saving anything. */
+        LinesInput: {
+            /** @description At most 200 lines of at most 300 characters; blank lines are dropped. */
+            lines: string[];
+        };
+        /** @description Ingredient lines, read. */
+        LinesRead: {
+            lines: components["schemas"]["RecipeLine"][];
         };
         LoginRequest: {
             password: string;
@@ -891,6 +1086,11 @@ export interface components {
             current?: string | null;
             new: string;
         };
+        /**
+         * Format: binary
+         * @description An image file's bytes, as the API document describes a photo's request body.
+         */
+        PhotoFile: string;
         Plan: {
             entries: components["schemas"]["PlanEntry"][];
             /**
@@ -912,6 +1112,63 @@ export interface components {
             variant_id: string;
             /** @description Serving counts with published amounts. */
             yields: number[];
+        };
+        /** @description A recipe the household wrote, as it was written. */
+        Recipe: {
+            description?: string | null;
+            /** @description The slug of its dish, for `/api/v1/dishes/{slug}`. */
+            dish_slug: string;
+            /**
+             * Format: uuid
+             * @description The version's id: `/api/v1/variants/{id}` shows it at any serving count.
+             */
+            id: string;
+            image?: components["schemas"]["Image"] | null;
+            ingredients: components["schemas"]["RecipeLine"][];
+            /**
+             * Format: double
+             * @description The servings the amounts are written for.
+             */
+            servings: number;
+            steps: string[];
+            subtitle?: string | null;
+            title: string;
+        };
+        /** @description A recipe as its writer sends it. */
+        RecipeInput: {
+            /** @description At most 4000 characters. */
+            description?: string | null;
+            /** @description At most 200 lines of at most 300 characters; blank lines are dropped. */
+            ingredients: components["schemas"]["LineInput"][];
+            /**
+             * Format: double
+             * @description How many servings the amounts are written for: more than 0, at most 1000. Any other serving count is
+             *     worked out from these.
+             */
+            servings: number;
+            /** @description At most 100 steps of at most 4000 characters, in order; blank ones are dropped. */
+            steps: string[];
+            /** @description At most 200 characters: "with Garlic and Parmesan". */
+            subtitle?: string | null;
+            /** @description 1 to 200 characters. */
+            title: string;
+        };
+        /** @description One ingredient line: what was typed, and what mise read from it. */
+        RecipeLine: {
+            /**
+             * Format: double
+             * @description The amount read from it, at the recipe's servings; absent for "salt, to taste".
+             */
+            amount?: number | null;
+            food?: components["schemas"]["FoodRef"] | null;
+            /** @description The name read from it, which is what gets matched to a food: "flour". */
+            name: string;
+            /** @description The rest: "sifted", "14 oz; drained", "to taste". */
+            note?: string | null;
+            /** @description The line as typed. */
+            text: string;
+            /** @description The unit read from it: "cup", "tablespoon", "ounce", "clove", or "unit" for a bare count ("2 eggs"). */
+            unit?: string | null;
         };
         /** @description An answer to one item. */
         ReviewDecision: {
@@ -1101,6 +1358,8 @@ export interface components {
             attributes: {
                 [key: string]: string;
             };
+            /** @description This household wrote the version in the app, so it can change it at `/api/v1/recipes/{id}`. */
+            editable: boolean;
             has_steps: boolean;
             /** Format: uuid */
             id: string;
@@ -1590,6 +1849,76 @@ export interface operations {
             };
         };
     };
+    search_foods: {
+        parameters: {
+            query: {
+                /** @description Part of the food's name, 1 to 100 characters: "onion", "parm". Small typos still match. */
+                q: string;
+                /** @description How many to answer with (default 10, at most 50). */
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching foods, the closest names first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoodList"];
+                };
+            };
+            /** @description `q` is missing, empty or over 100 characters, or `limit` isn't a number */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called from a kitchen device, which reads only the plan and recipes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -1735,6 +2064,93 @@ export interface operations {
             };
             /** @description The server failed; the details are in its log */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    import_url: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportInput"];
+            };
+        };
+        responses: {
+            /** @description The page's recipes, imported */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Import"];
+                };
+            };
+            /** @description The address isn't a web link mise fetches (not http or https, a private or local address, a port of another service), there's no site at it, or the page isn't a page, is too large or holds no recipe; or the body isn't JSON of the right shape */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The body is over 2 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The site didn't answer, took too long, redirected too often or answered with an error */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2321,7 +2737,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description No such photo, or its file is missing */
+            /** @description No such photo, not one a version this household can see uses, or its file is missing */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2800,6 +3216,567 @@ export interface operations {
             };
             /** @description The body is over 2 MB */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeInput"];
+            };
+        };
+        responses: {
+            /** @description The recipe, stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            /** @description A field is missing, empty, too long or out of range, a line names a food that doesn't exist, or the body isn't JSON of the right shape */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The body is over 2 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_recipe_lines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinesInput"];
+            };
+        };
+        responses: {
+            /** @description Each line, read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinesRead"];
+                };
+            };
+            /** @description There are too many lines, one is too long, or the body isn't JSON of the right shape */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The body is over 2 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recipe as written */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            /** @description The id isn't a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called from a kitchen device, which reads only the plan and recipes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such recipe, or not one this household wrote */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeInput"];
+            };
+        };
+        responses: {
+            /** @description The recipe, changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            /** @description The id isn't a UUID, a field is missing, empty, too long or out of range, a line names a food that doesn't exist, or the body isn't JSON of the right shape */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such recipe, or not one this household wrote */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The body is over 2 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recipe is gone */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id isn't a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such recipe, or not one this household wrote */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_recipe_photo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description The image file */
+        requestBody: {
+            content: {
+                "image/*": components["schemas"]["PhotoFile"];
+            };
+        };
+        responses: {
+            /** @description The recipe with its new photo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            /** @description The id isn't a UUID, the Content-Type isn't an image type, or the body isn't an image mise reads or has too many pixels */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such recipe, or not one this household wrote */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The photo is over 20 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    remove_recipe_photo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recipe without a photo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            /** @description The id isn't a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such recipe, or not one this household wrote */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };

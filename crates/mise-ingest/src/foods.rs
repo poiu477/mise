@@ -201,14 +201,44 @@ pub async fn reset_matching(pool: &PgPool) -> Result<()> {
 /// Match every unmatched ingredient line to a food, creating foods as needed, then propose tree links for
 /// the foods created in this run.
 pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
+    let mut tx = pool.begin().await?;
+    let stats = match_foods_in(&mut tx).await?;
+    tx.commit().await?;
+    Ok(stats)
+}
+
+/// The key of the advisory lock one matching run holds until its transaction ends ("mise food" in ASCII).
+const MATCHING_LOCK: i64 = 0x6d69_7365_666f_6f64;
+
+/// [`match_foods`] inside the caller's transaction, so saving a recipe and matching its lines succeed or fail
+/// together. Runs take turns (an advisory lock held to the end of the transaction): two at once would each make a
+/// food for the same new name.
+pub async fn match_foods_in(tx: &mut Transaction<'_, Postgres>) -> Result<MatchStats> {
     let mut stats = MatchStats::default();
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(MATCHING_LOCK)
+        .execute(&mut **tx)
+        .await
+        .context("waiting for another matching run")?;
+
+    // Unmatched names, most frequent spelling first so it becomes the food's display name.
+    let names: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT raw_name, count(*) FROM ingredient_lines WHERE food_id IS NULL AND raw_name <> ''
+         GROUP BY raw_name ORDER BY count(*) DESC",
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+    stats.names = names.len();
+    if names.is_empty() {
+        return Ok(stats);
+    }
 
     // Existing foods by key.
     let mut by_key: HashMap<String, Food> = HashMap::new();
     let rows: Vec<(String, Uuid, String)> = sqlx::query_as(
         "SELECT a.alias, f.id, f.name FROM food_aliases a JOIN foods f ON f.id = a.food_id",
     )
-    .fetch_all(pool)
+    .fetch_all(&mut **tx)
     .await?;
     for (alias, id, name) in rows {
         by_key.insert(
@@ -221,19 +251,10 @@ pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
         );
     }
 
-    // Unmatched names, most frequent spelling first so it becomes the food's display name.
-    let names: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT raw_name, count(*) FROM ingredient_lines WHERE food_id IS NULL AND raw_name <> ''
-         GROUP BY raw_name ORDER BY count(*) DESC",
-    )
-    .fetch_all(pool)
-    .await?;
-    stats.names = names.len();
-
     let mut new_foods: Vec<(Uuid, String, String, &'static str)> = Vec::new(); // id, name, slug, kind
     let mut slugs_taken: std::collections::HashSet<String> =
         sqlx::query_scalar::<_, String>("SELECT slug FROM foods")
-            .fetch_all(pool)
+            .fetch_all(&mut **tx)
             .await?
             .into_iter()
             .collect();
@@ -270,7 +291,6 @@ pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
     }
     stats.foods_created = new_foods.len();
 
-    let mut tx = pool.begin().await?;
     sqlx::query(
         "INSERT INTO foods (id, name, slug, kind)
          SELECT id, name, slug, kind::food_kind FROM UNNEST($1::uuid[], $2::text[], $3::text[], $4::text[]) AS t(id, name, slug, kind)",
@@ -279,7 +299,7 @@ pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
     .bind(new_foods.iter().map(|f| f.1.clone()).collect::<Vec<_>>())
     .bind(new_foods.iter().map(|f| f.2.clone()).collect::<Vec<_>>())
     .bind(new_foods.iter().map(|f| f.3.to_string()).collect::<Vec<_>>())
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await
     .context("inserting foods")?;
 
@@ -294,7 +314,7 @@ pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
     )
     .bind(&alias_ids)
     .bind(&alias_keys)
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await
     .context("inserting aliases")?;
 
@@ -305,7 +325,7 @@ pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
     )
     .bind(&match_names)
     .bind(&match_ids)
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await
     .context("matching lines")?
     .rows_affected();
@@ -316,14 +336,13 @@ pub async fn match_foods(pool: &PgPool) -> Result<MatchStats> {
          FROM ingredient_lines il JOIN variants v ON v.id = il.variant_id
          WHERE il.food_id IS NOT NULL GROUP BY il.food_id",
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await?
     .into_iter()
     .map(|(id, recipes, all)| (id, (recipes, all)))
     .collect();
 
-    propose_tree(&mut tx, &by_key, &usage, &mut stats).await?;
-    tx.commit().await?;
+    propose_tree(tx, &by_key, &usage, &mut stats).await?;
     Ok(stats)
 }
 

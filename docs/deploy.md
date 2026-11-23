@@ -157,6 +157,10 @@ rule that lets only the proxy reach port 8080 does what `127.0.0.1` would.
 - **Nginx Proxy Manager:** a proxy host for `mise.example.com` forwarding to `http://<mise host>:8080`, with an SSL
   certificate and **Force SSL** on.
 
+A recipe's photo is uploaded in one request of up to 20 MB. Caddy and Traefik pass that as they come; nginx and
+Nginx Proxy Manager stop at 1 MB unless told otherwise (`client_max_body_size 20m;` in the `server` block, or in
+the proxy host's custom configuration).
+
 mise sends no HSTS header. Once HTTPS works for good, the proxy can add one, for example Caddy's
 `header Strict-Transport-Security "max-age=31536000"`. Browsers then refuse plain HTTP to that name for a year, so
 add it last.
@@ -221,6 +225,20 @@ With `mise.example.com` standing for your address (add `--cacert mise-root.crt` 
 
 CI runs the first three against the stack's own Caddy with `MISE_TLS=internal` whenever `compose.yaml` or the
 `Caddyfile` changes (the `docker image` job in `.gitlab-ci.yml`).
+
+## 8. Importing from a link
+
+"Import from a link" (and `mise import url`) has the server fetch the page and its photo, so the server, not the
+browser, makes the request. It fetches only from the public internet: an address that is, or whose name resolves to,
+a loopback, private, link-local (where cloud hosts keep their metadata), shared or reserved address is refused, IPv4
+and IPv6 alike, as is a redirect to one; the connection goes to the address that was checked. Only `http` and
+`https`, on ports 80, 443 or 1024 and up; at most 5 redirects, 20 seconds and 5 MB for a page, 30 seconds and 20 MB
+for a photo.
+
+To import from another app on the home network, set `IMPORT_ALLOW_PRIVATE=true` in `.env` and restart the app. That
+lifts the address and port checks for everyone who can sign in, so anyone with an account can then make the server
+fetch from the home network (an admin page, a router) and see whether it answers. Leave it off unless every account
+belongs to people you'd trust with that. The server logs a warning at start while it is on.
 
 ## Commands
 

@@ -1,7 +1,13 @@
 // The household's journeys through mise in a real browser, on the demo recipes (fixtures/demo-bundle), from an
-// empty install: first-run setup, cooking at any serving count, an old dish address, printing a recipe card,
-// answering the review queue, planning a week, shopping (offline too), phone layout, accessibility and signing out. They run in order and share
+// empty install: first-run setup, cooking at any serving count, an old dish address, writing a recipe, printing a
+// recipe card, answering the review queue, planning a week, shopping (offline too), importing a recipe from a link,
+// phone layout, accessibility and signing out. They run in order and share
 // one browser session, as a person would.
+//
+// The browser is in New York on a Sunday evening, when the date by UTC is already Monday. The app plans and shops
+// the week by the viewer's own calendar, while the server, asked for no week, answers for its own by UTC. So in
+// these journeys the browser's week is always the one before the server's, and anything that leans on the server's
+// default week, in the app or in a journey, reads the wrong week on every run, not just for a few hours a week.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
@@ -10,8 +16,28 @@ test.describe.configure({ mode: "serial" });
 let context: BrowserContext;
 let page: Page;
 
+/** Where the browser is: west of Greenwich, so its Sunday evening is UTC's Monday. */
+const ZONE = "America/New_York";
+const DAY = 24 * 60 * 60 * 1000;
+
+/** 02:39 UTC on the Monday of the server's current week: 9:39 or 10:39 on Sunday evening in New York. */
+const sundayEvening = () => {
+  const now = new Date();
+  const monday = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() - ((now.getUTCDay() + 6) % 7),
+  );
+  return new Date(monday + (2 * 60 + 39) * 60_000);
+};
+/** The time on the browser's clock, for every page of the session. */
+let clock: Date;
+
 test.beforeAll(async ({ browser }) => {
-  context = await browser.newContext();
+  context = await browser.newContext({ timezoneId: ZONE });
+  clock = sundayEvening();
+  // The date stands still while timers run as usual, so the day can't turn mid-run.
+  await context.clock.setFixedTime(clock);
   page = await context.newPage();
 });
 
@@ -46,6 +72,21 @@ const pagesIn = (pdf: Buffer) => pdf.toString("latin1").match(/\/Type\s*\/Page(?
 /** A row on the shopping list, found by the food's name. */
 const shoppingItem = (name: string): Locator =>
   page.locator(".shop-section li").filter({ has: page.locator(".item-name", { hasText: name }) });
+
+/** The week the shopping page is showing, read from its link to that week's plan: "2026-11-09". */
+const weekShown = async () => {
+  const href = await page.locator('main a[href^="/plan?week="]').first().getAttribute("href");
+  const week = href?.split("week=")[1] ?? "";
+  expect(week, "the shopping page links to its week's plan").toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  return week;
+};
+
+/** The server's shopping list for the week on screen, as whoever is signed in. It names the week: asked for none,
+ * the server answers for its own, by UTC, which on a Sunday evening here is next week. */
+const listOnServer = async () => {
+  const week = await weekShown();
+  return (await context.request.get("/api/v1/shopping", { params: { week } })).json();
+};
 
 test("the first visit creates the admin account", async () => {
   await page.goto("/");
@@ -96,6 +137,90 @@ test("an old address for a renamed dish lands on its current one", async () => {
   await expect(page).toHaveURL(/\/dishes\/weeknight-tomato-pasta\?s=4$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weeknight Tomato Pasta");
   await expect(amountOf("Spaghetti")).toHaveText("12 oz");
+});
+
+/** A photo to upload: 16 × 12 pixels of orange, as a PNG. */
+const PHOTO = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAFUlEQVR42mO412NDEmIY1TCqATsCAAwgPJCWiDEFAAAAAElFTkSuQmCC",
+  "base64",
+);
+
+/** How the editor reads the ingredient line that names `food`: its row under the ingredients box. */
+const readingOf = (food: string) =>
+  page
+    .getByRole("region", { name: "How each ingredient reads" })
+    .locator("ul.reading-list > li")
+    .filter({ has: page.locator(".reading", { hasText: food }) });
+
+test("a recipe is written from nothing, corrected, photographed, cooked at another size, and deleted", async () => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Write a recipe" }).click();
+  await expect(page.getByRole("heading", { name: "Write a recipe" })).toBeVisible();
+  await page.getByLabel("Title", { exact: true }).fill("Garlic Toast");
+  await page.getByLabel("Servings").fill("2");
+  await page
+    .getByLabel("Ingredients")
+    .fill("4 slices bread\n2 cloves garlic, minced\n2 TBSP hard cheese, grated\n1 TBSP olive oil");
+
+  // Each line reads back as it will be stored, with the food it counts as.
+  await expect(readingOf("garlic").locator(".reading")).toHaveText("2 cloves · garlic · minced");
+  await expect(readingOf("garlic").locator(".food")).toHaveText("Garlic");
+  await expect(readingOf("olive oil").locator(".food")).toHaveText("Olive Oil");
+  // "hard cheese" is no food mise knows: the cook says it is Parmesan.
+  await expect(readingOf("hard cheese").locator(".food")).toHaveText("new food");
+  await page.getByRole("button", { name: "Change the food for hard cheese" }).click();
+  await page.getByLabel("Find a food").fill("parm");
+  await page.getByRole("button", { name: "Parmesan", exact: true }).click();
+  await expect(readingOf("hard cheese").locator(".food")).toHaveText("Parmesan");
+
+  await page
+    .getByLabel("Steps")
+    .fill(
+      "Toast the bread.\nRub with the garlic, drizzle with 1 TBSP olive oil and top with the cheese.",
+    );
+  await page
+    .getByLabel("Photo")
+    .setInputFiles({ name: "toast.png", mimeType: "image/png", buffer: PHOTO });
+  await expect(page.getByRole("img", { name: "The recipe's photo" })).toBeVisible();
+  await page.getByRole("button", { name: "Save recipe" }).click();
+
+  // Saved, it is a dish like any other, with its photo.
+  await expect(page).toHaveURL(/\/dishes\/garlic-toast$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Garlic Toast");
+  const hero = page.locator(".hero img");
+  await expect(hero).toHaveAttribute("src", /\/api\/v1\/media\/[0-9a-f-]+\/1200$/);
+  await expect
+    .poll(() => hero.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
+  await expect(amountOf("garlic")).toHaveText("2 cloves");
+  await expect(amountOf("olive oil")).toHaveText("1 TBSP");
+
+  // At another serving count the amounts follow, in the list and in the step that names one.
+  await page.getByRole("button", { name: "More servings" }).click();
+  await page.getByRole("button", { name: "More servings" }).click();
+  await expect(amountOf("garlic")).toHaveText("≈4 cloves");
+  await expect(amountOf("olive oil")).toHaveText("≈2 TBSP");
+  await expect(page.getByText("drizzle with 2 TBSP olive oil")).toBeVisible();
+
+  // Edited, it keeps the food the cook picked, and its dish follows the new title; the old address still lands.
+  await page.getByRole("link", { name: "Edit recipe" }).click();
+  await expect(page.getByRole("heading", { name: "Edit recipe" })).toBeVisible();
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Garlic Toast");
+  await expect(readingOf("hard cheese").locator(".food")).toHaveText("Parmesan");
+  await page.getByLabel("Title", { exact: true }).fill("Garlic Cheese Toast");
+  await page.getByRole("button", { name: "Save recipe" }).click();
+  await expect(page).toHaveURL(/\/dishes\/garlic-cheese-toast$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Garlic Cheese Toast");
+  await page.goto("/dishes/garlic-toast");
+  await expect(page).toHaveURL(/\/dishes\/garlic-cheese-toast$/);
+
+  // Deleted, it is gone, and the journeys after this one start from the demo recipes alone.
+  await page.getByRole("link", { name: "Edit recipe" }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete recipe" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/dishes/garlic-cheese-toast");
+  await expect(page.getByText("No such dish.")).toBeVisible();
 });
 
 test("a serving count the server refuses says why, on the dish page and its card", async () => {
@@ -309,6 +434,31 @@ test("two more dishes and the week's list take under 20 interactions", async () 
   expect(sections.at(-1)).toBe("Check you have");
 });
 
+test("on a Sunday evening west of Greenwich, the week planned is the household's own", async () => {
+  // The clock these journeys run on: Sunday here, Monday already by UTC.
+  const days = await page.evaluate(() => [new Date().getDay(), new Date().getUTCDay()]);
+  expect(days).toEqual([0, 1]);
+  // Sunday ends the week that began six days ago, and that is the week on screen.
+  await expect(page.getByRole("heading", { name: "This week", exact: true })).toBeVisible();
+  const week = await weekShown();
+  expect(week).toBe(new Date(clock.getTime() - 7 * DAY).toISOString().slice(0, 10));
+
+  // The three dishes are on that week's plan. The server's own week, the one it answers for when asked for none,
+  // is a later one by UTC, and nothing landed there.
+  const planned = await (await page.request.get("/api/v1/plan", { params: { week } })).json();
+  expect(planned.week).toBe(week);
+  expect(planned.entries.map((e: { title: string }) => e.title)).toEqual([
+    "Weeknight Tomato Pasta",
+    "Black Bean Tacos",
+    "Lemon Herb Chicken",
+  ]);
+  const servers = await (await page.request.get("/api/v1/plan")).json();
+  expect(servers.week > week, `the server's week, ${servers.week}, is after ${week}`).toBe(true);
+  expect(servers.entries).toEqual([]);
+  const serversList = await (await page.request.get("/api/v1/shopping")).json();
+  expect(serversList.sections).toEqual([]);
+});
+
 test("kinds of one food share a line, and its tick survives a reload", async () => {
   // The pasta asks for a yellow onion and the tacos for half a cup of any onion: one line, in onions.
   const onions = page.locator(".shop-section li").filter({ hasText: /onion/i });
@@ -320,7 +470,7 @@ test("kinds of one food share a line, and its tick survives a reload", async () 
   // Wait for the server to have the tick, so the reload reads it from there, not from the device's queue.
   await expect
     .poll(async () => {
-      const list = await (await page.request.get("/api/v1/shopping")).json();
+      const list = await listOnServer();
       const items = list.sections.flatMap(
         (s: { items: { name: string; checked: boolean }[] }) => s.items,
       );
@@ -365,7 +515,7 @@ test("ticks survive a reload, and the list keeps working offline", async () => {
   await context.setOffline(false);
   await expect(page.getByText("not sent yet")).toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByRole("status")).toHaveCount(0);
-  const list = await (await page.request.get("/api/v1/shopping")).json();
+  const list = await listOnServer();
   const items = list.sections.flatMap(
     (s: { items: { name: string; checked: boolean }[] }) => s.items,
   );
@@ -392,7 +542,7 @@ test("an addition whose answer is lost is sent again and added once", async () =
   // the first send to have been saved before reading the server's list.
   await savedOnce;
   await expect(page.getByText("not sent yet")).toBeVisible();
-  const saved = await (await page.request.get("/api/v1/shopping")).json();
+  const saved = await listOnServer();
   expect(saved.extras.map((x: { name: string }) => x.name)).toEqual(["Foil", "Tape"]);
 
   // Reopening sends it again, and the server knows it already.
@@ -400,7 +550,7 @@ test("an addition whose answer is lost is sent again and added once", async () =
   await expect.poll(() => sends, { timeout: 15_000 }).toBe(2);
   await expect(page.getByText("not sent yet")).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "Tape", exact: true })).toHaveCount(1);
-  const list = await (await page.request.get("/api/v1/shopping")).json();
+  const list = await listOnServer();
   expect(list.extras.map((x: { name: string }) => x.name)).toEqual(["Foil", "Tape"]);
   await page.unroute("**/api/v1/shopping/extras");
 });
@@ -453,7 +603,8 @@ test("work queued as one person never lands on whoever signs in after them", asy
   // it as meant for someone else, and the tab follows Sam instead of sending it as Sam.
   await expect(page.getByText("Nothing planned for this week yet")).toBeVisible();
   await page.waitForLoadState("networkidle");
-  const sams = await (await other.request.get("/api/v1/shopping")).json();
+  // Robin's addition named this week, so this week's list is where it would have landed.
+  const sams = await listOnServer();
   expect(sams.extras).toEqual([]);
   // Robin's addition is still waiting on the device, for Robin.
   const waiting = await page.evaluate(() =>
@@ -472,10 +623,39 @@ const pages = [
   // Scaled: the "Amounts scaled" and "Check amounts" step notes show.
   "/dishes/weeknight-tomato-pasta?s=3",
   "/dishes/weeknight-tomato-pasta/card?s=6",
+  "/recipes/new",
   "/plan",
   "/shopping",
   "/account",
+  "/import",
 ];
+
+test("a recipe imported from a link opens as a dish of the household's own", async () => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Import from a link" }).click();
+  await expect(page).toHaveURL(/\/import$/);
+  const link = page.getByLabel("Link to a recipe page");
+  // A page with no recipe says so. (Refused addresses are API tests: this server allows private ones.)
+  await link.fill("http://127.0.0.1:8096/web-pages/no-recipe.html");
+  await page.getByRole("button", { name: "Import" }).click();
+  await expect(page.getByRole("alert")).toContainText("no recipe found");
+
+  await link.fill("http://127.0.0.1:8096/web-pages/no-image.html");
+  await page.getByRole("button", { name: "Import" }).click();
+  await expect(page).toHaveURL(/\/dishes\/five-minute-hummus\?v=/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Five-Minute Hummus");
+  await expect(amountOf("tahini")).toHaveText("3 TBSP");
+
+  // The same page again changes nothing: it says so, and the dish is the one already there.
+  await page.goto("/import");
+  await page
+    .getByLabel("Link to a recipe page")
+    .fill("http://127.0.0.1:8096/web-pages/no-image.html");
+  await page.getByRole("button", { name: "Import" }).click();
+  await expect(page).toHaveURL(/\/dishes\/five-minute-hummus\?v=/);
+  const found = await (await page.request.get("/api/v1/dishes?q=hummus")).json();
+  expect(found.total).toBe(1);
+});
 
 test("every page fits a phone without sideways scrolling", async () => {
   await page.setViewportSize({ width: 375, height: 812 });
@@ -505,7 +685,23 @@ test("pages have no serious accessibility problems", async () => {
   }
 });
 
+/** The API answers the service worker holds for offline use: recipes and photos, by address. */
+const keptAnswers = () =>
+  page.evaluate(async () => {
+    const kept: string[] = [];
+    for (const name of await caches.keys()) {
+      const requests = await (await caches.open(name)).keys();
+      kept.push(
+        ...requests.map((r) => new URL(r.url).pathname).filter((p) => p.startsWith("/api")),
+      );
+    }
+    return kept;
+  });
+
 test("signing out leaves nothing of the household on the device", async () => {
+  // The journeys so far left recipes kept for offline use.
+  await page.goto("/");
+  await expect.poll(keptAnswers).not.toEqual([]);
   await page.goto("/account");
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
@@ -513,4 +709,7 @@ test("signing out leaves nothing of the household on the device", async () => {
     Object.keys(localStorage).filter((k) => k.startsWith("mise:")),
   );
   expect(kept).toEqual([]);
+  // Nor the recipes and photos kept for offline use: they are the household's, and the next person to sign in
+  // here may be of another.
+  await expect.poll(keptAnswers).toEqual([]);
 });

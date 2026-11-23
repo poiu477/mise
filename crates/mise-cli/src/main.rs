@@ -32,6 +32,9 @@ enum Command {
         /// Directory containing manifest.json and variants.ndjson.
         dir: std::path::PathBuf,
     },
+    /// Import recipes into a household from elsewhere.
+    #[command(subcommand)]
+    Import(ImportCommand),
     /// Match ingredient lines to foods and propose the food tree.
     MatchFoods {
         /// First undo the previous matching run (keeps imported food knowledge).
@@ -122,6 +125,48 @@ fn write_json(file: &std::path::Path, value: serde_json::Value) -> anyhow::Resul
     std::fs::write(file, text).with_context(|| format!("writing {}", file.display()))
 }
 
+#[derive(Subcommand)]
+enum ImportCommand {
+    /// Fetch a web page and import each recipe on it (schema.org Recipe data) into a household, which alone sees
+    /// it. Only public addresses are fetched unless IMPORT_ALLOW_PRIVATE=true. Importing an unchanged page again
+    /// changes nothing.
+    Url {
+        /// The page's address.
+        url: url::Url,
+        /// The household the recipes belong to, by name; may be left out when the install has one household.
+        #[arg(long)]
+        household: Option<String>,
+        /// Where photos are stored.
+        #[arg(long, env = "MEDIA_ROOT", default_value = "./data/media")]
+        media_root: std::path::PathBuf,
+    },
+}
+
+/// The household named `name`, or the install's only household when no name is given.
+async fn household(pool: &sqlx::PgPool, name: Option<&str>) -> anyhow::Result<uuid::Uuid> {
+    let found: Vec<(uuid::Uuid, String)> = sqlx::query_as(
+        "SELECT id, name FROM households WHERE $1::text IS NULL OR name = $1 ORDER BY created_at",
+    )
+    .bind(name)
+    .fetch_all(pool)
+    .await?;
+    match (found.as_slice(), name) {
+        ([(id, _)], _) => Ok(*id),
+        ([], Some(name)) => anyhow::bail!("no household is called {name:?}"),
+        ([], None) => {
+            anyhow::bail!("there are no households yet: set the install up in the web app first")
+        }
+        (_, Some(name)) => anyhow::bail!("more than one household is called {name:?}"),
+        (all, None) => anyhow::bail!(
+            "say which household with --household: {}",
+            all.iter()
+                .map(|(_, n)| n.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -154,6 +199,26 @@ async fn main() -> anyhow::Result<()> {
             if foods.exists() {
                 let added = mise_ingest::foods::import_food_knowledge(&pool, &foods).await?;
                 tracing::info!(added, "food knowledge imported");
+            }
+        }
+        Command::Import(ImportCommand::Url {
+            url,
+            household: name,
+            media_root,
+        }) => {
+            let household = household(&pool, name.as_deref()).await?;
+            let fetcher = mise_ingest::fetch::Fetcher::from_env();
+            let imported =
+                mise_ingest::web::import_url(&pool, &media_root, &fetcher, household, &url).await?;
+            for r in imported {
+                let what = if r.unchanged { "unchanged" } else { "imported" };
+                println!(
+                    "{what}: {} (/dishes/{}?v={})",
+                    r.title, r.dish_slug, r.variant_id
+                );
+                if let Some(why) = r.photo_problem {
+                    println!("  {why}");
+                }
             }
         }
         Command::MatchFoods { reset } => {

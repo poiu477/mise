@@ -208,3 +208,29 @@ fn steps_parse_and_render_without_panicking() {
         );
     }
 }
+
+#[test]
+fn ingredient_lines_read_without_panicking() {
+    use mise_core::ingredient_line;
+
+    let mut rng = Rng(0x11e5);
+    for _ in 0..200_000 {
+        let text = random_text(&mut rng);
+        let line = ingredient_line::parse(&text);
+        assert_eq!(
+            line.amount.is_some(),
+            line.unit.is_some(),
+            "{text:?} read as {line:?}"
+        );
+        if let Some(amount) = line.amount {
+            assert!(amount.is_finite() && amount > 0.0, "{text:?} gave {amount}");
+            let word = line.unit_word().unwrap();
+            assert_eq!(Unit::parse(&word), line.unit, "{text:?} in {word:?}");
+        }
+        assert!(
+            line.name.len() <= text.len(),
+            "{text:?} named {:?}",
+            line.name
+        );
+    }
+}
