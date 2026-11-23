@@ -3,6 +3,11 @@
 // recipe card,
 // planning a week, shopping (offline too), phone layout, accessibility and signing out. They run in order and share
 // one browser session, as a person would.
+//
+// The browser is in New York on a Sunday evening, when the date by UTC is already Monday. The app plans and shops
+// the week by the viewer's own calendar, while the server, asked for no week, answers for its own by UTC. So in
+// these journeys the browser's week is always the one before the server's, and anything that leans on the server's
+// default week, in the app or in a journey, reads the wrong week on every run, not just for a few hours a week.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
@@ -11,8 +16,28 @@ test.describe.configure({ mode: "serial" });
 let context: BrowserContext;
 let page: Page;
 
+/** Where the browser is: west of Greenwich, so its Sunday evening is UTC's Monday. */
+const ZONE = "America/New_York";
+const DAY = 24 * 60 * 60 * 1000;
+
+/** 02:39 UTC on the Monday of the server's current week: 9:39 or 10:39 on Sunday evening in New York. */
+const sundayEvening = () => {
+  const now = new Date();
+  const monday = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() - ((now.getUTCDay() + 6) % 7),
+  );
+  return new Date(monday + (2 * 60 + 39) * 60_000);
+};
+/** The time on the browser's clock, for every page of the session. */
+let clock: Date;
+
 test.beforeAll(async ({ browser }) => {
-  context = await browser.newContext();
+  context = await browser.newContext({ timezoneId: ZONE });
+  clock = sundayEvening();
+  // The date stands still while timers run as usual, so the day can't turn mid-run.
+  await context.clock.setFixedTime(clock);
   page = await context.newPage();
 });
 
@@ -47,6 +72,21 @@ const pagesIn = (pdf: Buffer) => pdf.toString("latin1").match(/\/Type\s*\/Page(?
 /** A row on the shopping list, found by the food's name. */
 const shoppingItem = (name: string): Locator =>
   page.locator(".shop-section li").filter({ has: page.locator(".item-name", { hasText: name }) });
+
+/** The week the shopping page is showing, read from its link to that week's plan: "2026-11-09". */
+const weekShown = async () => {
+  const href = await page.locator('main a[href^="/plan?week="]').first().getAttribute("href");
+  const week = href?.split("week=")[1] ?? "";
+  expect(week, "the shopping page links to its week's plan").toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  return week;
+};
+
+/** The server's shopping list for the week on screen, as whoever is signed in. It names the week: asked for none,
+ * the server answers for its own, by UTC, which on a Sunday evening here is next week. */
+const listOnServer = async () => {
+  const week = await weekShown();
+  return (await context.request.get("/api/v1/shopping", { params: { week } })).json();
+};
 
 test("the first visit creates the admin account", async () => {
   await page.goto("/");
@@ -360,6 +400,31 @@ test("two more dishes and the week's list take under 20 interactions", async () 
   expect(sections.at(-1)).toBe("Check you have");
 });
 
+test("on a Sunday evening west of Greenwich, the week planned is the household's own", async () => {
+  // The clock these journeys run on: Sunday here, Monday already by UTC.
+  const days = await page.evaluate(() => [new Date().getDay(), new Date().getUTCDay()]);
+  expect(days).toEqual([0, 1]);
+  // Sunday ends the week that began six days ago, and that is the week on screen.
+  await expect(page.getByRole("heading", { name: "This week", exact: true })).toBeVisible();
+  const week = await weekShown();
+  expect(week).toBe(new Date(clock.getTime() - 7 * DAY).toISOString().slice(0, 10));
+
+  // The three dishes are on that week's plan. The server's own week, the one it answers for when asked for none,
+  // is a later one by UTC, and nothing landed there.
+  const planned = await (await page.request.get("/api/v1/plan", { params: { week } })).json();
+  expect(planned.week).toBe(week);
+  expect(planned.entries.map((e: { title: string }) => e.title)).toEqual([
+    "Weeknight Tomato Pasta",
+    "Black Bean Tacos",
+    "Lemon Herb Chicken",
+  ]);
+  const servers = await (await page.request.get("/api/v1/plan")).json();
+  expect(servers.week > week, `the server's week, ${servers.week}, is after ${week}`).toBe(true);
+  expect(servers.entries).toEqual([]);
+  const serversList = await (await page.request.get("/api/v1/shopping")).json();
+  expect(serversList.sections).toEqual([]);
+});
+
 test("kinds of one food share a line, and its tick survives a reload", async () => {
   // The pasta asks for a yellow onion and the tacos for half a cup of any onion: one line, in onions.
   const onions = page.locator(".shop-section li").filter({ hasText: /onion/i });
@@ -371,7 +436,7 @@ test("kinds of one food share a line, and its tick survives a reload", async () 
   // Wait for the server to have the tick, so the reload reads it from there, not from the device's queue.
   await expect
     .poll(async () => {
-      const list = await (await page.request.get("/api/v1/shopping")).json();
+      const list = await listOnServer();
       const items = list.sections.flatMap(
         (s: { items: { name: string; checked: boolean }[] }) => s.items,
       );
@@ -416,7 +481,7 @@ test("ticks survive a reload, and the list keeps working offline", async () => {
   await context.setOffline(false);
   await expect(page.getByText("not sent yet")).toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByRole("status")).toHaveCount(0);
-  const list = await (await page.request.get("/api/v1/shopping")).json();
+  const list = await listOnServer();
   const items = list.sections.flatMap(
     (s: { items: { name: string; checked: boolean }[] }) => s.items,
   );
@@ -443,7 +508,7 @@ test("an addition whose answer is lost is sent again and added once", async () =
   // the first send to have been saved before reading the server's list.
   await savedOnce;
   await expect(page.getByText("not sent yet")).toBeVisible();
-  const saved = await (await page.request.get("/api/v1/shopping")).json();
+  const saved = await listOnServer();
   expect(saved.extras.map((x: { name: string }) => x.name)).toEqual(["Foil", "Tape"]);
 
   // Reopening sends it again, and the server knows it already.
@@ -451,7 +516,7 @@ test("an addition whose answer is lost is sent again and added once", async () =
   await expect.poll(() => sends, { timeout: 15_000 }).toBe(2);
   await expect(page.getByText("not sent yet")).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "Tape", exact: true })).toHaveCount(1);
-  const list = await (await page.request.get("/api/v1/shopping")).json();
+  const list = await listOnServer();
   expect(list.extras.map((x: { name: string }) => x.name)).toEqual(["Foil", "Tape"]);
   await page.unroute("**/api/v1/shopping/extras");
 });
@@ -504,7 +569,8 @@ test("work queued as one person never lands on whoever signs in after them", asy
   // it as meant for someone else, and the tab follows Sam instead of sending it as Sam.
   await expect(page.getByText("Nothing planned for this week yet")).toBeVisible();
   await page.waitForLoadState("networkidle");
-  const sams = await (await other.request.get("/api/v1/shopping")).json();
+  // Robin's addition named this week, so this week's list is where it would have landed.
+  const sams = await listOnServer();
   expect(sams.extras).toEqual([]);
   // Robin's addition is still waiting on the device, for Robin.
   const waiting = await page.evaluate(() =>
