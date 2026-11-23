@@ -6,9 +6,10 @@
 //! `dish_decisions` override all of this: decided merges are applied last, and decided pairs are not queued
 //! again. Variants pinned by a person, and dishes a person made, are never touched.
 //!
-//! A household's own versions (imports, forks, recipes written in the app) group like any others, with one limit:
-//! they may join a dish everyone sees, but never a dish only another household can see. A dish everyone sees takes its
-//! name and the version it opens on from the versions everyone sees, so nothing of a household's own shows through it.
+//! A household's own imported versions group like any others, with one limit: they may join a dish everyone sees, but
+//! never a dish only another household can see. A dish everyone sees takes its name and the version it opens on from
+//! the versions everyone sees, so nothing of a household's own shows through it. A recipe written in the app is not
+//! grouped at all: the API puts it in a dish a person made, pinned there.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -37,6 +38,11 @@ const WEAK_CORE_SIMILARITY: f64 = 0.34;
 /// shipped ingredients overlap this much, or their subtitles are this similar.
 const TWIN_OVERLAP: f64 = 0.5;
 const TWIN_SUBTITLE_SIMILARITY: f64 = 0.6;
+
+/// The key of the advisory lock held while dishes are made or renamed, until the transaction ends ("mise dish" in
+/// ASCII): grouping, deriving options and saving a written recipe take turns, so two never choose the same address
+/// or rewrite the same dish's options at once.
+pub const DISH_LOCK: i64 = 0x6d69_7365_6469_7368;
 
 /// What one grouping run did, step by step, for the command's summary. The `merged_*` counts are joins that
 /// brought two groups together; a join between versions already in one group isn't counted.
@@ -115,6 +121,11 @@ impl UnionFind {
 pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let mut stats = GroupStats::default();
     let mut tx = pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(DISH_LOCK)
+        .execute(&mut *tx)
+        .await
+        .context("waiting for another change to dishes")?;
 
     // Dishes keep their id across runs, and their slug while it still fits their name (links, plans and bookmarks
     // point at them): remember which dish each version was in before starting over.

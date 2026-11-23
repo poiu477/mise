@@ -35,6 +35,9 @@ pub enum ApiError {
     /// Too many attempts; try again after this many seconds.
     #[error("too many attempts; try again in {0} seconds")]
     TooManyRequests(u64),
+    /// Another site this request needed (a page being imported) failed or didn't answer.
+    #[error("{0}")]
+    SiteFailed(String),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -71,6 +74,8 @@ pub enum ErrorCode {
     TooManyRequests,
     /// 500: the server failed; the details are in its log.
     Internal,
+    /// 502: another site the request needed failed or didn't answer, such as the page being imported.
+    SiteFailed,
 }
 
 impl ApiError {
@@ -87,6 +92,7 @@ impl ApiError {
             ApiError::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             ApiError::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             ApiError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::SiteFailed(_) => StatusCode::BAD_GATEWAY,
         }
     }
 
@@ -104,6 +110,7 @@ impl ApiError {
             ApiError::PayloadTooLarge => ErrorCode::PayloadTooLarge,
             ApiError::TooManyRequests(_) => ErrorCode::TooManyRequests,
             ApiError::Internal(_) => ErrorCode::Internal,
+            ApiError::SiteFailed(_) => ErrorCode::SiteFailed,
         }
     }
 }
@@ -264,6 +271,11 @@ mod tests {
             (ApiError::PayloadTooLarge, 413, "payload_too_large"),
             (ApiError::TooManyRequests(30), 429, "too_many_requests"),
             (anyhow::anyhow!("disk on fire").into(), 500, "internal"),
+            (
+                ApiError::SiteFailed("the site didn't answer".into()),
+                502,
+                "site_failed",
+            ),
         ];
         for (e, status, code) in cases {
             let (s, body) = answer(e).await;

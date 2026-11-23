@@ -4,6 +4,10 @@
 // the plan and the list) is never cached here; the shopping list keeps its own copy in the app, cleared on
 // signing out.
 //
+// Recipes and photos are a household's: the server gives each only what it may see, and a copy kept here is
+// served without asking it. So the app has this worker forget them (the "forget" message) when someone signs
+// out and when another household signs in on this browser.
+//
 // The API moved from /api to /api/v1, and the old addresses answer for one more release. This worker takes over
 // at once (skipWaiting, clients.claim), so a page still running the app from before calls the old addresses
 // through it: both read the same way, and a copy kept under one address serves the other, so updating loses no
@@ -16,6 +20,10 @@ const OLD_API = "/api";
 /** Recipe data, after the API's address: kept for offline use. Nothing else under the API is. */
 const RECIPE_DATA = ["/dishes", "/variants/"];
 const MEDIA = "/media/";
+/** The message the app sends to have the kept recipes and photos forgotten. */
+const FORGET = "forget";
+/** How many times they have been forgotten: an answer asked for before the last time isn't kept. */
+let forgotten = 0;
 
 /** The part of an API address after /api/v1 or the old /api: "/dishes" for both "/api/v1/dishes" and
  * "/api/dishes"; null outside the API. */
@@ -56,6 +64,21 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Forget the recipes and photos kept so far; the app's own files stay, so it still opens offline.
+self.addEventListener("message", (event) => {
+  if (event.data !== FORGET) return;
+  forgotten += 1;
+  event.waitUntil(
+    Promise.all([
+      caches.delete(PHOTOS),
+      caches.open(SHELL).then(async (c) => {
+        const kept = (await c.keys()).filter((r) => apiPath(new URL(r.url).pathname) !== null);
+        await Promise.all(kept.map((r) => c.delete(r)));
+      }),
+    ]),
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -66,6 +89,8 @@ self.addEventListener("fetch", (event) => {
   const photo = api !== null && api.startsWith(MEDIA);
   // Account and sign-in requests go straight to the network, never through a cache.
   if (api !== null && !recipe && !photo) return;
+  // Asked for by whoever is signed in now: if the copies are forgotten before the answer comes, it isn't kept.
+  const asked = forgotten;
 
   if (photo) {
     event.respondWith(
@@ -73,7 +98,7 @@ self.addEventListener("fetch", (event) => {
         const hit = (await c.match(req)) || (await c.match(otherAddress(url, api)));
         if (hit) return hit;
         const res = await fetch(req);
-        if (res.ok) c.put(req, res.clone());
+        if (res.ok && asked === forgotten) c.put(req, res.clone());
         return res;
       }),
     );
@@ -83,7 +108,11 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(req)
       .then((res) => {
-        if (res.ok && (req.mode === "navigate" || url.pathname.startsWith("/assets/") || recipe)) {
+        const keep =
+          req.mode === "navigate" ||
+          url.pathname.startsWith("/assets/") ||
+          (recipe && asked === forgotten);
+        if (res.ok && keep) {
           const copy = res.clone();
           caches.open(SHELL).then((c) => c.put(req.mode === "navigate" ? "/" : req, copy));
         }

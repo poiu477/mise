@@ -6,8 +6,11 @@ pub mod auth;
 pub mod dishes;
 pub mod error;
 pub mod extract;
+pub mod foods;
+pub mod imports;
 pub mod media;
 pub mod plan;
+pub mod recipes;
 pub mod shopping;
 pub mod variants;
 
@@ -15,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 use axum::{
     Json, Router,
-    extract::Request,
+    extract::{DefaultBodyLimit, Request},
     http::{HeaderName, HeaderValue, Uri, header},
     middleware::{self, Next},
     response::Response,
@@ -36,6 +39,8 @@ pub struct AppState {
     /// Where stored photos and their web-size copies live (MEDIA_ROOT).
     pub media_root: PathBuf,
     pub auth: std::sync::Arc<auth::Auth>,
+    /// Fetches pages and photos to import (`IMPORT_ALLOW_PRIVATE`).
+    pub fetcher: std::sync::Arc<mise_ingest::fetch::Fetcher>,
 }
 
 #[derive(OpenApi)]
@@ -43,6 +48,9 @@ pub struct AppState {
     info(title = "mise", description = "Self-hosted recipe system: dishes, their versions, and any serving count."),
     paths(
         health, dishes::list, dishes::get, variants::get, media::get,
+        recipes::create, recipes::get, recipes::update, recipes::delete, recipes::set_photo, recipes::remove_photo, recipes::read_lines,
+        imports::create,
+        foods::search,
         auth::routes::config, auth::routes::setup, auth::routes::login, auth::routes::logout, auth::oidc::start, auth::oidc::callback,
         auth::routes::me, auth::routes::change_password, auth::routes::list_tokens, auth::routes::create_token, auth::routes::delete_token,
         auth::kitchen::open_link, auth::kitchen::list, auth::kitchen::create, auth::kitchen::delete,
@@ -53,6 +61,7 @@ pub struct AppState {
     ),
     tags(
         (name = "dishes", description = "Browse and search dishes"), (name = "media", description = "Photos"),
+        (name = "recipes", description = "Recipes a household writes itself"),
         (name = "plan", description = "The household's weekly plan"), (name = "shopping", description = "The shopping list worked out from the plan"),
         (name = "auth", description = "Signing in"), (name = "account", description = "The signed-in account"),
         (name = "admin", description = "Accounts and households (admins)"),
@@ -205,6 +214,23 @@ fn api_routes() -> Router<AppState> {
         .route("/dishes/{slug}", get(dishes::get))
         .route("/variants/{id}", get(variants::get))
         .route("/media/{id}/{size}", get(media::get))
+        .route("/recipes", post(recipes::create))
+        .route("/recipes/lines", post(recipes::read_lines))
+        .route(
+            "/recipes/{id}",
+            get(recipes::get)
+                .put(recipes::update)
+                .delete(recipes::delete),
+        )
+        .route(
+            "/recipes/{id}/photo",
+            put(recipes::set_photo)
+                .delete(recipes::remove_photo)
+                // A photo is far larger than the JSON every other route reads.
+                .layer(DefaultBodyLimit::max(recipes::MAX_PHOTO_BYTES)),
+        )
+        .route("/imports", post(imports::create))
+        .route("/foods", get(foods::search))
         .route("/plan", get(plan::get))
         .route("/plan/entries", post(plan::add))
         .route(
