@@ -22,7 +22,7 @@ impl TestApp {
     /// As `with_demo`, with imports also let through to these sites on this machine, and to nothing else that
     /// isn't public.
     pub async fn with_demo_fetching(sites: Vec<std::net::SocketAddr>) -> Option<TestApp> {
-        let app = TestApp::start_fetching(None, Some(MediaDir::create()), sites).await?;
+        let app = TestApp::start_fetching(None, Some(MediaDir::create()), sites, None).await?;
         app.load_demo().await;
         Some(app)
     }
