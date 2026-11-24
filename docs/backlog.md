@@ -17,15 +17,6 @@ status.md if it changed either.
 
 ## Ready
 
-### T9 · Observability
-
-- An option for JSON logs, a request id on every log line (and in the response), a readiness check that the
-  database answers (next to the existing health check), and basic metrics (request counts and durations by route).
-- **Touches:** `crates/mise-api/src/main.rs`, `lib.rs`, `docs/deploy.md`.
-- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs`.
-- **Done when:** API tests cover the readiness check and the request id header; deploy.md says how to turn JSON logs
-  on.
-
 ### T10 · Release images
 
 - On a `v*` tag, a release job in `.gitlab-ci.yml` builds the Docker image, pushes it to the GitLab project's

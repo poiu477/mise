@@ -270,6 +270,35 @@ preferences are never shared.
 shared with the install is then seen only by its household's partners, or by no one else at all. Raising it again
 restores what each household chose.
 
+## 11. Logs, readiness and metrics
+
+**Logs** are text by default (`docker compose logs app`). For a log collector (Loki, Graylog, an ELK stack), set
+`MISE_LOG_FORMAT=json` in `.env` and restart the app: each line is then one JSON object, with the request it belongs
+to under `span` (`request_id`, `method`, `path`). `RUST_LOG` still sets how much is logged.
+
+**Request ids.** Every answer carries an `X-Request-Id` header, and every log line written while answering it
+carries the same id, so a report of a failed request ("it said internal error") can be found in the log. A reverse
+proxy that sets its own `X-Request-Id` (letters, digits and `-_.:`, at most 128) has it kept, so its log and mise's
+agree; Caddy does with `request_header X-Request-Id {http.request.uuid}` in the site block.
+
+**Readiness.** `/api/v1/health` says the process is up; `/api/v1/ready` answers 200 only while the database answers
+too (within two seconds), and 503 otherwise. Neither needs a sign-in. Point a load balancer or an uptime monitor at
+`/api/v1/ready` to hear when mise can't serve; the container's own healthcheck stays on `/api/v1/health`, so a
+database restart doesn't mark the app unhealthy.
+
+**Metrics.** Set `MISE_METRICS_BIND=0.0.0.0:9090` to serve Prometheus metrics at `/metrics` on that port: request
+counts (`mise_http_requests_total`) and durations (`mise_http_request_duration_seconds`, a histogram) by method,
+route (as the router writes it, `/api/v1/dishes/{slug}`) and status, since the server started. The API's own port
+never serves them. Scrape it from a Prometheus container on the stack's network (`app:9090`), or publish the port to
+the private network only, in a `compose.override.yaml`:
+
+```yaml
+services:
+  app:
+    ports:
+      - "10.0.0.5:9090:9090"
+```
+
 ## Commands
 
 The `mise` admin command is in the image: `docker compose exec app mise --help`. Account recovery is

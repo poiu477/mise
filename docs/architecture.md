@@ -161,7 +161,8 @@ queued work never lands in another household, and the app re-checks who is signe
 `ApiResult<T>`; `error.rs` maps errors to the right status and one JSON body, `{ "error": "…", "code": "…" }`: a
 sentence to show people, and a stable name for programs (`not_found`, `bad_request`, `unauthorized`,
 `bad_credentials`, `forbidden`, `method_not_allowed`, `conflict`, `account_changed`, `payload_too_large`,
-`too_many_requests`, `internal`, and `site_failed`: a page being imported didn't answer). `extract.rs` wraps axum's extractors so bad input answers in that shape too, and
+`too_many_requests`, `internal`, `site_failed`: a page being imported didn't answer, and `unavailable`: the database
+isn't answering). `extract.rs` wraps axum's extractors so bad input answers in that shape too, and
 the router does the same for an unknown address and a method a route doesn't take. Each route's `#[utoipa::path]`
 lists every status it can answer: its own, and the shared sets in `error.rs` (`SignedIn`, `ReadOnlyToken`,
 `TooLarge`, `ServerError`) for what the middleware, the body extractor and a failing server answer;
@@ -204,6 +205,15 @@ for 30 seconds, doubling with each failure to at most 15 minutes, and a success 
 username rather than per address, since behind a reverse proxy every request comes from the proxy; the cost is that
 someone who knows a username can keep that account locked by failing on purpose, which a household install accepts.
 The counts are kept in memory, so restarting the server clears them.
+
+`observe.rs` is how the server can be watched. `request_id`, the outermost layer, gives each request an id (a
+proxy's `X-Request-Id` when it is plain, else a UUID) and returns it in the answer; `span` puts that id, the method
+and the path (never the query, which can hold a kitchen link's code) on the span every log line of the request is
+written in, as text or JSON (`MISE_LOG_FORMAT`). `measure`, inside routing, counts each request and times it under
+the route it matched (`MatchedPath`), so `/api/v1/dishes/{slug}` is one series however many dishes are asked for;
+`Metrics::render` writes the counts in Prometheus's text format for the metrics port (`MISE_METRICS_BIND`, served
+by `metrics_router` beside the API, never on it). `/api/v1/ready` answers 503 (`unavailable`) when the database
+doesn't answer within two seconds; `/api/v1/health` answers whenever the process does.
 
 Recipes a household writes itself live under `/api/v1/recipes` (`recipes.rs`): create, read back as typed, replace,
 delete, and set or remove the photo. A deleted recipe leaves every plan it was on, and its dish goes with it when

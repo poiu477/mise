@@ -9,6 +9,7 @@ pub mod extract;
 pub mod foods;
 pub mod imports;
 pub mod media;
+pub mod observe;
 pub mod plan;
 pub mod recipes;
 pub mod review;
@@ -45,13 +46,15 @@ pub struct AppState {
     pub auth: std::sync::Arc<auth::Auth>,
     /// Fetches pages and photos to import (`IMPORT_ALLOW_PRIVATE`).
     pub fetcher: std::sync::Arc<mise_ingest::fetch::Fetcher>,
+    /// Request counts and durations, served on the metrics port (`MISE_METRICS_BIND`).
+    pub metrics: std::sync::Arc<observe::Metrics>,
 }
 
 #[derive(OpenApi)]
 #[openapi(
     info(title = "mise", description = "Self-hosted recipe system: dishes, their versions, and any serving count. A request that changes something answers 403 when a browser says another site sent it (`Sec-Fetch-Site`, or an `Origin` that isn't this server's)."),
     paths(
-        health, dishes::list, dishes::get, variants::get, media::get,
+        health, observe::ready, dishes::list, dishes::get, variants::get, media::get,
         recipes::create, recipes::get, recipes::update, recipes::delete, recipes::set_photo, recipes::remove_photo, recipes::read_lines, recipes::fork,
         imports::create,
         imports::create_from_file,
@@ -192,6 +195,7 @@ async fn mark_deprecated(req: Request, next: Next) -> Response {
 fn api_routes() -> Router<AppState> {
     Router::new()
         .route("/health", get(health))
+        .route("/ready", get(observe::ready))
         .route("/auth/config", get(auth::routes::config))
         .route("/auth/setup", post(auth::routes::setup))
         .route("/auth/login", post(auth::routes::login))
@@ -279,6 +283,7 @@ fn api_routes() -> Router<AppState> {
 
 /// The API, and the built web app in `web_dir` for every other path when given.
 pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
+    let metrics = state.metrics.clone();
     let api = api_routes();
     let mut app = Router::new()
         .nest(API, api.clone())
@@ -306,8 +311,12 @@ pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
     for (name, value) in security::headers() {
         app = app.layer(SetResponseHeaderLayer::if_not_present(name, value));
     }
-    app.layer(CompressionLayer::new())
-        .layer(TraceLayer::new_for_http())
+    // Inside routing, where the route a request matched is known; outside everything else, so a request's time is
+    // all of it. The request id is outermost, so the log span and every layer see it.
+    app.layer(middleware::from_fn_with_state(metrics, observe::measure))
+        .layer(CompressionLayer::new())
+        .layer(TraceLayer::new_for_http().make_span_with(observe::span::<axum::body::Body>))
+        .layer(middleware::from_fn(observe::request_id))
 }
 
 /// The built web app: its files, with any other path answered by index.html (status 200) so client-side

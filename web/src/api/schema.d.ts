@@ -541,6 +541,27 @@ export interface paths {
         patch: operations["update_plan_entry"];
         trace?: never;
     };
+    "/api/v1/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Readiness: whether the server can serve requests, which needs its database to answer within two seconds. A
+         *     container orchestrator or a proxy sends traffic only while this answers 200; `/api/v1/health` says only that the
+         *     process is up.
+         */
+        get: operations["ready"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recipes": {
         parameters: {
             query?: never;
@@ -960,7 +981,7 @@ export interface components {
          * @description What kind of error a response is, named for programs: stable across releases, whatever the message says.
          * @enum {string}
          */
-        ErrorCode: "not_found" | "bad_request" | "unauthorized" | "bad_credentials" | "forbidden" | "method_not_allowed" | "conflict" | "account_changed" | "payload_too_large" | "too_many_requests" | "internal" | "site_failed";
+        ErrorCode: "not_found" | "bad_request" | "unauthorized" | "bad_credentials" | "forbidden" | "method_not_allowed" | "conflict" | "account_changed" | "payload_too_large" | "too_many_requests" | "internal" | "site_failed" | "unavailable";
         /**
          * Format: binary
          * @description An export file's bytes, as the API document describes the request body.
@@ -1267,6 +1288,11 @@ export interface components {
             variant_id: string;
             /** @description Serving counts with published amounts. */
             yields: number[];
+        };
+        /** @description The server can serve requests. */
+        Ready: {
+            /** @description Always `ready`. */
+            status: string;
         };
         /** @description A recipe the household wrote, as it was written. */
         Recipe: {
@@ -3786,6 +3812,35 @@ export interface operations {
             };
             /** @description The server failed; the details are in its log */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    ready: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The server and its database are answering */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ready"];
+                };
+            };
+            /** @description The database isn't answering */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

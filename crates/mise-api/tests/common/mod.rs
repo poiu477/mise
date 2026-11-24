@@ -106,6 +106,8 @@ pub struct TestApp {
     pub pool: PgPool,
     /// MEDIA_ROOT: where the server reads photos from.
     pub media_root: PathBuf,
+    /// What the metrics port would serve.
+    pub metrics: Arc<mise_api::observe::Metrics>,
     /// The folder at `media_root` when this test made one, removed with it.
     _media: Option<MediaDir>,
     // Last, so the pool is gone before the database is dropped.
@@ -155,14 +157,17 @@ impl TestApp {
         let media_root = media
             .as_ref()
             .map_or_else(|| PathBuf::from("./no-media"), |m| m.path.clone());
+        let metrics = Arc::new(mise_api::observe::Metrics::default());
         let state = mise_api::AppState {
             pool: pool.clone(),
             media_root: media_root.clone(),
             auth: Arc::new(Auth::new(config)),
             fetcher: Arc::new(mise_ingest::fetch::Fetcher::new(false).allowing(sites)),
+            metrics: metrics.clone(),
         };
         Some(TestApp {
             router: mise_api::router(state, web),
+            metrics,
             pool,
             media_root,
             _media: media,

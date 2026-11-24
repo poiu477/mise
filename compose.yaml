@@ -42,6 +42,8 @@ services:
       IMPORT_ALLOW_PRIVATE: ${IMPORT_ALLOW_PRIVATE:-false}
       SHARING_MAX_LEVEL: ${SHARING_MAX_LEVEL:-install}
       RUST_LOG: ${RUST_LOG:-info,sqlx=error,tower_http=warn}
+      MISE_LOG_FORMAT: ${MISE_LOG_FORMAT:-text}
+      MISE_METRICS_BIND: ${MISE_METRICS_BIND:-}
     ports:
       # Home network by default; bind to 127.0.0.1 instead when only a reverse proxy should reach it.
       - "${MISE_LISTEN:-0.0.0.0}:${MISE_PORT:-8080}:8080"
