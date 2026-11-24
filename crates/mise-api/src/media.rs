@@ -25,15 +25,18 @@ pub const CACHE_CONTROL: &str = "private, max-age=31536000, immutable";
 /// Links to one photo in every size, for responses.
 #[derive(Serialize, utoipa::ToSchema, Clone, Debug)]
 pub struct Image {
+    /// The photo's id.
     pub id: Uuid,
     /// Longest side at most 400 px.
     pub small: String,
     /// Longest side at most 1200 px.
     pub large: String,
+    /// The photo as stored, full size.
     pub original: String,
 }
 
 impl Image {
+    /// The links to photo `id` in every size.
     pub fn new(id: Uuid) -> Self {
         Image {
             id,

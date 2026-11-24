@@ -38,6 +38,7 @@ pub struct ImportedRecipe {
     pub variant_id: Uuid,
     /// The slug of the dish it joined, for `/api/v1/dishes/{slug}`.
     pub dish_slug: String,
+    /// The recipe's title.
     pub title: String,
     /// The household had already imported this recipe as it is now, so nothing changed.
     pub unchanged: bool,

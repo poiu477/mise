@@ -32,6 +32,7 @@ macro_rules! visible_default {
     };
 }
 
+/// A search of the dishes: by words, by ingredient, by kind, a page at a time.
 #[derive(Deserialize, IntoParams)]
 pub struct ListParams {
     /// Words in the title or subtitle; ranked by similarity, so small typos still match.
@@ -44,26 +45,37 @@ pub struct ListParams {
     pub content_type: Option<String>,
     /// Page size (default 24, at most 100).
     pub limit: Option<i64>,
+    /// How many results to skip, for the next page (default 0).
     pub offset: Option<i64>,
 }
 
+/// A dish as search lists it.
 #[derive(Serialize, ToSchema)]
 pub struct DishSummary {
+    /// The dish's id.
     pub id: Uuid,
+    /// Its address: `/api/v1/dishes/{slug}`. It follows the title, and old slugs still find it.
     pub slug: String,
+    /// The dish's title.
     pub title: String,
+    /// What it comes with ("with Lemon Rice & Greens").
     pub subtitle: Option<String>,
+    /// recipe, ready_meal, add_on or product.
     pub content_type: String,
     /// Number of published or forked versions this household can see.
     pub versions: i64,
     /// The version the dish opens on.
     pub default_variant: Option<Uuid>,
+    /// The photo of the version the dish opens on.
     pub image: Option<Image>,
 }
 
+/// A page of search results.
 #[derive(Serialize, ToSchema)]
 pub struct DishPage {
+    /// How many dishes match in all, across every page.
     pub total: i64,
+    /// This page's dishes, the best matches first.
     pub items: Vec<DishSummary>,
 }
 
@@ -146,9 +158,12 @@ pub async fn list(
     Ok(Json(DishPage { total, items }))
 }
 
+/// One value of a dish's option: a protein, a portion, a version.
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct Choice {
+    /// The value as the versions' attributes hold it.
     pub value: String,
+    /// The value as people read it ("Chicken", "Double portion").
     pub label: String,
     /// How many versions this household can see offer it.
     pub variants: i64,
@@ -156,28 +171,39 @@ pub struct Choice {
     pub years: Option<String>,
 }
 
+/// A way the dish's versions differ (protein, portion, version), and the choices it offers.
 #[derive(Serialize, ToSchema)]
 pub struct DishOption {
     /// protein, portion or version: the attribute key on each version.
     pub key: String,
+    /// The option as people read it ("Protein").
     pub label: String,
+    /// Its values, as the dish's versions offer them.
     pub choices: Vec<Choice>,
+    /// The value the dish opens on, when it has one.
     pub default: Option<String>,
 }
 
+/// One version of a dish, as its page lists it.
 #[derive(Serialize, ToSchema)]
 pub struct VariantSummary {
+    /// The version's id: `/api/v1/variants/{id}` shows it at any serving count.
     pub id: Uuid,
+    /// The version's title.
     pub title: String,
+    /// The version's subtitle.
     pub subtitle: Option<String>,
+    /// When its source published it, RFC 3339; absent for one written or forked in mise.
     #[serde(with = "time::serde::rfc3339::option")]
     pub published_at: Option<OffsetDateTime>,
     /// Serving counts with published amounts.
     pub yields: Vec<f64>,
+    /// It has a method, not only ingredients.
     pub has_steps: bool,
     /// This version's value for each of the dish's options.
     #[schema(value_type = std::collections::HashMap<String, String>)]
     pub attributes: serde_json::Value,
+    /// The version's photo.
     pub image: Option<Image>,
     /// This household wrote the version in the app, so it can change it at `/api/v1/recipes/{id}`.
     pub editable: bool,
@@ -192,19 +218,29 @@ pub struct VariantSummary {
 /// The version a fork was made from.
 #[derive(Serialize, ToSchema)]
 pub struct Original {
+    /// The original version's id.
     pub id: Uuid,
+    /// The original version's title.
     pub title: String,
     /// Who it is by: the source it was published or imported from, or the household that wrote it.
     pub by: Option<String>,
 }
 
+/// A dish's page: its versions this household can see, and the options that pick between them.
 #[derive(Serialize, ToSchema)]
 pub struct Dish {
+    /// The dish's id.
     pub id: Uuid,
+    /// Its address now; an old slug asked for answers with this one.
     pub slug: String,
+    /// The dish's title.
     pub title: String,
+    /// What it comes with.
     pub subtitle: Option<String>,
+    /// recipe, ready_meal, add_on or product.
     pub content_type: String,
+    /// The version the dish opens on: its default when this household can see it, else the one with steps published
+    /// last.
     pub default_variant: Option<Uuid>,
     /// Only combinations some version actually has are offered: pick the version whose attributes match.
     pub options: Vec<DishOption>,

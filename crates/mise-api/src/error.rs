@@ -8,22 +8,28 @@ use axum::{
 };
 use serde::Serialize;
 
+/// Everything a handler can answer instead of what was asked for; each kind has its status and `ErrorCode`.
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
     /// No such thing, or no route at this address under the API.
     #[error("not found")]
     NotFound,
+    /// The request is malformed or a value is refused; says which, as a sentence to show people.
     #[error("{0}")]
     BadRequest(String),
+    /// No session or token, or one that has ended.
     #[error("sign in first")]
     Unauthorized,
+    /// Signing in with a wrong username or password.
     #[error("wrong username or password")]
     BadCredentials,
+    /// Signed in, but not allowed to do this; says why.
     #[error("{0}")]
     Forbidden(String),
     /// The route exists but doesn't take this method (axum's 405, which has no body of its own).
     #[error("this address doesn't take that method")]
     MethodNotAllowed,
+    /// Clashes with what is already there (a username taken, a second setup); says what.
     #[error("{0}")]
     Conflict(String),
     /// The request was made for another account than the one now signed in (see `ACCOUNT_HEADER`).
@@ -41,6 +47,7 @@ pub enum ApiError {
     /// Something the server needs is down: the database isn't answering.
     #[error("{0}")]
     Unavailable(String),
+    /// The server failed. The details go to the log; the answer says only "internal error".
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -153,6 +160,7 @@ impl IntoResponse for ApiError {
     }
 }
 
+/// What a handler returns: its answer, or an `ApiError`.
 pub type ApiResult<T> = Result<T, ApiError>;
 
 // Responses many routes share, written once and named in each route's `#[utoipa::path]` beside its own:

@@ -878,6 +878,7 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description How this install signs people in. */
         AuthInfo: {
             /** @description Username and password sign-in is on. */
             local: boolean;
@@ -886,8 +887,11 @@ export interface components {
             /** @description No account exists yet: the first visitor creates the admin account. */
             setup_required: boolean;
         };
+        /** @description One value of a dish's option: a protein, a portion, a version. */
         Choice: {
+            /** @description The value as people read it ("Chicken", "Double portion"). */
             label: string;
+            /** @description The value as the versions' attributes hold it. */
             value: string;
             /**
              * Format: int64
@@ -897,30 +901,51 @@ export interface components {
             /** @description Years it was published, e.g. "2022–2024". */
             years?: string | null;
         };
+        /** @description A dish's page: its versions this household can see, and the options that pick between them. */
         Dish: {
+            /** @description recipe, ready_meal, add_on or product. */
             content_type: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The version the dish opens on: its default when this household can see it, else the one with steps published
+             *     last.
+             */
             default_variant?: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The dish's id.
+             */
             id: string;
             /** @description Only combinations some version actually has are offered: pick the version whose attributes match. */
             options: components["schemas"]["DishOption"][];
+            /** @description Its address now; an old slug asked for answers with this one. */
             slug: string;
+            /** @description What it comes with. */
             subtitle?: string | null;
+            /** @description The dish's title. */
             title: string;
             /** @description The versions this household can see, newest first. */
             variants: components["schemas"]["VariantSummary"][];
         };
+        /** @description A way the dish's versions differ (protein, portion, version), and the choices it offers. */
         DishOption: {
+            /** @description Its values, as the dish's versions offer them. */
             choices: components["schemas"]["Choice"][];
+            /** @description The value the dish opens on, when it has one. */
             default?: string | null;
             /** @description protein, portion or version: the attribute key on each version. */
             key: string;
+            /** @description The option as people read it ("Protein"). */
             label: string;
         };
+        /** @description A page of search results. */
         DishPage: {
+            /** @description This page's dishes, the best matches first. */
             items: components["schemas"]["DishSummary"][];
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description How many dishes match in all, across every page.
+             */
             total: number;
         };
         /** @description The two sides of a doubtful dish merge, and how alike grouping found them. */
@@ -947,18 +972,26 @@ export interface components {
             /** @description The version's title, cleaned as dishes are named: "Pepper Steak Skillet". */
             title: string;
         };
+        /** @description A dish as search lists it. */
         DishSummary: {
+            /** @description recipe, ready_meal, add_on or product. */
             content_type: string;
             /**
              * Format: uuid
              * @description The version the dish opens on.
              */
             default_variant?: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The dish's id.
+             */
             id: string;
             image?: components["schemas"]["Image"] | null;
+            /** @description Its address: `/api/v1/dishes/{slug}`. It follows the title, and old slugs still find it. */
             slug: string;
+            /** @description What it comes with ("with Lemon Rice & Greens"). */
             subtitle?: string | null;
+            /** @description The dish's title. */
             title: string;
             /**
              * Format: int64
@@ -966,8 +999,12 @@ export interface components {
              */
             versions: number;
         };
+        /** @description A new serving count for a planned dish. */
         EntryChange: {
-            /** Format: double */
+            /**
+             * Format: double
+             * @description How many to plan it for: more than 0, at most 24.
+             */
             servings: number;
         };
         /** @description The body of every error the API answers with. */
@@ -987,7 +1024,9 @@ export interface components {
          * @description An export file's bytes, as the API document describes the request body.
          */
         ExportFile: string;
+        /** @description A change to an extra. */
         ExtraChange: {
+            /** @description Ticked off. */
             checked: boolean;
         };
         /** @description What importing a file did. */
@@ -1001,16 +1040,25 @@ export interface components {
         };
         /** @description Foods matching a search, the closest names first. */
         FoodList: {
+            /** @description The foods found, the closest names first. */
             items: components["schemas"]["FoodRef"][];
         };
         /** @description A food, by id and name. */
         FoodRef: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The food's id.
+             */
             id: string;
+            /** @description The food's name. */
             name: string;
         };
+        /** @description How one food's weight reads on the household's lists. */
         FoodWeights: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The food, by id.
+             */
             food_id: string;
             /**
              * Format: date
@@ -1019,19 +1067,31 @@ export interface components {
             week?: string | null;
             weight_unit?: components["schemas"]["Weights"] | null;
         };
+        /** @description The server is up. */
         Health: {
+            /** @description Always `ok`. */
             status: string;
+            /** @description The server's version, such as `0.1.0`. */
             version: string;
         };
+        /** @description A household, by id and name. */
         Household: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The household's id.
+             */
             id: string;
+            /** @description The household's name; empty for a kitchen device. */
             name: string;
         };
         /** @description A household, by id and name. */
         HouseholdRef: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The household's id.
+             */
             id: string;
+            /** @description The household's name. */
             name: string;
         };
         /** @description The signed-in household's sharing. */
@@ -1040,10 +1100,14 @@ export interface components {
             default_visibility: components["schemas"]["Visibility"];
             /** @description Every other household on the install, by name, to choose partners from. */
             households: components["schemas"]["HouseholdRef"][];
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The signed-in household's id.
+             */
             id: string;
             /** @description The most open level this install allows. */
             max_visibility: components["schemas"]["Visibility"];
+            /** @description The signed-in household's name. */
             name: string;
             /** @description The households that share with it at `partners`, by name. */
             partner_of: components["schemas"]["HouseholdRef"][];
@@ -1052,10 +1116,14 @@ export interface components {
         };
         /** @description Links to one photo in every size, for responses. */
         Image: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The photo's id.
+             */
             id: string;
             /** @description Longest side at most 1200 px. */
             large: string;
+            /** @description The photo as stored, full size. */
             original: string;
             /** @description Longest side at most 400 px. */
             small: string;
@@ -1079,6 +1147,7 @@ export interface components {
              *     too long to answer".
              */
             photo_problem?: string | null;
+            /** @description The recipe's title. */
             title: string;
             /** @description The household had already imported this recipe as it is now, so nothing changed. */
             unchanged: boolean;
@@ -1088,27 +1157,45 @@ export interface components {
              */
             variant_id: string;
         };
+        /** @description One ingredient line at the requested serving count. */
         Ingredient: {
+            /** @description Allergens the source lists for it ("Milk", "Wheat"). */
             allergens: string[];
             /** @description The amount at the requested yield, e.g. "1½ TBSP"; absent for "to taste" items like salt. */
             amount?: string | null;
+            /** @description That food's name. */
             food?: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The food it was matched to, for the shopping list and searches.
+             */
             food_id?: string | null;
             image?: components["schemas"]["Image"] | null;
+            /** @description What the line asks for ("garlic"). */
             name: string;
+            /** @description What the line says beyond its amount and name ("minced", "to taste"). */
             note?: string | null;
             /** @description Derived rather than published for this yield. */
             scaled: boolean;
             /** @description Supplied by the source (meal kit) rather than from the pantry. */
             shipped?: boolean | null;
         };
+        /** @description A kitchen device an admin has issued a link for. */
         KitchenToken: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When it was issued.
+             */
             created_at: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The token's id, to revoke it.
+             */
             id: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the device last used it, to within an hour.
+             */
             last_used_at?: string | null;
             /**
              * Format: date-time
@@ -1120,15 +1207,19 @@ export interface components {
              * @description When its link was opened on the device; null while the link waits.
              */
             linked_at?: string | null;
+            /** @description What the device is called. */
             name: string;
         };
+        /** @description A kitchen device to issue a link for. */
         KitchenTokenRequest: {
             /** @description What the device is called, such as "Kitchen Echo". */
             name: string;
         };
         /** @description Something left off the list, to put back. */
         LeftOut: {
+            /** @description The key to put it back with: the item's key, or for a staple the food's id. */
             key: string;
+            /** @description What it is. */
             name: string;
         };
         /** @description One ingredient line as typed. */
@@ -1149,17 +1240,23 @@ export interface components {
         };
         /** @description Ingredient lines, read. */
         LinesRead: {
+            /** @description Each line sent, in order, as mise reads it. */
             lines: components["schemas"]["RecipeLine"][];
         };
+        /** @description A password sign-in. */
         LoginRequest: {
+            /** @description Its password. */
             password: string;
+            /** @description The account's username, in any case. */
             username: string;
         };
+        /** @description A tick, or taking an item off this week's list, or putting it back. */
         Mark: {
             /** @description Ticked off. */
             checked?: boolean | null;
             /** @description Taken off this week's list. */
             hidden?: boolean | null;
+            /** @description The item's `key`, as the list gave it. */
             key: string;
             /**
              * Format: date
@@ -1167,29 +1264,42 @@ export interface components {
              */
             week?: string | null;
         };
+        /** @description The signed-in account, or the kitchen device. */
         Me: {
+            /** @description Its name as people read it. */
             display_name: string;
+            /** @description Its email address, when it has one. */
             email?: string | null;
             /** @description The account can sign in with a password (single-sign-on-only accounts cannot). */
             has_password: boolean;
+            /** @description Its household. */
             household: components["schemas"]["Household"];
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The account's id.
+             */
             id: string;
+            /** @description It manages accounts, households and kitchen devices. */
             is_admin: boolean;
             /**
              * @description This is a kitchen device, not an account: `id` is its kitchen token's, `display_name` its name, and the
              *     username, email and household name are empty.
              */
             kitchen: boolean;
+            /** @description What it signs in with. */
             username: string;
         };
+        /** @description A dish to add to a week's plan. */
         NewEntry: {
             /**
              * Format: double
              * @description Default: 2 where published, else the smallest published size.
              */
             servings?: number | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The version to plan.
+             */
             variant_id: string;
             /**
              * Format: date
@@ -1197,12 +1307,14 @@ export interface components {
              */
             week?: string | null;
         };
+        /** @description Something to add to a week's list by hand. */
         NewExtra: {
             /**
              * @description A key the device made for this addition (1 to 100 characters), unique in the household. Sending the same
              *     key again adds nothing, so a device can resend an addition whose answer it never got.
              */
             client_key?: string | null;
+            /** @description What to add ("foil"), at most 200 characters. */
             name: string;
             /**
              * Format: date
@@ -1210,10 +1322,14 @@ export interface components {
              */
             week?: string | null;
         };
+        /** @description A household to make. */
         NewHousehold: {
+            /** @description Its name; not empty. */
             name: string;
         };
+        /** @description A kitchen device's one-time link, and the token it sets up. */
         NewKitchenToken: {
+            /** @description The token, as the list of kitchen devices shows it. */
             info: components["schemas"]["KitchenToken"];
             /**
              * @description Shown once: open it on the kitchen device within the hour. A full address when the install's
@@ -1221,8 +1337,12 @@ export interface components {
              */
             link: string;
         };
+        /** @description A food the household always has, to leave off its lists. */
         NewStaple: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The food, by id.
+             */
             food_id: string;
             /**
              * Format: date
@@ -1230,36 +1350,50 @@ export interface components {
              */
             week?: string | null;
         };
+        /** @description A new API token, with its secret. */
         NewToken: {
+            /** @description The token, as the list shows it. */
             info: components["schemas"]["TokenInfo"];
             /** @description Shown once: send it as `Authorization: Bearer <token>`. */
             token: string;
         };
+        /** @description An account an admin adds. */
         NewUser: {
+            /** @description Its name as people read it (default: the username). */
             display_name?: string | null;
+            /** @description Its email address, which single sign-on can match it by. */
             email?: string | null;
             /**
              * Format: uuid
              * @description Join this household; leave out (with `household_name`) to start a new one.
              */
             household_id?: string | null;
+            /** @description With no `household_id`: the new household's name (default: the username followed by "'s household"). */
             household_name?: string | null;
+            /** @description Make it an admin (default no). */
             is_admin?: boolean;
             /** @description Leave out for an account that only signs in with single sign-on. */
             password?: string | null;
+            /** @description 1 to 64 letters, digits or `._-@+`. */
             username: string;
         };
         /** @description The version a fork was made from. */
         Original: {
             /** @description Who it is by: the source it was published or imported from, or the household that wrote it. */
             by?: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The original version's id.
+             */
             id: string;
+            /** @description The original version's title. */
             title: string;
         };
+        /** @description A new password for the signed-in account. */
         PasswordChange: {
             /** @description Required when the account already has a password. */
             current?: string | null;
+            /** @description The new password, 8 to 256 characters. */
             new: string;
         };
         /**
@@ -1267,7 +1401,9 @@ export interface components {
          * @description An image file's bytes, as the API document describes a photo's request body.
          */
         PhotoFile: string;
+        /** @description A household's plan for one week. */
         Plan: {
+            /** @description The dishes planned, in the order they were added. */
             entries: components["schemas"]["PlanEntry"][];
             /**
              * Format: date
@@ -1275,16 +1411,29 @@ export interface components {
              */
             week: string;
         };
+        /** @description One dish planned for the week, at a serving count. */
         PlanEntry: {
+            /** @description Its dish's slug, for `/api/v1/dishes/{slug}`. */
             dish_slug?: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The entry's id, to change or remove it.
+             */
             id: string;
             image?: components["schemas"]["Image"] | null;
-            /** Format: double */
+            /**
+             * Format: double
+             * @description How many it is planned for.
+             */
             servings: number;
+            /** @description The version's subtitle ("with Lemon Rice"). */
             subtitle?: string | null;
+            /** @description The version's title. */
             title: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The version planned: `/api/v1/variants/{id}` shows it.
+             */
             variant_id: string;
             /** @description Serving counts with published amounts. */
             yields: number[];
@@ -1296,6 +1445,7 @@ export interface components {
         };
         /** @description A recipe the household wrote, as it was written. */
         Recipe: {
+            /** @description What the household wrote about it. */
             description?: string | null;
             /** @description The slug of its dish, for `/api/v1/dishes/{slug}`. */
             dish_slug: string;
@@ -1305,14 +1455,18 @@ export interface components {
              */
             id: string;
             image?: components["schemas"]["Image"] | null;
+            /** @description Its ingredient lines as typed, each with how mise read it. */
             ingredients: components["schemas"]["RecipeLine"][];
             /**
              * Format: double
              * @description The servings the amounts are written for.
              */
             servings: number;
+            /** @description Its method, one step to an entry. */
             steps: string[];
+            /** @description What it comes with, when it says. */
             subtitle?: string | null;
+            /** @description The recipe's title. */
             title: string;
             /** @description Who else sees it. */
             visibility: components["schemas"]["Visibility"];
@@ -1356,6 +1510,7 @@ export interface components {
         };
         /** @description An answer to one item. */
         ReviewDecision: {
+            /** @description The answer: one of the item's `verdicts`. */
             decision: components["schemas"]["Verdict"];
             /** @description Why, in a few words, kept with the decision: "renamed: same recipe". */
             note?: string | null;
@@ -1371,11 +1526,18 @@ export interface components {
              * @description How sure the pipeline was, 0 to 1; items it was least sure of, or that touch few recipes, are low.
              */
             confidence?: number | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the import pipeline raised it.
+             */
             created_at: string;
             dishes?: components["schemas"]["DishPair"] | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The item's id, to answer it at `/api/v1/review-items/{id}/decision`.
+             */
             id: string;
+            /** @description What the item asks: a food match, a food's parent, or a dish merge. */
             kind: components["schemas"]["ReviewKind"];
             /**
              * @description Why it asks, when the pipeline said: "black pepper or bell pepper (as a pantry item it is usually black
@@ -1401,13 +1563,18 @@ export interface components {
         ReviewKind: "food_match" | "food_parent" | "dish_merge";
         /** @description Every open item, food matches first, then food parents, then dish merges; the surest first within each. */
         ReviewQueue: {
+            /** @description The open items. */
             items: components["schemas"]["ReviewItem"][];
         };
+        /** @description The first account, which sets the install up and is its admin. */
         SetupRequest: {
+            /** @description Its name as people read it (default: the username). */
             display_name?: string | null;
             /** @description Name for the first household (default "Home"). */
             household?: string | null;
+            /** @description 8 to 256 characters. */
             password: string;
+            /** @description 1 to 64 letters, digits or `._-@+`. */
             username: string;
         };
         /** @description A household's default visibility. */
@@ -1415,22 +1582,34 @@ export interface components {
             /** @description What new recipes and forks are shared with, unless one says otherwise; no more than the install allows. */
             default_visibility: components["schemas"]["Visibility"];
         };
+        /** @description Something added to the week's list by hand. */
         ShoppingExtra: {
+            /** @description Ticked off. */
             checked: boolean;
             /** @description The key the device that added it sent, if it sent one. */
             client_key?: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The extra's id, to tick or remove it.
+             */
             id: string;
+            /** @description What was written ("foil"). */
             name: string;
         };
+        /** @description One thing to buy: a food, with what the week's dishes need of it added up. */
         ShoppingItem: {
             /** @description Added up across recipes, exactly, e.g. "3 packets (4½ oz)"; absent for "to taste" items like salt. */
             amount?: string | null;
+            /** @description Ticked off this week. */
             checked: boolean;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The food it is, when the lines were matched to one.
+             */
             food_id?: string | null;
             /** @description Names the item when ticking or removing it. */
             key: string;
+            /** @description What to buy, as the list names it. */
             name: string;
             /** @description The dishes that need it. */
             recipes: string[];
@@ -1438,7 +1617,9 @@ export interface components {
             weighed: boolean;
             weight_unit?: components["schemas"]["Weights"] | null;
         };
+        /** @description A household's shopping list for one week, worked out from its plan each time it is asked for. */
         ShoppingList: {
+            /** @description Things added by hand. */
             extras: components["schemas"]["ShoppingExtra"][];
             /** @description Dishes planned this week. */
             meals: number;
@@ -1456,10 +1637,14 @@ export interface components {
             /** @description How the household reads weights, unless a food says otherwise. */
             weight_unit: components["schemas"]["Weights"];
         };
+        /** @description A section of the shop, and what to buy there. */
         ShoppingSection: {
+            /** @description What to buy in it, by name. */
             items: components["schemas"]["ShoppingItem"][];
+            /** @description The section ("Produce"), or "Check you have" for pantry items. */
             name: string;
         };
+        /** @description How the household's lists read. */
         ShoppingSettings: {
             /** @description How the household reads weights on its list. */
             weight_unit: components["schemas"]["Weights"];
@@ -1471,16 +1656,22 @@ export interface components {
             /** @description Why it was left out: "not valid JSON (…)", "the recipe has no name". */
             reason: string;
         };
+        /** @description One step of the method at the requested serving count, its amounts scaled. */
         Step: {
             /** @description Some wording came from the nearest published yield; worth a second look. */
             check: boolean;
             /** @description The step names a yield mise could not place, so it reads as published: check its amounts. */
             check_amounts: boolean;
+            /** @description The step's own photos. */
             images: components["schemas"]["Image"][];
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Its place in the method, from 1.
+             */
             position: number;
             /** @description Some amount in this step was derived for this yield. */
             scaled: boolean;
+            /** @description The instruction, with its amounts for the requested serving count. */
             text: string;
             /** @description The times the step asks for, in the order its text gives them, for starting timers. */
             times: components["schemas"]["StepTime"][];
@@ -1501,52 +1692,89 @@ export interface components {
              */
             until_seconds?: number | null;
         };
+        /** @description An API token, as its account's list shows it; the secret itself is shown only once. */
         TokenInfo: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When it was made.
+             */
             created_at: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The token's id, to revoke it.
+             */
             id: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When it was last used, when it has been.
+             */
             last_used_at?: string | null;
+            /** @description What it is for ("grocy"). */
             name: string;
             /** @description read or read_write. */
             scope: string;
         };
+        /** @description An API token to make for the signed-in account. */
         TokenRequest: {
+            /** @description What it is for; not empty. */
             name: string;
             /** @description read or read_write. */
             scope: string;
         };
+        /** @description An account, as the admin's list shows it. */
         UserInfo: {
+            /** @description It is turned off: it can't sign in, and its tokens don't work. */
             disabled: boolean;
+            /** @description Its name as people read it. */
             display_name: string;
+            /** @description Its email address, when it has one. */
             email?: string | null;
+            /** @description It can sign in with a password (single-sign-on-only accounts cannot). */
             has_password: boolean;
+            /** @description Its household. */
             household: components["schemas"]["Household"];
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The account's id.
+             */
             id: string;
             /**
              * Format: int64
              * @description Single-sign-on identities linked to the account.
              */
             identities: number;
+            /** @description It is an admin. */
             is_admin: boolean;
+            /** @description What it signs in with. */
             username: string;
         };
+        /** @description A change to an account; what is left out stays as it is. */
         UserUpdate: {
+            /** @description Turn it off (signing it out everywhere), or back on. */
             disabled?: boolean | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Move it to this household.
+             */
             household_id?: string | null;
+            /** @description Make it an admin, or not. */
             is_admin?: boolean | null;
             /** @description Set a new password (and sign the account out everywhere). */
             password?: string | null;
         };
+        /** @description A version at a serving count: its lines and steps scaled, and whether anything was derived. */
         Variant: {
+            /** @description What the source says about it, paragraphs separated by a blank line. */
             description?: string | null;
+            /** @description Its dish's slug, for `/api/v1/dishes/{slug}`. */
             dish_slug?: string | null;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The version's id.
+             */
             id: string;
             image?: components["schemas"]["Image"] | null;
+            /** @description Its ingredient lines, in order. */
             ingredients: components["schemas"]["Ingredient"][];
             /** @description Source details kept with the version: prep and total time, difficulty, tags, cuisines, nutrition. */
             meta: {
@@ -1559,14 +1787,21 @@ export interface components {
             official: boolean;
             /** @description The requested yield is one of the published ones. */
             published_yield: boolean;
-            /** Format: double */
+            /**
+             * Format: double
+             * @description The serving count shown.
+             */
             servings: number;
+            /** @description Its method, in order. */
             steps: components["schemas"]["Step"][];
+            /** @description The version's subtitle. */
             subtitle?: string | null;
+            /** @description The version's title. */
             title: string;
             /** @description Serving counts with published amounts. */
             yields: number[];
         };
+        /** @description One version of a dish, as its page lists it. */
         VariantSummary: {
             /** @description This version's value for each of the dish's options. */
             attributes: {
@@ -1574,19 +1809,28 @@ export interface components {
             };
             /** @description This household wrote the version in the app, so it can change it at `/api/v1/recipes/{id}`. */
             editable: boolean;
+            /** @description It has a method, not only ingredients. */
             has_steps: boolean;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description The version's id: `/api/v1/variants/{id}` shows it at any serving count.
+             */
             id: string;
             image?: components["schemas"]["Image"] | null;
             original?: components["schemas"]["Original"] | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When its source published it, RFC 3339; absent for one written or forked in mise.
+             */
             published_at?: string | null;
             /**
              * @description Another household's own version, shared with this one: that household's name. It can be read and forked, not
              *     changed.
              */
             shared_by?: string | null;
+            /** @description The version's subtitle. */
             subtitle?: string | null;
+            /** @description The version's title. */
             title: string;
             /** @description Serving counts with published amounts. */
             yields: number[];
@@ -1951,6 +2195,7 @@ export interface operations {
                 type?: string | null;
                 /** @description Page size (default 24, at most 100). */
                 limit?: number | null;
+                /** @description How many results to skip, for the next page (default 0). */
                 offset?: number | null;
             };
             header?: never;

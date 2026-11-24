@@ -19,6 +19,7 @@ fn reject_nul(parts: &Parts) -> Result<(), ApiError> {
     Ok(())
 }
 
+/// Query parameters, refused with the API's JSON error when malformed or holding a NUL character.
 pub struct Query<T>(pub T);
 
 impl<T: DeserializeOwned, S: Send + Sync> FromRequestParts<S> for Query<T> {
@@ -33,6 +34,8 @@ impl<T: DeserializeOwned, S: Send + Sync> FromRequestParts<S> for Query<T> {
     }
 }
 
+/// Path parameters, refused with the API's JSON error when malformed (an id that isn't a UUID) or holding a NUL
+/// character.
 pub struct Path<T>(pub T);
 
 impl<T: DeserializeOwned + Send, S: Send + Sync> FromRequestParts<S> for Path<T> {
