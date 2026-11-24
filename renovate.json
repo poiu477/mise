@@ -30,7 +30,7 @@
     },
     {
       "description": "Container images: CI jobs, the Dockerfile and the Compose files.",
-      "matchManagers": ["gitlab-ci", "dockerfile", "docker-compose"],
+      "matchManagers": ["gitlabci", "gitlabci-include", "dockerfile", "docker-compose"],
       "groupName": "container images"
     },
     {

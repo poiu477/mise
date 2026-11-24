@@ -331,14 +331,14 @@ rust sast:
     expire_in: 30 days
 
 renovate config:
-  # Whenever renovate.json changes, check it the way Renovate will read it.
+  # Whenever renovate.json or the Renovate version (its image tag here) changes, check it the way Renovate will read it.
   image: renovate/renovate:44.259.0
   stage: test
   needs: []
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
-    - changes: [renovate.json]
+    - changes: [renovate.json, .gitlab-ci.yml]
   script:
     - renovate-config-validator --strict renovate.json
 
