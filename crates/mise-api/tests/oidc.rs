@@ -33,8 +33,8 @@ fn b64(bytes: impl AsRef<[u8]>) -> String {
 
 /// The provider's signing keys, plus an impostor RSA key that claims the real key's id.
 struct Keys {
-    rsa: rsa::RsaPrivateKey,
-    impostor: rsa::RsaPrivateKey,
+    rsa: rsa::PrivateKey,
+    impostor: rsa::PrivateKey,
     ec: p256::ecdsa::SigningKey,
     ed: ed25519_dalek::SigningKey,
 }
@@ -43,10 +43,10 @@ struct Keys {
 fn keys() -> &'static Keys {
     static KEYS: OnceLock<Keys> = OnceLock::new();
     KEYS.get_or_init(|| {
-        let mut rng = rsa::rand_core::OsRng;
+        let mut rng = rand::rng();
         Keys {
-            rsa: rsa::RsaPrivateKey::new(&mut rng, 2048).unwrap(),
-            impostor: rsa::RsaPrivateKey::new(&mut rng, 2048).unwrap(),
+            rsa: rsa::PrivateKey::new(&mut rng, 2048).unwrap(),
+            impostor: rsa::PrivateKey::new(&mut rng, 2048).unwrap(),
             // Fixed test-only keys: any 32 bytes make a valid P-256 scalar here and an Ed25519 seed.
             ec: p256::ecdsa::SigningKey::from_slice(&[7u8; 32]).unwrap(),
             ed: ed25519_dalek::SigningKey::from_bytes(&[9u8; 32]),
@@ -81,7 +81,7 @@ fn sign(alg: Alg, claims: &Value) -> String {
             } else {
                 &k.impostor
             };
-            rsa::pkcs1v15::SigningKey::<rsa::sha2::Sha256>::new(key.clone())
+            rsa::pkcs1v15::SigningKey::<sha2::Sha256>::new(key.clone())
                 .sign(input.as_bytes())
                 .to_vec()
         }
@@ -98,6 +98,15 @@ fn sign(alg: Alg, claims: &Value) -> String {
     format!("{input}.{}", b64(signature))
 }
 
+/// A big-endian number as a JSON Web Key writes it: no leading zero bytes (RFC 7518, section 6.3.1).
+fn unsigned(bytes: &[u8]) -> Vec<u8> {
+    let first = bytes
+        .iter()
+        .position(|b| *b != 0)
+        .unwrap_or(bytes.len() - 1);
+    bytes[first..].to_vec()
+}
+
 fn jwks() -> Value {
     use rsa::traits::PublicKeyParts;
     let k = keys();
@@ -106,7 +115,7 @@ fn jwks() -> Value {
     let (x, y) = point.as_bytes()[1..].split_at(32);
     json!({"keys": [
         {"kty": "RSA", "kid": "rsa", "use": "sig", "alg": "RS256",
-         "n": b64(k.rsa.n().to_bytes_be()), "e": b64(k.rsa.e().to_bytes_be())},
+         "n": b64(unsigned(&k.rsa.n().to_be_bytes())), "e": b64(unsigned(&k.rsa.e().to_be_bytes()))},
         {"kty": "EC", "kid": "ec", "use": "sig", "alg": "ES256", "crv": "P-256",
          "x": b64(x), "y": b64(y)},
         {"kty": "OKP", "kid": "ed", "use": "sig", "alg": "EdDSA", "crv": "Ed25519",
