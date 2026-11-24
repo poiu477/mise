@@ -119,14 +119,18 @@ pub async fn default_for(
 /// A household, by id and name.
 #[derive(Serialize, ToSchema)]
 pub struct HouseholdRef {
+    /// The household's id.
     pub id: Uuid,
+    /// The household's name.
     pub name: String,
 }
 
 /// The signed-in household's sharing.
 #[derive(Serialize, ToSchema)]
 pub struct HouseholdSharing {
+    /// The signed-in household's id.
     pub id: Uuid,
+    /// The signed-in household's name.
     pub name: String,
     /// What its new recipes and forks are shared with, unless one says otherwise.
     pub default_visibility: Visibility,

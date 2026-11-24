@@ -15,6 +15,7 @@ use crate::{
     variants::MAX_SERVINGS,
 };
 
+/// Which week to answer for.
 #[derive(Deserialize, IntoParams)]
 pub struct WeekParams {
     /// Any day in the week (default: today).
@@ -27,23 +28,33 @@ pub fn monday(day: Option<Date>) -> Date {
     d - time::Duration::days(d.weekday().number_days_from_monday().into())
 }
 
+/// One dish planned for the week, at a serving count.
 #[derive(Serialize, ToSchema)]
 pub struct PlanEntry {
+    /// The entry's id, to change or remove it.
     pub id: Uuid,
+    /// The version planned: `/api/v1/variants/{id}` shows it.
     pub variant_id: Uuid,
+    /// Its dish's slug, for `/api/v1/dishes/{slug}`.
     pub dish_slug: Option<String>,
+    /// The version's title.
     pub title: String,
+    /// The version's subtitle ("with Lemon Rice").
     pub subtitle: Option<String>,
+    /// How many it is planned for.
     pub servings: f64,
     /// Serving counts with published amounts.
     pub yields: Vec<f64>,
+    /// The version's photo.
     pub image: Option<Image>,
 }
 
+/// A household's plan for one week.
 #[derive(Serialize, ToSchema)]
 pub struct Plan {
     /// The Monday.
     pub week: Date,
+    /// The dishes planned, in the order they were added.
     pub entries: Vec<PlanEntry>,
 }
 
@@ -116,10 +127,12 @@ pub async fn get(
     Ok(Json(load(&s, me.household_id, monday(p.week)).await?))
 }
 
+/// A dish to add to a week's plan.
 #[derive(Deserialize, ToSchema)]
 pub struct NewEntry {
     /// Any day in the week (default: today).
     pub week: Option<Date>,
+    /// The version to plan.
     pub variant_id: Uuid,
     /// Default: 2 where published, else the smallest published size.
     pub servings: Option<f64>,
@@ -171,8 +184,10 @@ pub async fn add(
     Ok(Json(load(&s, me.household_id, week).await?))
 }
 
+/// A new serving count for a planned dish.
 #[derive(Deserialize, ToSchema)]
 pub struct EntryChange {
+    /// How many to plan it for: more than 0, at most 24.
     pub servings: f64,
 }
 

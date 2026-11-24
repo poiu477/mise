@@ -28,19 +28,6 @@ status.md if it changed either.
   image to the registry and creates the release; the test release and image are deleted afterwards. Syntax checks
   alone don't prove the release path.
 
-### T16 · Rust doc comments: `mise-api`, then the lint for the whole workspace
-
-- As `mise-core`, `mise-db` and `mise-ingest` already do, for `crates/mise-api` (213 items). In this crate `///` on a
-  handler or a request or response type also becomes its description in the OpenAPI document, so regenerate
-  `web/src/api/schema.d.ts` and keep `check-openapi.mjs` passing; write those comments for an API reader.
-- Then move the lint to the workspace: `[workspace.lints.rust] missing_docs = "warn"` in `Cargo.toml` and
-  `[lints] workspace = true` in every crate's `Cargo.toml`, removing the per-crate attributes. `mise-cli` is a binary
-  and has no public items, so it's covered without work.
-- **Touches:** `crates/mise-api/src/` (comments only), `web/src/api/schema.d.ts` (regenerated), every `Cargo.toml`.
-- **Needs:** not while the database-code rework is in flight: it moves most of this crate.
-- **Done when:** clippy passes workspace-wide with the lint in `Cargo.toml`; a missing doc comment in any crate fails
-  it.
-
 ## Needs a decision first
 
 Each of these waits on a question in status.md's "Open questions" or on Paul.

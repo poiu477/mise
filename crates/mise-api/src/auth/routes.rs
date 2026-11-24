@@ -18,6 +18,7 @@ use crate::{
     extract::{JsonBody, Path},
 };
 
+/// How this install signs people in.
 #[derive(Serialize, ToSchema)]
 pub struct AuthInfo {
     /// Username and password sign-in is on.
@@ -46,19 +47,29 @@ pub async fn config(State(s): State<AppState>) -> ApiResult<Json<AuthInfo>> {
     }))
 }
 
+/// A household, by id and name.
 #[derive(Serialize, ToSchema, Clone)]
 pub struct Household {
+    /// The household's id.
     pub id: Uuid,
+    /// The household's name; empty for a kitchen device.
     pub name: String,
 }
 
+/// The signed-in account, or the kitchen device.
 #[derive(Serialize, ToSchema)]
 pub struct Me {
+    /// The account's id.
     pub id: Uuid,
+    /// What it signs in with.
     pub username: String,
+    /// Its name as people read it.
     pub display_name: String,
+    /// Its email address, when it has one.
     pub email: Option<String>,
+    /// It manages accounts, households and kitchen devices.
     pub is_admin: bool,
+    /// Its household.
     pub household: Household,
     /// The account can sign in with a password (single-sign-on-only accounts cannot).
     pub has_password: bool,
@@ -92,10 +103,14 @@ pub(crate) async fn load_me(pool: &sqlx::PgPool, id: Uuid) -> ApiResult<Me> {
     })
 }
 
+/// The first account, which sets the install up and is its admin.
 #[derive(Deserialize, ToSchema)]
 pub struct SetupRequest {
+    /// 1 to 64 letters, digits or `._-@+`.
     pub username: String,
+    /// 8 to 256 characters.
     pub password: String,
+    /// Its name as people read it (default: the username).
     pub display_name: Option<String>,
     /// Name for the first household (default "Home").
     pub household: Option<String>,
@@ -163,9 +178,12 @@ pub async fn setup(
     ))
 }
 
+/// A password sign-in.
 #[derive(Deserialize, ToSchema)]
 pub struct LoginRequest {
+    /// The account's username, in any case.
     pub username: String,
+    /// Its password.
     pub password: String,
 }
 
@@ -268,10 +286,12 @@ pub async fn me(
     Ok(Json(load_me(&s.pool, u.id).await?))
 }
 
+/// A new password for the signed-in account.
 #[derive(Deserialize, ToSchema)]
 pub struct PasswordChange {
     /// Required when the account already has a password.
     pub current: Option<String>,
+    /// The new password, 8 to 256 characters.
     pub new: String,
 }
 
@@ -328,29 +348,38 @@ pub async fn change_password(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// An API token, as its account's list shows it; the secret itself is shown only once.
 #[derive(Serialize, ToSchema)]
 pub struct TokenInfo {
+    /// The token's id, to revoke it.
     pub id: Uuid,
+    /// What it is for ("grocy").
     pub name: String,
     /// read or read_write.
     pub scope: String,
+    /// When it was made.
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
+    /// When it was last used, when it has been.
     #[serde(with = "time::serde::rfc3339::option")]
     pub last_used_at: Option<OffsetDateTime>,
 }
 
+/// An API token to make for the signed-in account.
 #[derive(Deserialize, ToSchema)]
 pub struct TokenRequest {
+    /// What it is for; not empty.
     pub name: String,
     /// read or read_write.
     pub scope: String,
 }
 
+/// A new API token, with its secret.
 #[derive(Serialize, ToSchema)]
 pub struct NewToken {
     /// Shown once: send it as `Authorization: Bearer <token>`.
     pub token: String,
+    /// The token, as the list shows it.
     pub info: TokenInfo,
 }
 
@@ -461,15 +490,24 @@ pub async fn delete_token(
     }
 }
 
+/// An account, as the admin's list shows it.
 #[derive(Serialize, ToSchema)]
 pub struct UserInfo {
+    /// The account's id.
     pub id: Uuid,
+    /// What it signs in with.
     pub username: String,
+    /// Its name as people read it.
     pub display_name: String,
+    /// Its email address, when it has one.
     pub email: Option<String>,
+    /// It is an admin.
     pub is_admin: bool,
+    /// It is turned off: it can't sign in, and its tokens don't work.
     pub disabled: bool,
+    /// Its household.
     pub household: Household,
+    /// It can sign in with a password (single-sign-on-only accounts cannot).
     pub has_password: bool,
     /// Single-sign-on identities linked to the account.
     pub identities: i64,
@@ -540,17 +578,23 @@ pub async fn list_users(
     ))
 }
 
+/// An account an admin adds.
 #[derive(Deserialize, ToSchema)]
 pub struct NewUser {
+    /// 1 to 64 letters, digits or `._-@+`.
     pub username: String,
     /// Leave out for an account that only signs in with single sign-on.
     pub password: Option<String>,
+    /// Its name as people read it (default: the username).
     pub display_name: Option<String>,
+    /// Its email address, which single sign-on can match it by.
     pub email: Option<String>,
+    /// Make it an admin (default no).
     #[serde(default)]
     pub is_admin: bool,
     /// Join this household; leave out (with `household_name`) to start a new one.
     pub household_id: Option<Uuid>,
+    /// With no `household_id`: the new household's name (default: the username followed by "'s household").
     pub household_name: Option<String>,
 }
 
@@ -635,10 +679,14 @@ pub async fn add_user(pool: &sqlx::PgPool, r: NewUser) -> ApiResult<Uuid> {
     Ok(id)
 }
 
+/// A change to an account; what is left out stays as it is.
 #[derive(Deserialize, ToSchema)]
 pub struct UserUpdate {
+    /// Make it an admin, or not.
     pub is_admin: Option<bool>,
+    /// Turn it off (signing it out everywhere), or back on.
     pub disabled: Option<bool>,
+    /// Move it to this household.
     pub household_id: Option<Uuid>,
     /// Set a new password (and sign the account out everywhere).
     pub password: Option<String>,
@@ -752,8 +800,10 @@ pub async fn list_households(
     ))
 }
 
+/// A household to make.
 #[derive(Deserialize, ToSchema)]
 pub struct NewHousehold {
+    /// Its name; not empty.
     pub name: String,
 }
 

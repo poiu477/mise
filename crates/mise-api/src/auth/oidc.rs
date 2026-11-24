@@ -26,11 +26,15 @@ use crate::{AppState, extract::Query};
 
 /// OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_NAME, OIDC_SCOPES, OIDC_ADMIN_GROUP, OIDC_HOUSEHOLD.
 pub struct OidcConfig {
+    /// The provider's issuer URL, where its discovery document is.
     pub issuer: IssuerUrl,
+    /// mise's client id at the provider.
     pub client_id: String,
+    /// mise's client secret, for a confidential client.
     pub client_secret: Option<String>,
     /// Label on the sign-in button.
     pub name: String,
+    /// Scopes to ask for besides `openid` (default `email profile`).
     pub scopes: Vec<String>,
     /// Members of this group (from the `groups` claim) are admins; checked at every sign-in.
     pub admin_group: Option<String>,
@@ -39,6 +43,7 @@ pub struct OidcConfig {
 }
 
 impl OidcConfig {
+    /// Reads the provider's settings from the environment; fails, saying which, when one is missing or wrong.
     pub fn from_env() -> anyhow::Result<Self> {
         let var = |k: &str| {
             std::env::var(k)
@@ -115,6 +120,7 @@ async fn metadata<'a>(
         .await
 }
 
+/// Where to go once signed in.
 #[derive(Deserialize)]
 pub struct StartParams {
     /// Path to return to after signing in.
@@ -194,11 +200,16 @@ async fn start_inner(s: &AppState, headers: &HeaderMap, p: StartParams) -> anyho
     Ok(url.to_string())
 }
 
+/// What the provider sends back to the callback.
 #[derive(Deserialize)]
 pub struct CallbackParams {
+    /// The authorization code to exchange for tokens.
     pub code: Option<String>,
+    /// The state mise sent, to match the sign-in it started.
     pub state: Option<String>,
+    /// Why the provider didn't sign the person in, when it didn't.
     pub error: Option<String>,
+    /// The provider's words for that.
     pub error_description: Option<String>,
 }
 

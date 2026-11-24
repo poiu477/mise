@@ -105,7 +105,9 @@ pub struct DishPair {
 /// One open item in the queue.
 #[derive(Serialize, ToSchema)]
 pub struct ReviewItem {
+    /// The item's id, to answer it at `/api/v1/review-items/{id}/decision`.
     pub id: Uuid,
+    /// What the item asks: a food match, a food's parent, or a dish merge.
     pub kind: ReviewKind,
     /// What it asks about: the food's name, or the copied version's title.
     pub subject: String,
@@ -122,6 +124,7 @@ pub struct ReviewItem {
     pub dishes: Option<DishPair>,
     /// The answers this item takes.
     pub verdicts: Vec<Verdict>,
+    /// When the import pipeline raised it.
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
 }
@@ -129,9 +132,11 @@ pub struct ReviewItem {
 /// Every open item, food matches first, then food parents, then dish merges; the surest first within each.
 #[derive(Serialize, ToSchema)]
 pub struct ReviewQueue {
+    /// The open items.
     pub items: Vec<ReviewItem>,
 }
 
+/// Which items to list.
 #[derive(Deserialize, IntoParams)]
 pub struct QueueParams {
     /// Only items of this kind (default: every kind).
@@ -279,6 +284,7 @@ pub async fn list(
 /// An answer to one item.
 #[derive(Deserialize, ToSchema)]
 pub struct ReviewDecision {
+    /// The answer: one of the item's `verdicts`.
     pub decision: Verdict,
     /// With `edit` on a food: the food it is a kind of, by name ("Tomato").
     pub parent: Option<String>,

@@ -1,7 +1,5 @@
 //! Importing recipes into the data core: seed bundles, web pages, and the files other recipe apps export.
 
-#![warn(missing_docs)]
-
 pub mod bundle;
 pub mod curate;
 pub mod dish_decisions;

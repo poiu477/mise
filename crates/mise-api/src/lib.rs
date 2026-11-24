@@ -38,11 +38,14 @@ use tower_http::{
 };
 use utoipa::OpenApi;
 
+/// What every handler shares: the database, where photos live, sign-in, the importer's fetcher and the metrics.
 #[derive(Clone)]
 pub struct AppState {
+    /// The database.
     pub pool: PgPool,
     /// Where stored photos and their web-size copies live (MEDIA_ROOT).
     pub media_root: PathBuf,
+    /// Sign-in settings, the login throttle and single sign-on's provider.
     pub auth: std::sync::Arc<auth::Auth>,
     /// Fetches pages and photos to import (`IMPORT_ALLOW_PRIVATE`).
     pub fetcher: std::sync::Arc<mise_ingest::fetch::Fetcher>,
@@ -50,6 +53,7 @@ pub struct AppState {
     pub metrics: std::sync::Arc<observe::Metrics>,
 }
 
+/// The OpenAPI document: every route, its parameters and bodies, and every status it answers with.
 #[derive(OpenApi)]
 #[openapi(
     info(title = "mise", description = "Self-hosted recipe system: dishes, their versions, and any serving count. A request that changes something answers 403 when a browser says another site sent it (`Sec-Fetch-Site`, or an `Origin` that isn't this server's)."),
@@ -107,9 +111,12 @@ impl utoipa::Modify for Security {
     }
 }
 
+/// The server is up.
 #[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct Health {
+    /// Always `ok`.
     pub status: &'static str,
+    /// The server's version, such as `0.1.0`.
     pub version: &'static str,
 }
 

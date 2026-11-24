@@ -25,6 +25,7 @@ pub const KNOWN_FOOD: &str = "f.kind <> 'category' AND (f.origin <> 'matched' OR
 /// The most foods one search answers with.
 const MAX_LIMIT: i64 = 50;
 
+/// A search for foods by name.
 #[derive(Deserialize, IntoParams)]
 pub struct FoodParams {
     /// Part of the food's name, 1 to 100 characters: "onion", "parm". Small typos still match.
@@ -36,6 +37,7 @@ pub struct FoodParams {
 /// Foods matching a search, the closest names first.
 #[derive(Serialize, ToSchema)]
 pub struct FoodList {
+    /// The foods found, the closest names first.
     pub items: Vec<FoodRef>,
 }
 

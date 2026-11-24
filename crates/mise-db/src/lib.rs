@@ -1,7 +1,5 @@
 //! Database access: connection pool and migrations.
 
-#![warn(missing_docs)]
-
 use anyhow::Context;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 

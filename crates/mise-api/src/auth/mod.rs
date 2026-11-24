@@ -29,7 +29,9 @@ use uuid::Uuid;
 
 use crate::{AppState, error::ApiError};
 
+/// The cookie a browser's session travels in.
 pub const SESSION_COOKIE: &str = "mise_session";
+/// What every API token starts with, so one pasted somewhere is recognisable.
 pub const TOKEN_PREFIX: &str = "mise_";
 
 /// Routes anyone may call, after the API's address (`/api/v1` or the old `/api`): health, and what signing in
@@ -50,13 +52,16 @@ const PUBLIC: &[&str] = &[
 pub struct AuthConfig {
     /// Username and password sign-in.
     pub local: bool,
+    /// Single sign-on, when OIDC_ISSUER is set.
     pub oidc: Option<oidc::OidcConfig>,
     /// Where the install is reached from outside (behind a reverse proxy); unset on a home-network install.
     pub public_base_url: Option<Url>,
+    /// How long a sign-in lasts (SESSION_DAYS, default 30).
     pub session_days: i64,
 }
 
 impl AuthConfig {
+    /// Reads the settings from the environment; fails, saying which, when one is wrong or nobody could sign in.
     pub fn from_env() -> anyhow::Result<Self> {
         let modes = std::env::var("AUTH_MODES").unwrap_or_else(|_| "local".into());
         let modes: Vec<String> = modes
@@ -106,12 +111,16 @@ impl AuthConfig {
 
 /// Everything sign-in needs at run time.
 pub struct Auth {
+    /// The settings.
     pub config: AuthConfig,
+    /// Failed password sign-ins, per username.
     pub limiter: LoginLimiter,
+    /// The single sign-on provider, discovered on first use.
     pub oidc: oidc::Provider,
 }
 
 impl Auth {
+    /// Sign-in with these settings, nobody throttled yet.
     pub fn new(config: AuthConfig) -> Self {
         Auth {
             config,
@@ -125,17 +134,26 @@ impl Auth {
 /// kitchen token's, and `require_auth` lets it reach only the routes `kitchen::may` lists.
 #[derive(Clone, Debug)]
 pub struct CurrentUser {
+    /// The account's id, or a kitchen device's token id.
     pub id: Uuid,
+    /// The account's username; empty for a kitchen device.
     pub username: String,
+    /// The account manages accounts, households and kitchen devices.
     pub is_admin: bool,
+    /// The household every query is scoped to.
     pub household_id: Uuid,
+    /// How the request proved who it is.
     pub via: Via,
 }
 
+/// How a request proved who it is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Via {
+    /// A browser's session cookie.
     Session,
+    /// An API token in `Authorization: Bearer`.
     Token {
+        /// The token may only read.
         read_only: bool,
     },
     /// A kitchen device's cookie.
@@ -143,6 +161,7 @@ pub enum Via {
 }
 
 impl CurrentUser {
+    /// Refuses anyone but an admin.
     pub fn require_admin(&self) -> Result<(), ApiError> {
         if self.is_admin {
             Ok(())
@@ -152,6 +171,7 @@ impl CurrentUser {
     }
 }
 
+/// The password's Argon2id hash, as stored.
 pub fn hash_password(password: &str) -> anyhow::Result<String> {
     Argon2::default()
         .hash_password(password.as_bytes())
@@ -159,6 +179,7 @@ pub fn hash_password(password: &str) -> anyhow::Result<String> {
         .map_err(|e| anyhow::anyhow!("hashing a password: {e}"))
 }
 
+/// Whether the password matches a stored hash.
 pub fn verify_password(password: &str, hash: &str) -> bool {
     Argon2::default()
         .verify_password(password.as_bytes(), hash)
@@ -169,6 +190,8 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
 static DUMMY_HASH: LazyLock<String> =
     LazyLock::new(|| hash_password("not a real password").expect("argon2 works"));
 
+/// Whether the password matches; with no hash (no such account), it still takes as long as a check, so a wrong username
+/// can't be told from a wrong password by the time taken.
 pub fn check_password(password: &str, hash: Option<&str>) -> bool {
     match hash {
         Some(h) => verify_password(password, h),
@@ -195,6 +218,7 @@ pub fn validate_password(password: &str) -> Result<(), ApiError> {
     Ok(())
 }
 
+/// The username trimmed, when it is 1 to 64 letters, digits or `._-@+`; refused otherwise.
 pub fn validate_username(username: &str) -> Result<String, ApiError> {
     let u = username.trim();
     let ok = (1..=64).contains(&u.chars().count())
@@ -216,10 +240,12 @@ pub fn new_secret() -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 
+/// How a secret is stored: its SHA-256, in hex. Sessions, tokens and kitchen links are kept only this way.
 pub fn secret_hash(secret: &str) -> String {
     hex::encode(Sha256::digest(secret.as_bytes()))
 }
 
+/// Starts a session for `user` lasting `days`, clearing ended ones; answers with the secret for its cookie.
 pub async fn create_session(
     pool: &PgPool,
     user: Uuid,
@@ -242,6 +268,7 @@ pub async fn create_session(
     Ok(token)
 }
 
+/// The session cookie: HttpOnly, SameSite=Lax, Secure when the install is served over HTTPS.
 pub fn session_cookie(token: String, config: &AuthConfig) -> Cookie<'static> {
     Cookie::build((SESSION_COOKIE, token))
         .path("/")
@@ -252,6 +279,7 @@ pub fn session_cookie(token: String, config: &AuthConfig) -> Cookie<'static> {
         .build()
 }
 
+/// A cookie that removes the session cookie, signing the browser out.
 pub fn removal_cookie(config: &AuthConfig) -> Cookie<'static> {
     let mut c = Cookie::build((SESSION_COOKIE, ""))
         .path("/")
@@ -288,6 +316,7 @@ impl LoginLimiter {
         Some(left.as_secs().max(1))
     }
 
+    /// Counts a failed sign-in for `key` (a username).
     pub fn failed(&self, key: &str) {
         let mut map = self.failures.lock().unwrap();
         // Forget old entries so the map cannot grow without bound.
@@ -299,6 +328,7 @@ impl LoginLimiter {
         e.1 = Instant::now();
     }
 
+    /// Clears `key`'s failures after a sign-in that worked.
     pub fn succeeded(&self, key: &str) {
         self.failures.lock().unwrap().remove(key);
     }
