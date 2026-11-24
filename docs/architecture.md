@@ -70,15 +70,25 @@ A seed bundle (see [seed-bundle.md](seed-bundle.md)) is built offline from a pri
 `food apply` (curation file), `dish apply` and `dish prefer` (decisions and preferred versions), `group-dishes`,
 `derive-options`, `parse-steps`, `ingest-media`. Every stage is re-runnable and leaves what a person decided alone.
 
-Web pages come in through the same stages (other apps' files will too, T27). `schema_org::read_page` and
-`read_json` turn schema.org Recipe data (JSON-LD, or microdata when a page has none) into records shaped like a
+Web pages and other apps' export files come in through the same stages. `schema_org::read_page`, `read_json`
+and `read_value` turn schema.org Recipe data (JSON-LD, or microdata when a page has none) into records shaped like a
 bundle's variant lines, without fetching anything; the sample pages in `fixtures/web-pages/` show what each kind of
-markup gives. `web::import_url` (behind `POST /api/v1/imports` and `mise import url`) fetches the page with
-`fetch::Fetcher`, keeps each recipe as a `web` source record owned by the importing household, and makes a version
-of it owned by the same household: lines read with `mise_core::ingredient_line` (kept as written in `text`), steps
-parsed as they are stored, the photo fetched and stored as an upload is, foods matched in the same transaction, then
-`group-dishes` and `derive-options` run (one import at a time). An unchanged page changes nothing; a changed one is a
-new version whose parent is the previous.
+markup gives. `import` stores them, for pages and files alike: it keeps each recipe as a source record owned by the
+importing household and makes a version of it owned by the same household: lines read with
+`mise_core::ingredient_line` (kept as written in `text`), steps parsed as they are stored, the photo stored as an
+upload is, foods matched in the same transaction, then `group-dishes` and `derive-options` run once at the end (one
+import at a time). An unchanged recipe changes nothing; a changed one is a new version whose parent is the previous.
+
+`web::import_url` (behind `POST /api/v1/imports` and `mise import url`) fetches the page and its photo with
+`fetch::Fetcher` and stores its recipes as the `web` source's. `files::import_file` and `import_path` (behind
+`POST /api/v1/imports/file` and `mise import file`) unpack an export (a zip, zips inside it, a gzip, or a folder on
+disk, within size and count limits checked as it unpacks), sort each JSON document into a format by its fields, and
+read it with that format's module (`files::paprika`, `mealie`, `tandoor`, `nextcloud`; schema.org JSON goes straight
+to `read_value`). Each app's recipe is turned into schema.org JSON-LD and read like a page's, so yields, times and
+steps follow one set of rules, and the record keeps the app's own object as its `raw`. Each format is a source of its
+own (`file:paprika`), and the photo is the one the file holds: Paprika's inline `photo_data`, or the `full`,
+`original` or `image` picture beside a recipe in a folder that holds no other. `fixtures/import-files/` has an
+export of each format written for mise, with the records each gives.
 
 `fetch::Fetcher` refuses what an import must not reach: anything but `http` and `https`, credentials in the link,
 ports below 1024 other than 80 and 443, and any host that is or resolves to an address off the public internet

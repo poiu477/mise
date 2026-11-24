@@ -52,6 +52,7 @@ pub struct AppState {
         health, dishes::list, dishes::get, variants::get, media::get,
         recipes::create, recipes::get, recipes::update, recipes::delete, recipes::set_photo, recipes::remove_photo, recipes::read_lines, recipes::fork,
         imports::create,
+        imports::create_from_file,
         foods::search,
         auth::routes::config, auth::routes::setup, auth::routes::login, auth::routes::logout, auth::oidc::start, auth::oidc::callback,
         auth::routes::me, auth::routes::change_password, auth::routes::list_tokens, auth::routes::create_token, auth::routes::delete_token,
@@ -237,6 +238,12 @@ fn api_routes() -> Router<AppState> {
                 .layer(DefaultBodyLimit::max(recipes::MAX_PHOTO_BYTES)),
         )
         .route("/imports", post(imports::create))
+        .route(
+            "/imports/file",
+            post(imports::create_from_file)
+                // An export with its photos is far larger than the JSON every other route reads.
+                .layer(DefaultBodyLimit::max(mise_ingest::files::MAX_FILE_BYTES)),
+        )
         .route("/foods", get(foods::search))
         .route("/plan", get(plan::get))
         .route("/plan/entries", post(plan::add))

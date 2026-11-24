@@ -251,6 +251,7 @@ const RECIPE_PHOTO_REMOVE: (&str, &str) = ("DELETE", "/api/v1/recipes/{id}/photo
 const RECIPE_LINES: (&str, &str) = ("POST", "/api/v1/recipes/lines");
 const FORK: (&str, &str) = ("POST", "/api/v1/variants/{id}/fork");
 const IMPORT: (&str, &str) = ("POST", "/api/v1/imports");
+const IMPORT_FILE: (&str, &str) = ("POST", "/api/v1/imports/file");
 const FOODS: (&str, &str) = ("GET", "/api/v1/foods");
 const PLAN: (&str, &str) = ("GET", "/api/v1/plan");
 const PLAN_ADD: (&str, &str) = ("POST", "/api/v1/plan/entries");
@@ -934,6 +935,29 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
         .await;
     let gone = json!({"url": site.url("/gone")});
     c.call(IMPORT, me, Some(gone), 502, "a page the site doesn't have")
+        .await;
+    let export = |kind: &str, bytes: Vec<u8>| {
+        TestApp::request("POST", "/api/v1/imports/file?name=squash.json", me)
+            .header(header::CONTENT_TYPE, kind)
+            .body(Body::from(bytes))
+            .unwrap()
+    };
+    let squash = std::fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/import-files/schema-org/miso-glazed-squash.json"),
+    )
+    .unwrap();
+    let sent = export("application/octet-stream", squash.clone());
+    c.expect_request(IMPORT_FILE, sent, 200, "a file imported")
+        .await;
+    let sent = export("text/plain", squash);
+    c.expect_request(IMPORT_FILE, sent, 400, "sent as a form could")
+        .await;
+    let sent = export("application/octet-stream", b"{}".to_vec());
+    c.expect_request(IMPORT_FILE, sent, 400, "no recipe in it")
+        .await;
+    let sent = export("application/octet-stream", vec![0; (100 << 20) + 1]);
+    c.expect_request(IMPORT_FILE, sent, 413, "over 100 MB")
         .await;
     let found = format!("{}?q=leek", FOODS.1);
     c.expect(FOODS, &found, me, None, 200, "foods by name")

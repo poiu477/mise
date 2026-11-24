@@ -140,6 +140,33 @@ enum ImportCommand {
         #[arg(long, env = "MEDIA_ROOT", default_value = "./data/media")]
         media_root: std::path::PathBuf,
     },
+    /// Import the recipes in another recipe app's export into a household, which alone sees them: schema.org JSON,
+    /// a Nextcloud Cookbook folder (or the folder zipped), a Mealie or Tandoor export zip, or a Paprika export
+    /// (.paprikarecipes). Importing an unchanged export again changes nothing.
+    File {
+        /// The export: a file, or a folder of them.
+        path: std::path::PathBuf,
+        /// The household the recipes belong to, by name; may be left out when the install has one household.
+        #[arg(long)]
+        household: Option<String>,
+        /// Where photos are stored.
+        #[arg(long, env = "MEDIA_ROOT", default_value = "./data/media")]
+        media_root: std::path::PathBuf,
+    },
+}
+
+/// Prints what an import did, a recipe to a line.
+fn print_imported(imported: &[mise_ingest::import::Imported]) {
+    for r in imported {
+        let what = if r.unchanged { "unchanged" } else { "imported" };
+        println!(
+            "{what}: {} (/dishes/{}?v={})",
+            r.title, r.dish_slug, r.variant_id
+        );
+        if let Some(why) = &r.photo_problem {
+            println!("  {why}");
+        }
+    }
 }
 
 /// The household named `name`, or the install's only household when no name is given.
@@ -210,15 +237,19 @@ async fn main() -> anyhow::Result<()> {
             let fetcher = mise_ingest::fetch::Fetcher::from_env();
             let imported =
                 mise_ingest::web::import_url(&pool, &media_root, &fetcher, household, &url).await?;
-            for r in imported {
-                let what = if r.unchanged { "unchanged" } else { "imported" };
-                println!(
-                    "{what}: {} (/dishes/{}?v={})",
-                    r.title, r.dish_slug, r.variant_id
-                );
-                if let Some(why) = r.photo_problem {
-                    println!("  {why}");
-                }
+            print_imported(&imported);
+        }
+        Command::Import(ImportCommand::File {
+            path,
+            household: name,
+            media_root,
+        }) => {
+            let household = household(&pool, name.as_deref()).await?;
+            let imported =
+                mise_ingest::files::import_path(&pool, &media_root, household, &path).await?;
+            print_imported(&imported.recipes);
+            for s in &imported.skipped {
+                println!("skipped: {}: {}", s.path, s.reason);
             }
         }
         Command::MatchFoods { reset } => {

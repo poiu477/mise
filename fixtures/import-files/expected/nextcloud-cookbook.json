@@ -1,0 +1,145 @@
+[
+  {
+    "format": "Nextcloud Cookbook",
+    "path": "Recipes/Lemon Barley Salad/recipe.json",
+    "photo": "Recipes/Lemon Barley Salad/full.jpg",
+    "record": {
+      "description": "Chewy barley with cucumber, herbs and a sharp lemon dressing. Keeps for days.",
+      "external_id": "1482",
+      "hero_image": null,
+      "ingredients": [
+        {
+          "key": "1",
+          "name": "1 cup pearl barley"
+        },
+        {
+          "key": "2",
+          "name": "1 cucumber, diced"
+        },
+        {
+          "key": "3",
+          "name": "1 bunch parsley, chopped"
+        },
+        {
+          "key": "4",
+          "name": "2 lemons, juiced"
+        },
+        {
+          "key": "5",
+          "name": "3 TBSP olive oil"
+        },
+        {
+          "key": "6",
+          "name": "1 tsp salt"
+        }
+      ],
+      "meta": {
+        "categories": [
+          "Salads"
+        ],
+        "cook_time": "PT30M",
+        "prep_time": "PT20M",
+        "tags": [
+          "barley",
+          "lemon",
+          "make-ahead"
+        ],
+        "total_time": "PT50M"
+      },
+      "steps": [
+        {
+          "images": [],
+          "index": 1,
+          "text": "Simmer the barley in plenty of salted water for 30 minutes, until tender. Drain and cool."
+        },
+        {
+          "images": [],
+          "index": 2,
+          "text": "Whisk the lemon juice, olive oil and salt."
+        },
+        {
+          "images": [],
+          "index": 3,
+          "text": "Toss the barley with the cucumber, parsley and dressing."
+        }
+      ],
+      "title": "Lemon Barley Salad",
+      "url": null,
+      "yields": [
+        6.0
+      ]
+    }
+  },
+  {
+    "format": "Nextcloud Cookbook",
+    "path": "Recipes/Spiced Red Lentil Soup/recipe.json",
+    "photo": null,
+    "record": {
+      "description": null,
+      "external_id": "1490",
+      "hero_image": null,
+      "ingredients": [
+        {
+          "key": "1",
+          "name": "1 onion, chopped"
+        },
+        {
+          "key": "2",
+          "name": "2 garlic cloves, crushed"
+        },
+        {
+          "key": "3",
+          "name": "1 TBSP curry powder"
+        },
+        {
+          "key": "4",
+          "name": "1 cup red lentils, rinsed"
+        },
+        {
+          "key": "5",
+          "name": "4 cups vegetable stock"
+        },
+        {
+          "key": "6",
+          "name": "1 can coconut milk"
+        }
+      ],
+      "meta": {
+        "categories": [
+          "Soups"
+        ],
+        "cook_time": "PT25M",
+        "images": [
+          "https://recipes.example/photos/lentil-soup.jpg"
+        ],
+        "prep_time": "PT10M",
+        "tags": [
+          "lentils",
+          "vegan"
+        ]
+      },
+      "steps": [
+        {
+          "images": [],
+          "index": 1,
+          "text": "Soften the onion and garlic in a little oil, then stir in the curry powder."
+        },
+        {
+          "images": [],
+          "index": 2,
+          "text": "Add the lentils and stock and simmer for 20 minutes, until the lentils collapse."
+        },
+        {
+          "images": [],
+          "index": 3,
+          "text": "Stir in the coconut milk and blend until smooth."
+        }
+      ],
+      "title": "Spiced Red Lentil Soup",
+      "url": "https://recipes.example/spiced-red-lentil-soup",
+      "yields": [
+        4.0
+      ]
+    }
+  }
+]

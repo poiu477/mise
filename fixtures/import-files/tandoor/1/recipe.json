@@ -1,0 +1,136 @@
+{
+  "name": "Brown Butter Cornbread",
+  "description": "A tender cornbread with nutty brown butter, baked in a skillet.",
+  "keywords": [
+    {
+      "name": "Baking",
+      "description": "",
+      "created_at": "2026-01-10T09:12:31.512345+01:00",
+      "updated_at": "2026-01-10T09:12:31.512345+01:00"
+    },
+    {
+      "name": "Side",
+      "description": "",
+      "created_at": "2026-01-10T09:12:31.512345+01:00",
+      "updated_at": "2026-01-10T09:12:31.512345+01:00"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Batter",
+      "instruction": "Melt the butter and cook it until it smells nutty and browns.\nWhisk the cornmeal, flour, sugar and baking powder, then stir in the buttermilk, eggs and most of the butter.",
+      "ingredients": [
+        {
+          "food": { "name": "Dry", "plural_name": null, "ignore_shopping": false, "supermarket_category": null },
+          "unit": null,
+          "amount": 0,
+          "note": "",
+          "order": 0,
+          "is_header": true,
+          "no_amount": true
+        },
+        {
+          "food": { "name": "cornmeal", "plural_name": null, "ignore_shopping": false, "supermarket_category": { "name": "Baking" } },
+          "unit": { "name": "cup", "plural_name": "cups", "description": "" },
+          "amount": 1,
+          "note": "",
+          "order": 1,
+          "is_header": false,
+          "no_amount": false
+        },
+        {
+          "food": { "name": "flour", "plural_name": null, "ignore_shopping": false, "supermarket_category": { "name": "Baking" } },
+          "unit": { "name": "cup", "plural_name": "cups", "description": "" },
+          "amount": 1,
+          "note": "",
+          "order": 2,
+          "is_header": false,
+          "no_amount": false
+        },
+        {
+          "food": { "name": "sugar", "plural_name": null, "ignore_shopping": false, "supermarket_category": null },
+          "unit": { "name": "tablespoon", "plural_name": "tablespoons", "description": "" },
+          "amount": 2,
+          "note": "",
+          "order": 3,
+          "is_header": false,
+          "no_amount": false
+        },
+        {
+          "food": { "name": "baking powder", "plural_name": null, "ignore_shopping": false, "supermarket_category": null },
+          "unit": { "name": "teaspoon", "plural_name": "teaspoons", "description": "" },
+          "amount": 2,
+          "note": "",
+          "order": 4,
+          "is_header": false,
+          "no_amount": false
+        },
+        {
+          "food": { "name": "Wet", "plural_name": null, "ignore_shopping": false, "supermarket_category": null },
+          "unit": null,
+          "amount": 0,
+          "note": "",
+          "order": 5,
+          "is_header": true,
+          "no_amount": true
+        },
+        {
+          "food": { "name": "butter", "plural_name": null, "ignore_shopping": false, "supermarket_category": null },
+          "unit": { "name": "tablespoon", "plural_name": "tablespoons", "description": "" },
+          "amount": 6,
+          "note": "",
+          "order": 6,
+          "is_header": false,
+          "no_amount": false
+        },
+        {
+          "food": { "name": "buttermilk", "plural_name": null, "ignore_shopping": false, "supermarket_category": null },
+          "unit": { "name": "cup", "plural_name": "cups", "description": "" },
+          "amount": 1.25,
+          "note": "",
+          "order": 7,
+          "is_header": false,
+          "no_amount": false
+        },
+        {
+          "food": { "name": "egg", "plural_name": "eggs", "ignore_shopping": false, "supermarket_category": null },
+          "unit": null,
+          "amount": 2,
+          "note": "beaten",
+          "order": 8,
+          "is_header": false,
+          "no_amount": false
+        },
+        {
+          "food": { "name": "salt", "plural_name": null, "ignore_shopping": false, "supermarket_category": null },
+          "unit": null,
+          "amount": 0,
+          "note": "a pinch",
+          "order": 9,
+          "is_header": false,
+          "no_amount": true
+        }
+      ],
+      "time": 15,
+      "order": 0,
+      "show_as_header": false,
+      "show_ingredients_table": true
+    },
+    {
+      "name": "Bake",
+      "instruction": "Pour the batter into the hot skillet with the last of the butter and bake at 400°F for 20 minutes, until golden.",
+      "ingredients": [],
+      "time": 20,
+      "order": 1,
+      "show_as_header": false,
+      "show_ingredients_table": true
+    }
+  ],
+  "working_time": 15,
+  "waiting_time": 20,
+  "internal": true,
+  "nutrition": null,
+  "servings": 8,
+  "servings_text": "",
+  "source_url": ""
+}

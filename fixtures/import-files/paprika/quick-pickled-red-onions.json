@@ -1,0 +1,29 @@
+{
+  "uid": "1A9C3E5B-7D2F-4B6A-8C0E-9D1F3B5A7C24",
+  "name": "Quick Pickled Red Onions",
+  "description": "",
+  "ingredients": "1 red onion, thinly sliced\n1/2 cup cider vinegar\n1/2 cup water\n1 TBSP sugar\n1 1/2 tsp salt",
+  "directions": "Pack the onion into a jar.\nBring the vinegar, water, sugar and salt to a simmer, stirring until dissolved, and pour it over the onion.\nCool, then chill for at least an hour.",
+  "notes": "",
+  "servings": "Makes 1 jar",
+  "prep_time": "10 min",
+  "cook_time": "",
+  "total_time": "1 hr 10 min",
+  "difficulty": "",
+  "rating": 0,
+  "categories": [
+    "Pantry",
+    "Condiments"
+  ],
+  "source": "recipes.example",
+  "source_url": "https://recipes.example/quick-pickled-onions",
+  "image_url": "https://recipes.example/photos/pickled-onions.jpg",
+  "photo": null,
+  "photo_hash": null,
+  "photo_large": null,
+  "photo_data": null,
+  "photos": [],
+  "nutritional_info": "",
+  "created": "2026-02-02 08:40:55",
+  "hash": "0F1E2D3C4B5A69788796A5B4C3D2E1F00F1E2D3C4B5A69788796A5B4C3D2E1F0"
+}

@@ -1600,6 +1600,16 @@ button.time.running {
   font-size: 24px;
   margin: 0 0 6px;
 }
+.import-page h2 {
+  font-size: 18px;
+  margin: 24px 0 6px;
+}
+.import-outcome {
+  margin-top: 16px;
+}
+.import-outcome code {
+  overflow-wrap: anywhere;
+}
 .imported {
   margin: 16px 0 0;
   padding-left: 20px;

@@ -98,7 +98,7 @@ export function SearchPage() {
         )}
         {canAdd && (
           <Link to="/import" className="import-link">
-            Import from a link
+            Import recipes
           </Link>
         )}
       </div>

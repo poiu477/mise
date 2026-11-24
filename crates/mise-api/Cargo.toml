@@ -42,6 +42,8 @@ path = "src/main.rs"
 [dev-dependencies]
 # The fake OpenID Connect provider in tests/oidc.rs signs ID tokens with these, at the versions openidconnect uses.
 ed25519-dalek = "3.0.0"
+# tests/file_imports.rs packs each fixture as its app exports it; as mise-ingest builds them.
+flate2 = { version = "1.1.11", default-features = false, features = ["rust_backend"] }
 http-body-util = "0.1.5"
 # tests/photos.rs draws a photo for the demo recipes and reads its web copies; as mise-ingest builds it.
 image = { version = "0.25.8", default-features = false, features = ["jpeg", "png"] }
@@ -50,3 +52,5 @@ rsa = { version = "0.9.10", features = ["sha2", "getrandom"] }
 # Test media folders: private, and removed even when a test fails.
 tempfile = "3.27.0"
 tower = { version = "0.5.3", features = ["util"] }
+# tests/file_imports.rs again.
+zip = { version = "9.8.2", default-features = false, features = ["deflate-flate2"] }

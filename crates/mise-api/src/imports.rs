@@ -1,12 +1,20 @@
-//! Importing recipes from a web page: the server fetches the page and its photo (from the public internet only,
-//! see `mise_ingest::fetch`), reads its schema.org Recipe data and makes a version of each recipe for the household,
-//! which alone sees it. Importing an unchanged page again changes nothing.
+//! Importing recipes from a web page or a file. For a page, the server fetches it and its photo (from the public
+//! internet only, see `mise_ingest::fetch`) and reads its schema.org Recipe data; a file is an export from another
+//! recipe app, sent whole (see `mise_ingest::files`). Either way each recipe becomes a version for the household,
+//! which alone sees it, and importing an unchanged page or file again changes nothing.
 
-use axum::{Extension, Json, extract::State};
+use axum::{
+    Extension, Json,
+    body::Bytes,
+    extract::{FromRequest, Query, Request, State},
+    http::{StatusCode, header},
+};
 use mise_ingest::fetch::FetchError;
+use mise_ingest::files::{self, FileError};
 use mise_ingest::web::{self, ImportError};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use tokio::sync::Semaphore;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
@@ -81,14 +89,143 @@ pub async fn create(
             e => ApiError::BadRequest(e.to_string()),
         })?;
     Ok(Json(Import {
+        recipes: imported.into_iter().map(ImportedRecipe::from).collect(),
+    }))
+}
+
+impl From<mise_ingest::import::Imported> for ImportedRecipe {
+    fn from(r: mise_ingest::import::Imported) -> Self {
+        ImportedRecipe {
+            variant_id: r.variant_id,
+            dish_slug: r.dish_slug,
+            title: r.title,
+            unchanged: r.unchanged,
+            photo_problem: r.photo_problem,
+        }
+    }
+}
+
+/// An export file's bytes, as the API document describes the request body.
+#[derive(ToSchema)]
+#[schema(value_type = String, format = Binary)]
+pub struct ExportFile(pub Vec<u8>);
+
+/// An export sent as a request's whole body. Its type must be an `application/` one (`application/octet-stream`
+/// will do for any), which a form on another site can't send, so a signed-in visitor's browser can't be made to
+/// import something.
+pub struct ExportBody(pub Bytes);
+
+impl<S: Send + Sync> FromRequest<S> for ExportBody {
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let content_type = req
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.trim_start().to_ascii_lowercase())
+            .unwrap_or_default();
+        if !content_type.starts_with("application/")
+            || content_type.starts_with("application/x-www-form-urlencoded")
+        {
+            return Err(ApiError::BadRequest(
+                "send the file as the body, as application/octet-stream".into(),
+            ));
+        }
+        Bytes::from_request(req, state)
+            .await
+            .map(ExportBody)
+            .map_err(|e| match e.status() {
+                StatusCode::PAYLOAD_TOO_LARGE => ApiError::PayloadTooLarge,
+                _ => ApiError::BadRequest(e.body_text()),
+            })
+    }
+}
+
+/// What the file was called.
+#[derive(Deserialize, IntoParams)]
+pub struct FileName {
+    /// The file's name, such as `My Recipes.paprikarecipes`. What a file is comes from what it holds; the name is
+    /// used in messages, and tells a Nextcloud Cookbook `recipe.json` sent on its own from other schema.org JSON.
+    pub name: Option<String>,
+}
+
+/// Something in the file that looked like a recipe but couldn't be read.
+#[derive(Serialize, ToSchema)]
+pub struct SkippedEntry {
+    /// Where in the file it was: `recipes/soup/soup.json`.
+    pub path: String,
+    /// Why it was left out: "not valid JSON (…)", "the recipe has no name".
+    pub reason: String,
+}
+
+/// What importing a file did.
+#[derive(Serialize, ToSchema)]
+pub struct FileImport {
+    /// The apps its recipes came from, by name ("Paprika"); usually one.
+    pub formats: Vec<String>,
+    /// Each recipe, in the order the file lists them.
+    pub recipes: Vec<ImportedRecipe>,
+    /// What looked like a recipe but couldn't be read; the rest was imported.
+    pub skipped: Vec<SkippedEntry>,
+}
+
+/// One file import at a time: an export may unpack to hundreds of megabytes and hundreds of photos to decode.
+static FILE_IMPORTS: Semaphore = Semaphore::const_new(1);
+
+/// Import the recipes in a file another recipe app exported: schema.org JSON, a Nextcloud Cookbook folder (zipped)
+/// or `recipe.json`, a Mealie or Tandoor export zip, or a Paprika export (`.paprikarecipes`) or recipe. The body is
+/// the file itself, at most 100 MB, sent as `application/octet-stream`; what it is comes from what it holds. Each
+/// recipe becomes a version only this household sees, grouped into a dish like any other, with the photo the file
+/// keeps for it (photos it only links to aren't fetched). Importing an unchanged file again changes nothing; a recipe
+/// changed in the app since becomes a new version. Something that looked like a recipe but couldn't be read is
+/// listed and the rest imported.
+#[utoipa::path(
+    post, path = "/api/v1/imports/file", operation_id = "import_file", tag = "recipes", params(FileName),
+    request_body(content = ExportFile, content_type = "application/octet-stream", description = "The export file"),
+    responses(
+        (status = 200, description = "The file's recipes, imported", body = FileImport),
+        (status = 400, description = "The body isn't sent as an application type, or the file holds no recipe mise reads or more than 2,000, is a zip mise can't unpack, or unpacks past the limits (300 MB, 20,000 files, 25 MB for any one)", body = crate::error::ErrorBody),
+        (status = 413, description = "The file is over 100 MB", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken
+    )
+)]
+pub async fn create_from_file(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Query(file): Query<FileName>,
+    ExportBody(body): ExportBody,
+) -> ApiResult<Json<FileImport>> {
+    let _turn = FILE_IMPORTS
+        .acquire()
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
+    let name = file.name.unwrap_or_default();
+    let imported = files::import_file(&s.pool, &s.media_root, me.household_id, &name, body.into())
+        .await
+        .map_err(|e| match e {
+            FileError::Failed(e) => ApiError::Internal(e),
+            FileError::Io(e) => ApiError::Internal(e.into()),
+            e => ApiError::BadRequest(e.to_string()),
+        })?;
+    Ok(Json(FileImport {
+        formats: imported
+            .formats
+            .iter()
+            .map(|f| f.name().to_owned())
+            .collect(),
         recipes: imported
+            .recipes
             .into_iter()
-            .map(|r| ImportedRecipe {
-                variant_id: r.variant_id,
-                dish_slug: r.dish_slug,
-                title: r.title,
-                unchanged: r.unchanged,
-                photo_problem: r.photo_problem,
+            .map(ImportedRecipe::from)
+            .collect(),
+        skipped: imported
+            .skipped
+            .into_iter()
+            .map(|s| SkippedEntry {
+                path: s.path,
+                reason: s.reason,
             })
             .collect(),
     }))
