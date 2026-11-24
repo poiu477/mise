@@ -126,14 +126,22 @@ impl TestApp {
     /// Make and migrate the database, then build the router with local sign-in, `oidc` if given, and photos read
     /// from `media` (or a folder that doesn't exist). Imports fetch from the public internet only.
     async fn start(oidc: Option<OidcConfig>, media: Option<MediaDir>) -> Option<TestApp> {
-        TestApp::start_fetching(oidc, media, Vec::new()).await
+        TestApp::start_fetching(oidc, media, Vec::new(), None).await
     }
 
-    /// As `start`, with imports also let through to these exact addresses on this machine (a test's own sites).
+    /// The app with local sign-in, serving the built web app in `web` for every path outside the API, as the
+    /// server does.
+    pub async fn with_web_app(web: &std::path::Path) -> Option<TestApp> {
+        TestApp::start_fetching(None, None, Vec::new(), Some(web)).await
+    }
+
+    /// As `start`, with imports also let through to these exact addresses on this machine (a test's own sites), and
+    /// the web app served from `web` when given.
     async fn start_fetching(
         oidc: Option<OidcConfig>,
         media: Option<MediaDir>,
         sites: Vec<std::net::SocketAddr>,
+        web: Option<&std::path::Path>,
     ) -> Option<TestApp> {
         let db = Database::create().await?;
         let pool = mise_db::connect(&db.url()).await.unwrap();
@@ -154,7 +162,7 @@ impl TestApp {
             fetcher: Arc::new(mise_ingest::fetch::Fetcher::new(false).allowing(sites)),
         };
         Some(TestApp {
-            router: mise_api::router(state, None),
+            router: mise_api::router(state, web),
             pool,
             media_root,
             _media: media,

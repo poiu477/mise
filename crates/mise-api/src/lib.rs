@@ -12,6 +12,7 @@ pub mod media;
 pub mod plan;
 pub mod recipes;
 pub mod review;
+pub mod security;
 pub mod sharing;
 pub mod shopping;
 pub mod variants;
@@ -31,6 +32,7 @@ use sqlx::PgPool;
 use tower_http::{
     compression::CompressionLayer,
     services::{ServeDir, ServeFile},
+    set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
 };
 use utoipa::OpenApi;
@@ -47,7 +49,7 @@ pub struct AppState {
 
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "mise", description = "Self-hosted recipe system: dishes, their versions, and any serving count."),
+    info(title = "mise", description = "Self-hosted recipe system: dishes, their versions, and any serving count. A request that changes something answers 403 when a browser says another site sent it (`Sec-Fetch-Site`, or an `Origin` that isn't this server's)."),
     paths(
         health, dishes::list, dishes::get, variants::get, media::get,
         recipes::create, recipes::get, recipes::update, recipes::delete, recipes::set_photo, recipes::remove_photo, recipes::read_lines, recipes::fork,
@@ -291,10 +293,18 @@ pub fn router(state: AppState, web_dir: Option<&Path>) -> Router {
             state.clone(),
             auth::require_auth,
         ))
+        // Outside the sign-in check, so a change another site asks for is refused before a session is looked up.
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            security::refuse_cross_site,
+        ))
         .layer(middleware::from_fn(mark_deprecated))
         .with_state(state);
     if let Some(dir) = web_dir {
         app = app.fallback_service(web_app(dir));
+    }
+    for (name, value) in security::headers() {
+        app = app.layer(SetResponseHeaderLayer::if_not_present(name, value));
     }
     app.layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
