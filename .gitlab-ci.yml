@@ -332,7 +332,7 @@ rust sast:
 
 renovate config:
   # Whenever renovate.json changes, check it the way Renovate will read it.
-  image: renovate/renovate:44.227.0
+  image: renovate/renovate:44.259.0
   stage: test
   needs: []
   rules:
@@ -348,7 +348,7 @@ renovate config:
 # github.com's rate limit when Renovate looks up the mirror's workflow actions and release notes.
 renovate:
   extends: .scheduled
-  image: renovate/renovate:44.227.0
+  image: renovate/renovate:44.259.0
   stage: test
   needs: []
   variables:
