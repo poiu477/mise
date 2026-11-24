@@ -180,6 +180,18 @@ pub struct VariantSummary {
     pub image: Option<Image>,
     /// This household wrote the version in the app, so it can change it at `/api/v1/recipes/{id}`.
     pub editable: bool,
+    /// For the household's own version of another (a fork), the version it was made from, while the household can
+    /// still see it.
+    pub original: Option<Original>,
+}
+
+/// The version a fork was made from.
+#[derive(Serialize, ToSchema)]
+pub struct Original {
+    pub id: Uuid,
+    pub title: String,
+    /// Who it is by: the source it was published or imported from, or the household that wrote it.
+    pub by: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -198,6 +210,23 @@ pub struct Dish {
 
 /// id, slug, title, subtitle, content type, default version.
 type DishRow = (Uuid, String, String, Option<String>, String, Option<Uuid>);
+
+/// A version on a dish page: id, title, subtitle, published, has steps, yields, attributes, photo, editable, and its
+/// original's id, title and author.
+type VariantRow = (
+    Uuid,
+    String,
+    Option<String>,
+    Option<DateTime<Utc>>,
+    bool,
+    Option<Vec<f64>>,
+    serde_json::Value,
+    Option<Uuid>,
+    bool,
+    Option<Uuid>,
+    Option<String>,
+    Option<String>,
+);
 
 /// A dish with its options and versions, by its slug or one it used to have (its `slug` is always the current one).
 /// A dish the household can see no version of is not found, as if it didn't exist.
@@ -241,30 +270,43 @@ pub async fn get(
         Ok(DishOption { key, label, choices, default })
     })
     .collect::<ApiResult<Vec<_>>>()?;
-    let variants = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<DateTime<Utc>>, bool, Option<Vec<f64>>, serde_json::Value, Option<Uuid>, bool)>(
+    // A version written in the app names its parent as its original; an imported one's parent is the issue before
+    // it, which isn't an original in that sense.
+    let variants = sqlx::query_as::<_, VariantRow>(
         "SELECT v.id, v.title, v.subtitle, v.published_at, v.has_steps,
                 (SELECT array_agg(y.servings::float8 ORDER BY y.servings) FROM variant_yields y WHERE y.variant_id = v.id),
                 coalesce((SELECT jsonb_object_agg(a.key, a.value) FROM variant_attributes a WHERE a.variant_id = v.id), '{}'),
                 (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1),
-                v.origin = 'user' AND v.household_id IS NOT DISTINCT FROM $2
-         FROM variants v WHERE v.dish_id = $1 AND visible_to(v, $2) ORDER BY v.published_at DESC NULLS LAST",
+                v.origin = 'user' AND v.household_id IS NOT DISTINCT FROM $2,
+                p.id, p.title, coalesce(src.name, h.name)
+         FROM variants v
+         LEFT JOIN variants p ON p.id = v.parent_variant_id AND v.origin = 'user' AND visible_to(p, $2)
+         LEFT JOIN source_records sr ON sr.id = p.source_record_id
+         LEFT JOIN sources src ON src.id = sr.source_id
+         LEFT JOIN households h ON h.id = p.household_id AND p.origin = 'user'
+         WHERE v.dish_id = $1 AND visible_to(v, $2) ORDER BY v.published_at DESC NULLS LAST",
     )
     .bind(id)
     .bind(me.household_id)
     .fetch_all(&s.pool)
     .await?
     .into_iter()
-    .map(|(id, title, subtitle, published_at, has_steps, yields, attributes, hero, editable)| VariantSummary {
-        id,
-        title,
-        subtitle,
-        published_at,
-        yields: yields.unwrap_or_default(),
-        has_steps,
-        attributes,
-        image: hero.map(Image::new),
-        editable,
-    })
+    .map(
+        |(id, title, subtitle, published_at, has_steps, yields, attributes, hero, editable, parent, parent_title, by)| {
+            VariantSummary {
+                id,
+                title,
+                subtitle,
+                published_at,
+                yields: yields.unwrap_or_default(),
+                has_steps,
+                attributes,
+                image: hero.map(Image::new),
+                editable,
+                original: parent.zip(parent_title).map(|(id, title)| Original { id, title, by }),
+            }
+        },
+    )
     .collect::<Vec<_>>();
     // Options are derived across all of a dish's versions; where some are another household's, they are recounted
     // over this household's share, so they neither count nor offer what it can't open.

@@ -49,7 +49,7 @@ pub struct AppState {
     info(title = "mise", description = "Self-hosted recipe system: dishes, their versions, and any serving count."),
     paths(
         health, dishes::list, dishes::get, variants::get, media::get,
-        recipes::create, recipes::get, recipes::update, recipes::delete, recipes::set_photo, recipes::remove_photo, recipes::read_lines,
+        recipes::create, recipes::get, recipes::update, recipes::delete, recipes::set_photo, recipes::remove_photo, recipes::read_lines, recipes::fork,
         imports::create,
         foods::search,
         auth::routes::config, auth::routes::setup, auth::routes::login, auth::routes::logout, auth::oidc::start, auth::oidc::callback,
@@ -216,6 +216,7 @@ fn api_routes() -> Router<AppState> {
         .route("/dishes", get(dishes::list))
         .route("/dishes/{slug}", get(dishes::get))
         .route("/variants/{id}", get(variants::get))
+        .route("/variants/{id}/fork", post(recipes::fork))
         .route("/media/{id}/{size}", get(media::get))
         .route("/recipes", post(recipes::create))
         .route("/recipes/lines", post(recipes::read_lines))
