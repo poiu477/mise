@@ -9,7 +9,7 @@ COPY web/ ./
 RUN npm run build
 
 # The same Rust as rust-toolchain.toml.
-FROM rust:1.99.1-bookworm AS server
+FROM rust:1.100.0-bookworm AS server
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates

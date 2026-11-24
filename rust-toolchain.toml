@@ -1,7 +1,7 @@
 # The one Rust every build uses: local, CI and the Docker image (which copies this file, so rustup enforces it there
 # too). When raising it, change the Dockerfile's and .gitlab-ci.yml's rust tags, Cargo.toml's rust-version and the
-# cargo-deny step in .github/workflows/ci.yml in the same commit; Renovate leaves the rust images alone.
+# cargo-deny step in .github/workflows/ci.yml in the same commit; Renovate leaves the rust images and this file alone.
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 components = ["rustfmt", "clippy"]
 profile = "minimal"

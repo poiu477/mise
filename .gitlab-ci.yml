@@ -72,7 +72,7 @@ default:
   paths: [.cargo/registry/index, .cargo/registry/cache, .cargo/git/db]
 
 .rust:
-  image: rust:1.99.1-bookworm
+  image: rust:1.100.0-bookworm
   cache:
     - *cargo-home-cache
     - key:
