@@ -88,6 +88,7 @@ async fn demo_bundle_through_every_stage_matches_the_snapshots() {
         pool: pool.clone(),
         media_root: PathBuf::from("./no-media"),
         fetcher: Arc::new(mise_ingest::fetch::Fetcher::new(false)),
+        metrics: Arc::default(),
         auth: Arc::new(Auth::new(AuthConfig {
             local: true,
             oidc: None,

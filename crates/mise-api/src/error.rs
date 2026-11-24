@@ -38,6 +38,9 @@ pub enum ApiError {
     /// Another site this request needed (a page being imported) failed or didn't answer.
     #[error("{0}")]
     SiteFailed(String),
+    /// Something the server needs is down: the database isn't answering.
+    #[error("{0}")]
+    Unavailable(String),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -76,6 +79,8 @@ pub enum ErrorCode {
     Internal,
     /// 502: another site the request needed failed or didn't answer, such as the page being imported.
     SiteFailed,
+    /// 503: the server can't serve requests yet: its database isn't answering.
+    Unavailable,
 }
 
 impl ApiError {
@@ -93,6 +98,7 @@ impl ApiError {
             ApiError::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             ApiError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::SiteFailed(_) => StatusCode::BAD_GATEWAY,
+            ApiError::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 
@@ -111,6 +117,7 @@ impl ApiError {
             ApiError::TooManyRequests(_) => ErrorCode::TooManyRequests,
             ApiError::Internal(_) => ErrorCode::Internal,
             ApiError::SiteFailed(_) => ErrorCode::SiteFailed,
+            ApiError::Unavailable(_) => ErrorCode::Unavailable,
         }
     }
 }
@@ -275,6 +282,11 @@ mod tests {
                 ApiError::SiteFailed("the site didn't answer".into()),
                 502,
                 "site_failed",
+            ),
+            (
+                ApiError::Unavailable("the database isn't answering".into()),
+                503,
+                "unavailable",
             ),
         ];
         for (e, status, code) in cases {

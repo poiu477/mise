@@ -2,8 +2,10 @@
 //!
 //! Settings come from the environment (see .env.example): DATABASE_URL, MEDIA_ROOT, MISE_BIND, MISE_WEB_DIR
 //! (the built web app, default ./web/dist when present), MISE_MIGRATE (run migrations at start, default on) and
-//! IMPORT_ALLOW_PRIVATE (let imports fetch from private and local addresses, default off) and SHARING_MAX_LEVEL (the
-//! most a household may share its recipes with: private, partners or install, the default).
+//! IMPORT_ALLOW_PRIVATE (let imports fetch from private and local addresses, default off), SHARING_MAX_LEVEL (the
+//! most a household may share its recipes with: private, partners or install, the default), MISE_LOG_FORMAT (`json`
+//! for one JSON object a line, default text) and MISE_METRICS_BIND (an address to serve Prometheus metrics on, apart
+//! from the API's port; none by default).
 //!
 //! `mise-server openapi` prints the OpenAPI document and exits, without a database (the web app's types are
 //! generated from it).
@@ -23,12 +25,19 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,sqlx=error,tower_http=info")),
-        )
-        .init();
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info,sqlx=error,tower_http=info"));
+    match std::env::var("MISE_LOG_FORMAT").as_deref().map(str::trim) {
+        // One JSON object a line, the request's span (its id, method and path) on each, for a log collector.
+        Ok("json") => tracing_subscriber::fmt()
+            .json()
+            .with_current_span(true)
+            .with_span_list(false)
+            .with_env_filter(filter)
+            .init(),
+        Ok("" | "text") | Err(_) => tracing_subscriber::fmt().with_env_filter(filter).init(),
+        Ok(other) => anyhow::bail!("MISE_LOG_FORMAT is {other:?}: use text or json"),
+    }
 
     let database_url =
         std::env::var("DATABASE_URL").context("DATABASE_URL is not set (see .env.example)")?;
@@ -60,11 +69,27 @@ async fn main() -> anyhow::Result<()> {
         media_root: media_root.clone(),
         auth: std::sync::Arc::new(mise_api::auth::Auth::new(auth)),
         fetcher: std::sync::Arc::new(mise_ingest::fetch::Fetcher::from_env()),
+        metrics: std::sync::Arc::default(),
     };
     if state.fetcher.allows_private() {
         tracing::warn!(
             "IMPORT_ALLOW_PRIVATE is on: imports may fetch from private and local addresses"
         );
+    }
+    // Metrics go on a port of their own, for a scraper on the private network; the API's port never serves them.
+    if let Ok(metrics_bind) = std::env::var("MISE_METRICS_BIND")
+        && !metrics_bind.trim().is_empty()
+    {
+        let listener = tokio::net::TcpListener::bind(metrics_bind.trim())
+            .await
+            .with_context(|| format!("binding MISE_METRICS_BIND {metrics_bind}"))?;
+        tracing::info!(bind = %metrics_bind.trim(), "serving metrics at /metrics");
+        let metrics = mise_api::observe::metrics_router(state.metrics.clone());
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, metrics).await {
+                tracing::error!(error = %e, "the metrics port stopped");
+            }
+        });
     }
     let app = mise_api::router(state, web_dir.as_deref());
     if let Some(dir) = &web_dir {

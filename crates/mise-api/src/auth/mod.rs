@@ -36,6 +36,7 @@ pub const TOKEN_PREFIX: &str = "mise_";
 /// needs. Single sign-on's redirects sit at `/api/auth/oidc/…` only, so they read the same under either.
 const PUBLIC: &[&str] = &[
     "/health",
+    "/ready",
     "/openapi.json",
     "/auth/config",
     "/auth/setup",
