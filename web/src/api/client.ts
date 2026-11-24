@@ -108,6 +108,10 @@ export type Image = components["schemas"]["Image"];
 export type AuthInfo = components["schemas"]["AuthInfo"];
 /** The signed-in account: names, household and whether it is an admin. */
 export type Me = components["schemas"]["Me"];
+/** How far a household's own recipe is seen. */
+export type Visibility = components["schemas"]["Visibility"];
+/** The signed-in household's sharing. */
+export type HouseholdSharing = components["schemas"]["HouseholdSharing"];
 /** An API token as its owner sees it: name, scope ("read" or "read_write") and when it was last used. */
 export type TokenInfo = components["schemas"]["TokenInfo"];
 /** A kitchen device's token as the household's admins see it: name, whether its link has been opened, last use. */

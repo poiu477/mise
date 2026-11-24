@@ -1,10 +1,11 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { api, errorText, type FoodRef, type Recipe } from "../api/client";
+import { api, errorText, type FoodRef, type Recipe, type Visibility } from "../api/client";
 import { answer, Refused } from "../api/query";
 import { draftOf, inputOf, linesOf, readingText, type Draft } from "../editor";
 import { useAccount, useSession } from "../session";
+import { allowedLevels } from "../sharing";
 
 /** `value` once it has stopped changing for `ms`, so typing asks the server once it pauses, not on every key. */
 function useSettled<T>(value: T, ms: number): T {
@@ -72,8 +73,13 @@ function Editor({ recipe }: { recipe: Recipe | null }) {
   const [error, setError] = useState("");
 
   /** Changes one box. */
-  const set = (field: keyof Omit<Draft, "picks">) => (value: string) =>
+  const set = (field: keyof Omit<Draft, "picks" | "visibility">) => (value: string) =>
     setDraft((d) => ({ ...d, [field]: value }));
+  // How far the household may share, and its default, for the "Who can see it" choice.
+  const sharing = useQuery({
+    queryKey: ["household-sharing", account],
+    queryFn: ({ signal }) => answer(api.GET("/api/v1/household", { signal })),
+  });
 
   // Each ingredient line as the server reads it, asked for once typing pauses.
   const lines = useMemo(() => linesOf(draft.ingredients), [draft.ingredients]);
@@ -289,6 +295,25 @@ function Editor({ recipe }: { recipe: Recipe | null }) {
           <span className="hint">One to a line</span>
           <textarea value={draft.steps} onChange={(e) => set("steps")(e.target.value)} rows={8} />
         </label>
+
+        {sharing.data && sharing.data.max_visibility !== "private" && (
+          <label>
+            Who can see it
+            <span className="hint">Other households can read it and make their own version</span>
+            <select
+              value={draft.visibility ?? sharing.data.default_visibility}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, visibility: e.target.value as Visibility }))
+              }
+            >
+              {allowedLevels(sharing.data.max_visibility).map((l) => (
+                <option key={l.value} value={l.value}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <div className="editor-photo">
           <label>

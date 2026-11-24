@@ -18,6 +18,7 @@ const parmesan = { id: "0190f4a2-0000-7000-8000-000000000002", name: "Parmesan" 
 const stored: Recipe = {
   id: "0190f4a2-0000-7000-8000-00000000000a",
   dish_slug: "garlic-bread",
+  visibility: "partners",
   title: "Garlic Bread",
   subtitle: null,
   description: "Crisp outside, soft inside.",
@@ -78,7 +79,13 @@ describe("inputOf", () => {
         { text: "a handful of hard cheese", food_id: parmesan.id },
       ],
       steps: ["Mix the garlic into the butter.", "Bake until golden."],
+      visibility: "partners",
     });
+  });
+
+  it("leaves a new recipe's visibility to the household's default", () => {
+    expect(draftOf(null).visibility).toBeNull();
+    expect(inputOf(draftOf(null)).visibility).toBeNull();
   });
 
   it("drops a pick when its line's text changes, so the line is matched by name again", () => {

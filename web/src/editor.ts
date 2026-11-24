@@ -1,6 +1,6 @@
 // The recipe editor's rules, apart from its page: how the text boxes become ingredient lines and steps, which food
 // goes with which line, and how a line reads back once the server has read it.
-import type { FoodRef, Recipe, RecipeInput, RecipeLine } from "./api/client";
+import type { FoodRef, Recipe, RecipeInput, RecipeLine, Visibility } from "./api/client";
 
 /** Foods the cook picked, by the exact line each was picked for. Changing a line's text drops its pick, so the
  * line is matched by its name again. */
@@ -17,6 +17,8 @@ export type Draft = {
   /** One step to a line. */
   steps: string;
   picks: Picks;
+  /** Who else sees it; null leaves it to the server: the household's default for a new recipe. */
+  visibility: Visibility | null;
 };
 
 /** The non-blank lines of a text box, trimmed: one ingredient or one step each. */
@@ -39,6 +41,7 @@ export function draftOf(recipe: Recipe | null): Draft {
       ingredients: "",
       steps: "",
       picks: {},
+      visibility: null,
     };
   const picks: Picks = {};
   for (const line of recipe.ingredients) if (line.food) picks[line.text.trim()] = line.food;
@@ -51,6 +54,7 @@ export function draftOf(recipe: Recipe | null): Draft {
     // A step takes one line in its box, so one written elsewhere over several lines is joined up.
     steps: recipe.steps.map((step) => step.replace(/\s*\n\s*/g, " ")).join("\n"),
     picks,
+    visibility: recipe.visibility,
   };
 }
 
@@ -66,6 +70,7 @@ export function inputOf(draft: Draft): RecipeInput {
       food_id: draft.picks[text]?.id ?? null,
     })),
     steps: linesOf(draft.steps),
+    visibility: draft.visibility,
   };
 }
 
