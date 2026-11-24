@@ -504,12 +504,14 @@ const PHOTO_NAMES: &[&str] = &["full", "original", "image"];
 
 /// A recipe's photo from the export: in its folder or that folder's `images/`, under one of [`PHOTO_NAMES`].
 fn photo_beside<'a>(entries: &'a [Entry], dir: &str) -> Option<&'a Entry> {
+    let images = if dir.is_empty() {
+        "images".to_owned()
+    } else {
+        format!("{dir}/images")
+    };
     let in_dir = |e: &&Entry| {
         let parent = folder(&e.path);
-        parent == dir
-            || parent
-                .strip_suffix("images")
-                .is_some_and(|p| p.strip_suffix('/').unwrap_or(p) == dir)
+        parent == dir || parent == images
     };
     let stem = |e: &Entry| {
         let file = e.path.rsplit('/').next().unwrap_or(&e.path);

@@ -779,11 +779,11 @@ test("a recipe imported from a link opens as a dish of the household's own", asy
   const link = page.getByLabel("Link to a recipe page");
   // A page with no recipe says so. (Refused addresses are API tests: this server allows private ones.)
   await link.fill("http://127.0.0.1:8096/web-pages/no-recipe.html");
-  await page.getByRole("button", { name: "Import" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("no recipe found");
 
   await link.fill("http://127.0.0.1:8096/web-pages/no-image.html");
-  await page.getByRole("button", { name: "Import" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page).toHaveURL(/\/dishes\/five-minute-hummus\?v=/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Five-Minute Hummus");
   await expect(amountOf("tahini")).toHaveText("3 TBSP");
@@ -793,7 +793,7 @@ test("a recipe imported from a link opens as a dish of the household's own", asy
   await page
     .getByLabel("Link to a recipe page")
     .fill("http://127.0.0.1:8096/web-pages/no-image.html");
-  await page.getByRole("button", { name: "Import" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page).toHaveURL(/\/dishes\/five-minute-hummus\?v=/);
   const found = await (await page.request.get("/api/v1/dishes?q=hummus")).json();
   expect(found.total).toBe(1);
