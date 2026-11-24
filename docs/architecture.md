@@ -168,6 +168,43 @@ lists every status it can answer: its own, and the shared sets in `error.rs` (`S
 `tests/responses.rs` checks each route gives all of them and nothing else. Endpoints that change a plan or a
 list answer with the whole plan or list, so the client never has to merge.
 
+### Security headers and requests from other sites
+
+Every response, a page of the web app or an API answer, carries the headers in `security.rs`: a
+Content-Security-Policy that lets a page load scripts, styles, photos, fonts and its service worker from mise alone
+(and `blob:` and `data:` images, for the editor's preview of a photo not yet sent), runs no inline script or style,
+loads no plugin, posts no form elsewhere and lets no other site frame it (`frame-ancestors 'none'`, and
+`X-Frame-Options: DENY` for browsers that don't read that); `X-Content-Type-Options: nosniff`, so a response is only
+ever what its type says; and `Referrer-Policy: same-origin`, so a dish's address or a kitchen link goes to no other
+site. The browser journeys run the built app under the policy, so a change that breaks it fails them.
+
+Another site can't make a signed-in browser change anything in mise, for three reasons that each hold on their own:
+
+- **The cookies.** The session and kitchen cookies are `HttpOnly` and `SameSite=Lax`: a browser sends them with a
+  request another site's page makes only when that site is a sibling on the same domain (`apps.example.com` against
+  `mise.example.com`), and with a top-level link someone follows, which only reads.
+- **What a page on another site can send.** The server answers no CORS preflight, so a browser won't send another
+  origin's PUT, PATCH or DELETE, or a POST with a JSON body, at all. Every route that takes a body asks for a type a
+  form can't send: `application/json` (`extract::JsonBody`), an image type for a photo, an `application/` type for an
+  export file. Two routes take no body: `POST /auth/logout` and `POST /variants/{id}/fork`.
+- **The browser's own label.** `security::refuse_cross_site` refuses (403) any request but GET, HEAD and OPTIONS that
+  a browser marks `Sec-Fetch-Site: cross-site` or `same-site`, before the session is looked up: this is what covers
+  the two routes without a body, and a sibling on the same domain. A browser too old to send that label sends
+  `Origin` with every such request, which must then be the host the request went to or `PUBLIC_BASE_URL`. A request
+  with neither comes from no browser page (the `mise` command, a script with a token) and goes through. It is the
+  check Go's `net/http` makes (`CrossOriginProtection`).
+
+Bearer tokens are never sent by a browser on its own, so a request made with one can't be forged this way. No GET
+changes anything, but for two that need a secret the other site doesn't have: a kitchen device's one-time link (its
+code) and single sign-on's callback (the `state` it sent, and PKCE). `tests/security.rs` sends sign-out, a DELETE and
+a fork the way another site's page would and checks each is refused and changes nothing.
+
+Password sign-in is throttled per username (`auth::LoginLimiter`): five failures are free, then the account is locked
+for 30 seconds, doubling with each failure to at most 15 minutes, and a success clears the count. It is counted per
+username rather than per address, since behind a reverse proxy every request comes from the proxy; the cost is that
+someone who knows a username can keep that account locked by failing on purpose, which a household install accepts.
+The counts are kept in memory, so restarting the server clears them.
+
 Recipes a household writes itself live under `/api/v1/recipes` (`recipes.rs`): create, read back as typed, replace,
 delete, and set or remove the photo. A deleted recipe leaves every plan it was on, and its dish goes with it when
 it was the dish's only version. The dish page's versions each say whether the household can edit them (`editable`). Only the household that wrote a recipe can read it there or change it; for anyone
