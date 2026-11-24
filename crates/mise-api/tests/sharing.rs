@@ -519,3 +519,78 @@ async fn a_withdrawn_share_leaves_the_forks_made_from_it() {
         .await;
     assert_eq!(kept["ingredients"].as_array().unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn a_fork_of_another_households_recipe_starts_private_whatever_the_default() {
+    // Next door shares with its partners only; home is one, and shares everything it makes with the install.
+    let street = test_app!(Street::new());
+    street.add_partner(&street.next_door, &street.home).await;
+    street
+        .json(
+            "PUT",
+            "/api/v1/household/sharing",
+            &street.home,
+            Some(json!({"default_visibility": "install"})),
+        )
+        .await;
+    let theirs = street
+        .write(&street.next_door, "Neighbourly Leeks", Some("partners"))
+        .await;
+    assert!(street.sees(&street.home, &theirs).await);
+    assert!(!street.sees(&street.across, &theirs).await);
+
+    // Home's copy stays home's until home chooses otherwise: across the road, which next door didn't share with,
+    // doesn't get it by home's default.
+    let fork = street
+        .json(
+            "POST",
+            &format!("/api/v1/variants/{}/fork", theirs["id"].as_str().unwrap()),
+            &street.home,
+            None,
+        )
+        .await;
+    assert_eq!(fork["visibility"], "private");
+    assert!(!street.sees(&street.across, &fork).await);
+}
+
+#[tokio::test]
+async fn reading_lines_shows_only_foods_the_household_could_find() {
+    // Next door's private recipe names a food nobody else's recipes do, so matching makes it for next door alone.
+    let street = test_app!(Street::new());
+    let line = "2 cups zorbleberry preserves";
+    street
+        .json(
+            "POST",
+            "/api/v1/recipes",
+            &street.next_door,
+            Some(json!({
+                "title": "Zorbleberry Toast", "servings": 2,
+                "ingredients": [{"text": line}], "steps": ["Spread it."],
+            })),
+        )
+        .await;
+    let read = |cookie: String| {
+        let street = &street;
+        async move {
+            street
+                .json(
+                    "POST",
+                    "/api/v1/recipes/lines",
+                    &cookie,
+                    Some(json!({"lines": [line]})),
+                )
+                .await["lines"][0]["food"]
+                .clone()
+        }
+    };
+    assert_eq!(
+        read(street.next_door.clone()).await["name"],
+        "zorbleberry preserves",
+        "next door's own food shows to next door"
+    );
+    assert_eq!(
+        read(street.home.clone()).await,
+        Value::Null,
+        "home learns nothing of a food only next door's private recipe names"
+    );
+}

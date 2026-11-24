@@ -40,6 +40,8 @@ services:
       OIDC_SCOPES: ${OIDC_SCOPES:-}
       OIDC_ADMIN_GROUP: ${OIDC_ADMIN_GROUP:-}
       OIDC_HOUSEHOLD: ${OIDC_HOUSEHOLD:-}
+      OIDC_ALLOWED_GROUP: ${OIDC_ALLOWED_GROUP:-}
+      OIDC_OPEN_SIGNUP: ${OIDC_OPEN_SIGNUP:-false}
       IMPORT_ALLOW_PRIVATE: ${IMPORT_ALLOW_PRIVATE:-false}
       SHARING_MAX_LEVEL: ${SHARING_MAX_LEVEL:-install}
       RUST_LOG: ${RUST_LOG:-info,sqlx=error,tower_http=warn}
@@ -54,8 +56,9 @@ services:
       # A recipe archive to import photos from, read-only (optional).
       - ${ARCHIVE_DIR:-./data/archive}:/archive:ro
 
-  # Nightly database dump into BACKUP_DIR, keeping BACKUP_DAYS days. Media is not included: it is rebuildable
-  # from the archive, or back up MEDIA_DIR with the rest of the host.
+  # Nightly database dump into BACKUP_DIR, keeping BACKUP_DAYS days. Photos are not in it: back up MEDIA_DIR too.
+  # Photos imported from an archive could be made again from it, but photos uploaded in the app or imported from a
+  # link or a file exist only in MEDIA_DIR.
   backup:
     image: postgres:16
     restart: unless-stopped
