@@ -21,9 +21,9 @@ use axum::{
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::Engine;
-use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
+use time::OffsetDateTime;
 use url::Url;
 use uuid::Uuid;
 
@@ -310,7 +310,7 @@ async fn from_session(
     days: i64,
 ) -> Result<Option<CurrentUser>, ApiError> {
     let hash = secret_hash(token);
-    let row: Option<(Uuid, String, bool, Uuid, DateTime<Utc>)> = sqlx::query_as(
+    let row: Option<(Uuid, String, bool, Uuid, OffsetDateTime)> = sqlx::query_as(
         "SELECT u.id, u.username, u.is_admin, u.household_id, s.last_seen_at FROM sessions s JOIN users u ON u.id = s.user_id
          WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.disabled",
     )
@@ -321,7 +321,7 @@ async fn from_session(
         return Ok(None);
     };
     // Sliding expiry, written at most hourly.
-    if Utc::now() - seen > chrono::Duration::hours(1) {
+    if OffsetDateTime::now_utc() - seen > time::Duration::hours(1) {
         sqlx::query("UPDATE sessions SET last_seen_at = now(), expires_at = now() + make_interval(days => $2::int) WHERE token_hash = $1")
             .bind(&hash)
             .bind(days as i32)

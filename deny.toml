@@ -9,10 +9,10 @@ ignore = [
     # openidconnect release: then raise openidconnect and the dev-dependency in crates/mise-api together, and drop
     # this. Review by 2027-05-01 in any case.
     { id = "RUSTSEC-2023-0071", reason = "rsa is used only for public-key signature verification (openidconnect)" },
-    # chrono is unmaintained: no known flaw, but no one will fix one. mise's own code can move to jiff or time
-    # (backlog T34), but chrono stays in the tree regardless: oauth2 and openidconnect 4.1.0 (the newest) require
-    # it. Drop this once they no longer do and T34 is done. Review by 2027-05-01 in any case.
-    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, not vulnerable; openidconnect requires it (backlog T34)" },
+    # chrono is unmaintained: no known flaw, but no one will fix one. mise's own code uses time instead (T34);
+    # chrono stays in the tree only because oauth2 and openidconnect 4.1.0 (the newest) require it
+    # (`cargo tree -i chrono -e normal`). Drop this once they no longer do. Review by 2027-05-01 in any case.
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, not vulnerable; only oauth2 and openidconnect use it" },
 ]
 
 [licenses]

@@ -3,12 +3,12 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use axum::{Extension, Json, extract::State};
-use chrono::NaiveDate;
 use mise_core::quantity::{Quantity, Unit};
 use mise_core::servings::{self, CountUnit};
 use mise_core::shopping::{self, CHECK, MarkLine, Measures, OTHER, TreeFood, WeightUnit};
 use mise_core::step_amounts::{self, Template};
 use serde::{Deserialize, Serialize};
+use time::Date;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -92,7 +92,7 @@ pub struct LeftOut {
 #[derive(Serialize, ToSchema)]
 pub struct ShoppingList {
     /// The Monday.
-    pub week: NaiveDate,
+    pub week: Date,
     /// Dishes planned this week.
     pub meals: usize,
     pub extras: Vec<ShoppingExtra>,
@@ -176,7 +176,7 @@ type FoodTreeRow = (
 );
 
 /// The week's planned versions and their lines; like the plan, only versions the household can see.
-async fn plan_lines(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Planned> {
+async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Planned> {
     let entries: Vec<(Uuid, f64, String)> = sqlx::query_as(
         "SELECT e.variant_id, e.servings::float8, coalesce(d.title, v.title) FROM plan_entries e
          JOIN variants v ON v.id = e.variant_id LEFT JOIN dishes d ON d.id = v.dish_id
@@ -447,7 +447,7 @@ async fn plan_lines(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult
     })
 }
 
-async fn build(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<ShoppingList> {
+async fn build(s: &AppState, household: Uuid, week: Date) -> ApiResult<ShoppingList> {
     let planned = plan_lines(s, household, week).await?;
     // Marks are kept per food, so a line shows ticked (or removed) when every food on it is.
     let marks: HashMap<String, (bool, bool)> =
@@ -570,7 +570,7 @@ pub async fn get(
 #[derive(Deserialize, ToSchema)]
 pub struct Mark {
     /// Any day in the week (default: today).
-    pub week: Option<NaiveDate>,
+    pub week: Option<Date>,
     pub key: String,
     /// Ticked off.
     pub checked: Option<bool>,
@@ -630,7 +630,7 @@ fn clean(text: &str) -> ApiResult<&str> {
 #[derive(Deserialize, ToSchema)]
 pub struct NewExtra {
     /// Any day in the week (default: today).
-    pub week: Option<NaiveDate>,
+    pub week: Option<Date>,
     pub name: String,
     /// A key the device made for this addition (1 to 100 characters), unique in the household. Sending the same
     /// key again adds nothing, so a device can resend an addition whose answer it never got.
@@ -699,7 +699,7 @@ pub async fn update_extra(
     Path(id): Path<Uuid>,
     JsonBody(b): JsonBody<ExtraChange>,
 ) -> ApiResult<Json<ShoppingList>> {
-    let week: NaiveDate = sqlx::query_scalar("UPDATE shopping_extras SET checked = $3 WHERE id = $1 AND household_id = $2 RETURNING week")
+    let week: Date = sqlx::query_scalar("UPDATE shopping_extras SET checked = $3 WHERE id = $1 AND household_id = $2 RETURNING week")
         .bind(id)
         .bind(me.household_id)
         .bind(b.checked)
@@ -725,7 +725,7 @@ pub async fn remove_extra(
     Extension(me): Extension<CurrentUser>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<ShoppingList>> {
-    let week: NaiveDate = sqlx::query_scalar(
+    let week: Date = sqlx::query_scalar(
         "DELETE FROM shopping_extras WHERE id = $1 AND household_id = $2 RETURNING week",
     )
     .bind(id)
@@ -739,7 +739,7 @@ pub async fn remove_extra(
 #[derive(Deserialize, ToSchema)]
 pub struct NewStaple {
     /// Any day in the week to answer with (default: today).
-    pub week: Option<NaiveDate>,
+    pub week: Option<Date>,
     pub food_id: Uuid,
 }
 
@@ -854,7 +854,7 @@ pub async fn update_settings(
 #[derive(Deserialize, ToSchema)]
 pub struct FoodWeights {
     /// Any day in the week to answer with (default: today).
-    pub week: Option<NaiveDate>,
+    pub week: Option<Date>,
     pub food_id: Uuid,
     /// How this food's weight reads; leave out to go back to the household's usual way.
     pub weight_unit: Option<Weights>,

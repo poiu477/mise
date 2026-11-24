@@ -8,13 +8,13 @@
 //! write them back out as curation files. The operation and the item's answer commit together.
 
 use axum::{Extension, Json, extract::State};
-use chrono::{DateTime, Utc};
 use mise_ingest::curate::{self, Op, Refused};
 use mise_ingest::dish_decisions::{self, Decision, Record};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::{Postgres, Transaction};
 use std::collections::HashMap;
+use time::OffsetDateTime;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -122,7 +122,8 @@ pub struct ReviewItem {
     pub dishes: Option<DishPair>,
     /// The answers this item takes.
     pub verdicts: Vec<Verdict>,
-    pub created_at: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
 }
 
 /// Every open item, food matches first, then food parents, then dish merges; the surest first within each.
@@ -137,7 +138,7 @@ pub struct QueueParams {
     pub kind: Option<ReviewKind>,
 }
 
-type ItemRow = (Uuid, String, Value, Value, Option<f32>, DateTime<Utc>);
+type ItemRow = (Uuid, String, Value, Value, Option<f32>, OffsetDateTime);
 
 /// A text field of a stored item's JSON.
 fn text(v: &Value, key: &str) -> Option<String> {

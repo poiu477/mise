@@ -13,10 +13,10 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Datelike, Utc};
 use mise_core::dish_titles::{clean_title, protein_core};
 use mise_core::text::normalize_name;
 use sqlx::PgPool;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use data::{Dish, Line, Snapshot, Variant};
@@ -29,7 +29,7 @@ const MAX_RELATED: usize = 6;
 const CORE_TWIN_OVERLAP: f64 = 0.5;
 
 pub struct Report {
-    pub generated_at: DateTime<Utc>,
+    pub generated_at: OffsetDateTime,
     pub seed: u64,
     pub requested: usize,
     pub summary: Summary,
@@ -72,8 +72,8 @@ pub struct Card {
     pub stratum: usize,
     pub tags: Vec<usize>,
     pub versions: usize,
-    pub first: Option<DateTime<Utc>>,
-    pub last: Option<DateTime<Utc>>,
+    pub first: Option<OffsetDateTime>,
+    pub last: Option<OffsetDateTime>,
     pub options: Vec<OptionView>,
     pub title_groups: Vec<TitleGroup>,
     pub rows: Vec<VersionRow>,
@@ -106,7 +106,7 @@ pub struct TitleGroup {
 
 #[derive(Clone)]
 pub struct VersionRow {
-    pub published: Option<DateTime<Utc>>,
+    pub published: Option<OffsetDateTime>,
     pub title: String,
     pub subtitle: Option<String>,
     pub protein: String,
@@ -519,7 +519,7 @@ async fn build(pool: &PgPool, snap: &Snapshot, sample_size: usize, seed: u64) ->
     }
 
     Ok(Report {
-        generated_at: Utc::now(),
+        generated_at: OffsetDateTime::now_utc(),
         seed,
         requested: sample_size,
         summary: summarize(snap, &ix, &features, &options_of),
@@ -706,7 +706,7 @@ fn food_of(l: &Line) -> Food {
 }
 
 /// "2019–2023", "2021", or "" when no version has a date.
-pub fn years(dates: impl Iterator<Item = Option<DateTime<Utc>>>) -> String {
+pub fn years(dates: impl Iterator<Item = Option<OffsetDateTime>>) -> String {
     let ys: Vec<i32> = dates.flatten().map(|d| d.year()).collect();
     match (ys.iter().min(), ys.iter().max()) {
         (Some(a), Some(b)) if a == b => a.to_string(),

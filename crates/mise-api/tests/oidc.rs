@@ -299,7 +299,7 @@ impl Sso {
 
     /// Standard claims for this provider and client, with the person's own on top.
     fn claims(&self, nonce: &str, person: Value) -> Value {
-        let now = chrono::Utc::now().timestamp();
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
         let mut c = json!({
             "iss": self.idp.issuer, "aud": CLIENT_ID, "iat": now, "exp": now + 300, "nonce": nonce,
         });
@@ -433,7 +433,7 @@ async fn forged_or_mismatched_tokens_are_refused() {
     // Signed with a key the provider never published, under the real key's id.
     refused(&app.sign_in(Alg::ForgedRs256, person()).await, DIDNT_WORK);
 
-    let now = chrono::Utc::now().timestamp();
+    let now = time::OffsetDateTime::now_utc().unix_timestamp();
     // Each case: what's wrong, and the claims that make it so (laid over an otherwise good token).
     let cases = [
         ("another sign-in's nonce", json!({"nonce": "not-the-nonce"})),

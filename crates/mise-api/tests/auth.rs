@@ -176,6 +176,11 @@ async fn api_tokens_and_their_scopes() {
             Some(json!({"name": "grocy", "scope": "read"})),
         )
         .await;
+    // Times are RFC 3339 in UTC, as the API document says (`date-time`), down to the database's microseconds.
+    let created = read["info"]["created_at"].as_str().unwrap();
+    assert!(created.ends_with('Z'), "{created}");
+    time::OffsetDateTime::parse(created, &time::format_description::well_known::Rfc3339)
+        .unwrap_or_else(|e| panic!("{created}: {e}"));
     let read = read["token"].as_str().unwrap().to_string();
     assert!(read.starts_with("mise_"));
     let rw = app
