@@ -274,6 +274,7 @@ const OPEN_KITCHEN: (&str, &str) = ("GET", "/api/v1/auth/kitchen");
 const REVIEW: (&str, &str) = ("GET", "/api/v1/review-items");
 const DECIDE: (&str, &str) = ("POST", "/api/v1/review-items/{id}/decision");
 const HEALTH: (&str, &str) = ("GET", "/api/v1/health");
+const READY: (&str, &str) = ("GET", "/api/v1/ready");
 const SSO_START: (&str, &str) = ("GET", "/api/auth/oidc/start");
 const SSO_CALLBACK: (&str, &str) = ("GET", "/api/auth/oidc/callback");
 
@@ -310,6 +311,9 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
 
     // First run: anyone may ask how to sign in and set the install up, once.
     c.call(HEALTH, As::Nobody, None, 200, "the health check")
+        .await;
+    // Its 503 comes at the end, with the database gone.
+    c.call(READY, As::Nobody, None, 200, "the readiness check")
         .await;
     c.call(CONFIG, As::Nobody, None, 200, "sign-in settings")
         .await;
