@@ -24,6 +24,8 @@ workflow:
 
 stages:
   - test
+  # Only on a version tag, once every check has passed: the image and the GitLab release (docs/development.md).
+  - release
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
@@ -305,6 +307,76 @@ docker image:
     - docker rm --force "$PROBE" || true
     - docker compose down --volumes --remove-orphans || true
     - docker image rm --force "$MISE_IMAGE" || true
+
+# A version tag (v0.1.0, or v0.1.0-rc.1 to try the release path) publishes a release, once every check in the tag's
+# pipeline has passed: a tag whose checks fail publishes nothing.
+.release:
+  stage: release
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$/
+  interruptible: false
+
+release image:
+  # Builds the image as `docker image` does and pushes it to the project's container registry as the version
+  # (0.1.0), and as `latest` unless it is a pre-release. The tag must name the version Cargo.toml gives mise-api, so
+  # the image's /api/v1/health reports what it was released as.
+  extends: .release
+  tags: [docker-socket]
+  image: docker:29-cli
+  script:
+    - |
+      version="${CI_COMMIT_TAG#v}"
+      cargo_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' crates/mise-api/Cargo.toml | head -1)
+      if [ "${version%%-*}" != "$cargo_version" ]; then
+        echo "The tag $CI_COMMIT_TAG doesn't match the version in crates/mise-api/Cargo.toml ($cargo_version)"
+        exit 1
+      fi
+      echo "$CI_REGISTRY_PASSWORD" | docker login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+      docker build \
+        --label "org.opencontainers.image.version=$version" \
+        --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" \
+        --label "org.opencontainers.image.source=$CI_PROJECT_URL" \
+        --tag "$CI_REGISTRY_IMAGE:$version" .
+      docker push "$CI_REGISTRY_IMAGE:$version"
+      case "$version" in
+        *-*) echo "$version is a pre-release, so latest stays where it was" ;;
+        *)
+          docker tag "$CI_REGISTRY_IMAGE:$version" "$CI_REGISTRY_IMAGE:latest"
+          docker push "$CI_REGISTRY_IMAGE:latest"
+          ;;
+      esac
+  after_script:
+    # Only the registry keeps the image; the runner's Docker is left as it was.
+    - docker image rm --force "$CI_REGISTRY_IMAGE:${CI_COMMIT_TAG#v}" "$CI_REGISTRY_IMAGE:latest" || true
+    - docker logout "$CI_REGISTRY" || true
+
+release:
+  # Then the GitLab release, its notes the version's section of CHANGELOG.md (a pre-release takes the section of the
+  # version it leads to). glab, in its own image, makes the release with the job's token.
+  extends: .release
+  needs: ["release image"]
+  image: registry.gitlab.com/gitlab-org/cli:v1.130.0
+  script:
+    - |
+      version="${CI_COMMIT_TAG#v}"
+      awk -v v="${version%%-*}" '
+        index($0, "## [" v "]") == 1 { on = 1; next }
+        on && (/^## \[/ || /^\[[^]]*\]: /) { exit }
+        on { print }
+      ' CHANGELOG.md > release-notes.md
+      if ! grep -q '[^[:space:]]' release-notes.md; then
+        echo "CHANGELOG.md has no section for ${version%%-*}"
+        exit 1
+      fi
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: mise $CI_COMMIT_TAG
+    description: release-notes.md
+    assets:
+      links:
+        - name: Docker image ($CI_REGISTRY_IMAGE)
+          url: $CI_PROJECT_URL/container_registry
+          link_type: image
 
 rust sast:
   # GitLab Advanced SAST doesn't read Rust, so this runs Semgrep's Rust rules and writes GitLab's SAST format. The

@@ -241,6 +241,22 @@ which opens an issue when that happens. The `renovate config` job checks `renova
 `.git-blame-ignore-revs` lists the formatting-only commits; run `git config blame.ignoreRevsFile .git-blame-ignore-revs`
 once per clone.
 
+## Releasing
+
+A release is a version tag on `main`. Its pipeline runs every check, then publishes (`release image` and `release`
+in `.gitlab-ci.yml`): the Docker image goes to the container registry as the version (`0.1.0`) and, unless it is a
+pre-release, as `latest`, and a GitLab release is made with the version's section of `CHANGELOG.md` as its notes.
+
+1. In a merge request: move what `## [Unreleased]` in `CHANGELOG.md` holds under a new `## [x.y.z] - <date>`
+   heading (and its link at the end), and set `version` in every crate's `Cargo.toml` to it. The release jobs refuse
+   a tag that doesn't match `crates/mise-api/Cargo.toml`.
+2. Once that is merged, tag `main` and push the tag: `git tag -a vx.y.z -m "mise x.y.z" origin/main && git push
+   origin vx.y.z`. Protect `v*` tags (**Settings → Repository → Protected tags**, maintainers only) so nobody else,
+   a bot included, can publish one.
+3. A pre-release (`vx.y.z-rc.1`) publishes its image as `x.y.z-rc.1` and leaves `latest` alone: use one to try the
+   release path. Delete a trial release and its image afterwards (**Deploy → Releases**, **Deploy → Container
+   registry**), and its tag.
+
 ## Changing the API
 
 Add the handler with a `#[utoipa::path]` attribute, register it in `ApiDoc` and the router in `lib.rs`, add an

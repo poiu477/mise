@@ -20,7 +20,8 @@ services:
 
   app:
     build: .
-    image: mise:latest
+    # Built here by default; set MISE_IMAGE to a released image to pull it instead (docs/deploy.md section 5).
+    image: ${MISE_IMAGE:-mise:latest}
     restart: unless-stopped
     depends_on:
       db:

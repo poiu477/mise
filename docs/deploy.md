@@ -23,6 +23,9 @@ sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 30 | tr
 docker compose up -d --build
 ```
 
+That builds the image on the server, from the version checked out. To run a released image instead, see "A released
+image" in section 5.
+
 Open `http://<container address>:8080`. The first visit creates the admin account (see [sign-in.md](sign-in.md)).
 The app applies database migrations whenever it starts. Phones need HTTPS to keep the shopping list offline; section
 7 sets it up.
@@ -84,6 +87,23 @@ names in the commands above.
 ```bash
 git pull && docker compose up -d --build
 ```
+
+### A released image
+
+Each release (a `v` tag; [CHANGELOG.md](../CHANGELOG.md) says what changed) publishes the image to the project's
+container registry, as its version (`0.1.0`) and, for a full release, as `latest`. To run it rather than build on the
+server, name it in `.env`, keeping the checkout at the same release so `compose.yaml` and the Caddyfile match it:
+
+```bash
+git fetch --tags && git checkout v0.1.0
+echo 'MISE_IMAGE=registry.gitlab.pauldrakehughes.com/personal/mise:0.1.0' >> .env
+docker compose pull app && docker compose up -d --no-build
+```
+
+The registry is private, as the project is: log the server in once with a deploy token that has `read_registry`
+(the project's **Settings → Repository → Deploy tokens**), `docker login registry.gitlab.pauldrakehughes.com`. To
+update, check out the next tag, change the version in `MISE_IMAGE` and run the last line again; migrations run when
+the app starts, as always. Pin a version rather than `latest`, so an update happens when you choose it.
 
 ### The API's old addresses
 
