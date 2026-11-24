@@ -17,17 +17,6 @@ status.md if it changed either.
 
 ## Ready
 
-### T10 · Release images
-
-- On a `v*` tag, a release job in `.gitlab-ci.yml` builds the Docker image, pushes it to the GitLab project's
-  container registry, and creates a GitLab release from `CHANGELOG.md` (start one, in Keep a Changelog form, with
-  what exists today as 0.1.0).
-- **Touches:** `.gitlab-ci.yml`, `CHANGELOG.md`, `docs/deploy.md` (pulling the image instead of building it).
-- **Needs:** **Paul** to push the first tag, and the container registry turned on for the project.
-- **Done when:** GitLab's CI lint accepts the file, and a test tag (`v0.1.0-rc.1`, pushed by Paul) publishes the
-  image to the registry and creates the release; the test release and image are deleted afterwards. Syntax checks
-  alone don't prove the release path.
-
 ## Needs a decision first
 
 Each of these waits on a question in status.md's "Open questions" or on Paul.
@@ -36,7 +25,7 @@ Each of these waits on a question in status.md's "Open questions" or on Paul.
   moved out of handlers into per-domain modules. It touches every file in `crates/mise-api/src/`, so it runs
   alone, with nothing else in flight there.
 - **Deploy gate:** a CI job that starts the Compose stack on an empty volume, upgrades a database from the previous
-  release, and backs up and restores. Needs T10 (a previous release to upgrade from).
+  release, and backs up and restores. Needs a released version to upgrade from (T10 makes them; the first is 0.1.0).
 - **Presentation:** README screenshots (taken by Playwright from the demo bundle), a hosted demo (**Paul**: where),
   a short demo recording.
 - **Scaled counts:** round up to halves (today) or to whole items.
