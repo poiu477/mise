@@ -93,6 +93,7 @@ pub(super) async fn from_cookie(
     )))
 }
 
+/// A kitchen device's cookie: HttpOnly, SameSite=Lax, Secure over HTTPS, renewed as the device is used.
 pub fn cookie(secret: String, config: &AuthConfig) -> Cookie<'static> {
     Cookie::build((COOKIE, secret))
         .path("/")
@@ -127,10 +128,14 @@ pub(super) async fn me(pool: &PgPool, id: Uuid) -> ApiResult<super::routes::Me> 
     })
 }
 
+/// A kitchen device an admin has issued a link for.
 #[derive(Serialize, ToSchema)]
 pub struct KitchenToken {
+    /// The token's id, to revoke it.
     pub id: Uuid,
+    /// What the device is called.
     pub name: String,
+    /// When it was issued.
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     /// When its link was opened on the device; null while the link waits.
@@ -139,21 +144,25 @@ pub struct KitchenToken {
     /// When an unopened link stops working; null once it has been opened.
     #[serde(with = "time::serde::rfc3339::option")]
     pub link_expires_at: Option<OffsetDateTime>,
+    /// When the device last used it, to within an hour.
     #[serde(with = "time::serde::rfc3339::option")]
     pub last_used_at: Option<OffsetDateTime>,
 }
 
+/// A kitchen device to issue a link for.
 #[derive(Deserialize, ToSchema)]
 pub struct KitchenTokenRequest {
     /// What the device is called, such as "Kitchen Echo".
     pub name: String,
 }
 
+/// A kitchen device's one-time link, and the token it sets up.
 #[derive(Serialize, ToSchema)]
 pub struct NewKitchenToken {
     /// Shown once: open it on the kitchen device within the hour. A full address when the install's
     /// PUBLIC_BASE_URL is set, else a path on this install.
     pub link: String,
+    /// The token, as the list of kitchen devices shows it.
     pub info: KitchenToken,
 }
 
@@ -285,6 +294,7 @@ pub async fn delete(
     }
 }
 
+/// What a kitchen link carries.
 #[derive(Deserialize, IntoParams)]
 pub struct LinkParams {
     /// The link's one-time code.

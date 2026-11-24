@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = "1.0.104"
 # Paprika keeps a recipe's photo inline, as base64.

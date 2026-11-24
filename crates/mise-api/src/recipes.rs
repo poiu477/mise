@@ -100,7 +100,9 @@ pub struct RecipeInput {
 /// A food, by id and name.
 #[derive(Serialize, ToSchema, Clone, Debug)]
 pub struct FoodRef {
+    /// The food's id.
     pub id: Uuid,
+    /// The food's name.
     pub name: String,
 }
 
@@ -128,13 +130,19 @@ pub struct Recipe {
     pub id: Uuid,
     /// The slug of its dish, for `/api/v1/dishes/{slug}`.
     pub dish_slug: String,
+    /// The recipe's title.
     pub title: String,
+    /// What it comes with, when it says.
     pub subtitle: Option<String>,
+    /// What the household wrote about it.
     pub description: Option<String>,
     /// The servings the amounts are written for.
     pub servings: f64,
+    /// Its ingredient lines as typed, each with how mise read it.
     pub ingredients: Vec<RecipeLine>,
+    /// Its method, one step to an entry.
     pub steps: Vec<String>,
+    /// Its photo, when it has one.
     pub image: Option<Image>,
     /// Who else sees it.
     pub visibility: Visibility,
@@ -1056,6 +1064,7 @@ pub struct LinesInput {
 /// Ingredient lines, read.
 #[derive(Serialize, ToSchema)]
 pub struct LinesRead {
+    /// Each line sent, in order, as mise reads it.
     pub lines: Vec<RecipeLine>,
 }
 

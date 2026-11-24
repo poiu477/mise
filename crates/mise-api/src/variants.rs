@@ -21,16 +21,21 @@ use crate::{
 /// The largest derived yield; any published yield is allowed, however large (a 40-serving roast turkey).
 pub const MAX_SERVINGS: f64 = 24.0;
 
+/// How many servings to show a version at.
 #[derive(Deserialize, IntoParams)]
 pub struct RenderParams {
     /// Serving count (default: the smallest published yield).
     pub servings: Option<f64>,
 }
 
+/// One ingredient line at the requested serving count.
 #[derive(Serialize, ToSchema)]
 pub struct Ingredient {
+    /// What the line asks for ("garlic").
     pub name: String,
+    /// The food it was matched to, for the shopping list and searches.
     pub food_id: Option<Uuid>,
+    /// That food's name.
     pub food: Option<String>,
     /// The amount at the requested yield, e.g. "1½ TBSP"; absent for "to taste" items like salt.
     pub amount: Option<String>,
@@ -38,14 +43,20 @@ pub struct Ingredient {
     pub scaled: bool,
     /// Supplied by the source (meal kit) rather than from the pantry.
     pub shipped: Option<bool>,
+    /// Allergens the source lists for it ("Milk", "Wheat").
     pub allergens: Vec<String>,
+    /// What the line says beyond its amount and name ("minced", "to taste").
     pub note: Option<String>,
+    /// The food's picture, when it has one.
     pub image: Option<Image>,
 }
 
+/// One step of the method at the requested serving count, its amounts scaled.
 #[derive(Serialize, ToSchema)]
 pub struct Step {
+    /// Its place in the method, from 1.
     pub position: i32,
+    /// The instruction, with its amounts for the requested serving count.
     pub text: String,
     /// Some amount in this step was derived for this yield.
     pub scaled: bool,
@@ -55,6 +66,7 @@ pub struct Step {
     pub check_amounts: bool,
     /// The times the step asks for, in the order its text gives them, for starting timers.
     pub times: Vec<StepTime>,
+    /// The step's own photos.
     pub images: Vec<Image>,
 }
 
@@ -82,23 +94,33 @@ fn times_in(text: &str) -> Vec<StepTime> {
         .collect()
 }
 
+/// A version at a serving count: its lines and steps scaled, and whether anything was derived.
 #[derive(Serialize, ToSchema)]
 pub struct Variant {
+    /// The version's id.
     pub id: Uuid,
+    /// Its dish's slug, for `/api/v1/dishes/{slug}`.
     pub dish_slug: Option<String>,
+    /// The version's title.
     pub title: String,
+    /// The version's subtitle.
     pub subtitle: Option<String>,
+    /// What the source says about it, paragraphs separated by a blank line.
     pub description: Option<String>,
     /// Serving counts with published amounts.
     pub yields: Vec<f64>,
+    /// The serving count shown.
     pub servings: f64,
     /// The requested yield is one of the published ones.
     pub published_yield: bool,
     /// Every amount shown is as published (a published yield can still lack an amount for a line, or have
     /// step text written for another yield).
     pub official: bool,
+    /// Its ingredient lines, in order.
     pub ingredients: Vec<Ingredient>,
+    /// Its method, in order.
     pub steps: Vec<Step>,
+    /// The version's photo.
     pub image: Option<Image>,
     /// Source details kept with the version: prep and total time, difficulty, tags, cuisines, nutrition.
     #[schema(value_type = std::collections::HashMap<String, serde_json::Value>)]

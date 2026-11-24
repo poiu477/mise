@@ -7,6 +7,10 @@ edition = "2024"
 license = "MIT"
 rust-version = "1.100"
 
+# Every public item says what it is; clippy's -D warnings makes a missing one fail the build.
+[workspace.lints.rust]
+missing_docs = "warn"
+
 [workspace.dependencies]
 sqlx = { version = "0.9.0", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time", "json"] }
 serde_json = "1.0.154"

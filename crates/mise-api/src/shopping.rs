@@ -24,9 +24,13 @@ use crate::{
 #[derive(Serialize, Deserialize, ToSchema, Clone, Copy, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Weights {
+    /// Pounds and ounces: "1 lb 14 oz".
     LbOz,
+    /// Ounces: "30 oz".
     Oz,
+    /// Pounds: "1⅞ lb".
     Lb,
+    /// Grams and kilograms: "850 g".
     Metric,
 }
 
@@ -50,11 +54,14 @@ impl Weights {
     }
 }
 
+/// One thing to buy: a food, with what the week's dishes need of it added up.
 #[derive(Serialize, ToSchema)]
 pub struct ShoppingItem {
     /// Names the item when ticking or removing it.
     pub key: String,
+    /// The food it is, when the lines were matched to one.
     pub food_id: Option<Uuid>,
+    /// What to buy, as the list names it.
     pub name: String,
     /// Added up across recipes, exactly, e.g. "3 packets (4½ oz)"; absent for "to taste" items like salt.
     pub amount: Option<String>,
@@ -62,21 +69,29 @@ pub struct ShoppingItem {
     pub weighed: bool,
     /// How this food's weight reads here, when not the household's usual way.
     pub weight_unit: Option<Weights>,
+    /// Ticked off this week.
     pub checked: bool,
     /// The dishes that need it.
     pub recipes: Vec<String>,
 }
 
+/// A section of the shop, and what to buy there.
 #[derive(Serialize, ToSchema)]
 pub struct ShoppingSection {
+    /// The section ("Produce"), or "Check you have" for pantry items.
     pub name: String,
+    /// What to buy in it, by name.
     pub items: Vec<ShoppingItem>,
 }
 
+/// Something added to the week's list by hand.
 #[derive(Serialize, ToSchema)]
 pub struct ShoppingExtra {
+    /// The extra's id, to tick or remove it.
     pub id: Uuid,
+    /// What was written ("foil").
     pub name: String,
+    /// Ticked off.
     pub checked: bool,
     /// The key the device that added it sent, if it sent one.
     pub client_key: Option<String>,
@@ -85,16 +100,20 @@ pub struct ShoppingExtra {
 /// Something left off the list, to put back.
 #[derive(Serialize, ToSchema)]
 pub struct LeftOut {
+    /// The key to put it back with: the item's key, or for a staple the food's id.
     pub key: String,
+    /// What it is.
     pub name: String,
 }
 
+/// A household's shopping list for one week, worked out from its plan each time it is asked for.
 #[derive(Serialize, ToSchema)]
 pub struct ShoppingList {
     /// The Monday.
     pub week: Date,
     /// Dishes planned this week.
     pub meals: usize,
+    /// Things added by hand.
     pub extras: Vec<ShoppingExtra>,
     /// In the order a shop is walked.
     pub sections: Vec<ShoppingSection>,
@@ -567,10 +586,12 @@ pub async fn get(
     Ok(Json(build(&s, me.household_id, monday(p.week)).await?))
 }
 
+/// A tick, or taking an item off this week's list, or putting it back.
 #[derive(Deserialize, ToSchema)]
 pub struct Mark {
     /// Any day in the week (default: today).
     pub week: Option<Date>,
+    /// The item's `key`, as the list gave it.
     pub key: String,
     /// Ticked off.
     pub checked: Option<bool>,
@@ -627,10 +648,12 @@ fn clean(text: &str) -> ApiResult<&str> {
     Ok(t)
 }
 
+/// Something to add to a week's list by hand.
 #[derive(Deserialize, ToSchema)]
 pub struct NewExtra {
     /// Any day in the week (default: today).
     pub week: Option<Date>,
+    /// What to add ("foil"), at most 200 characters.
     pub name: String,
     /// A key the device made for this addition (1 to 100 characters), unique in the household. Sending the same
     /// key again adds nothing, so a device can resend an addition whose answer it never got.
@@ -676,8 +699,10 @@ pub async fn add_extra(
     Ok(Json(build(&s, me.household_id, week).await?))
 }
 
+/// A change to an extra.
 #[derive(Deserialize, ToSchema)]
 pub struct ExtraChange {
+    /// Ticked off.
     pub checked: bool,
 }
 
@@ -736,10 +761,12 @@ pub async fn remove_extra(
     Ok(Json(build(&s, me.household_id, week).await?))
 }
 
+/// A food the household always has, to leave off its lists.
 #[derive(Deserialize, ToSchema)]
 pub struct NewStaple {
     /// Any day in the week to answer with (default: today).
     pub week: Option<Date>,
+    /// The food, by id.
     pub food_id: Uuid,
 }
 
@@ -801,6 +828,7 @@ pub async fn remove_staple(
     Ok(Json(build(&s, me.household_id, monday(p.week)).await?))
 }
 
+/// How the household's lists read.
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ShoppingSettings {
     /// How the household reads weights on its list.
@@ -851,10 +879,12 @@ pub async fn update_settings(
     Ok(Json(b))
 }
 
+/// How one food's weight reads on the household's lists.
 #[derive(Deserialize, ToSchema)]
 pub struct FoodWeights {
     /// Any day in the week to answer with (default: today).
     pub week: Option<Date>,
+    /// The food, by id.
     pub food_id: Uuid,
     /// How this food's weight reads; leave out to go back to the household's usual way.
     pub weight_unit: Option<Weights>,
