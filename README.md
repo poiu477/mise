@@ -65,7 +65,7 @@ The Rust crates' documentation, built from `main`, is on GitLab Pages at
 | --- | --- |
 | `crates/mise-core` | Quantities, scaling and rounding, step-text amounts, shopping totals, text helpers |
 | `crates/mise-db` | Connection pool and embedded migrations |
-| `crates/mise-ingest` | Importing and curating: seed bundles, food matching, dish grouping, options, media, steps |
+| `crates/mise-ingest` | Importing and curating: seed bundles, web pages and other apps' exports, food matching, dish grouping, options, media, steps |
 | `crates/mise-api` | The REST API (`mise-server`) |
 | `crates/mise-cli` | The `mise` admin command |
 | `web/` | The web app (installable PWA) |

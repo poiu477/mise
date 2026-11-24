@@ -231,9 +231,16 @@ pub fn read_page(page: &str, page_url: Option<&Url>) -> Result<Vec<Record>, Read
 /// Fails with [`ReadError::Json`] when it isn't JSON and [`ReadError::NoRecipe`] when it holds no Recipe.
 pub fn read_json(json: &str, url: Option<&Url>) -> Result<Vec<Record>, ReadError> {
     let doc: Value = serde_json::from_str(json).map_err(ReadError::Json)?;
-    let refs = Refs::of(&doc);
+    read_value(&doc, url)
+}
+
+/// Reads every recipe in a JSON-LD document already parsed, as [`read_json`] does.
+///
+/// Fails with [`ReadError::NoRecipe`] when it holds no Recipe.
+pub fn read_value(doc: &Value, url: Option<&Url>) -> Result<Vec<Record>, ReadError> {
+    let refs = Refs::of(doc);
     let mut recipes = Vec::new();
-    find_recipes(&doc, 0, &mut recipes);
+    find_recipes(doc, 0, &mut recipes);
     if recipes.is_empty() {
         return Err(ReadError::NoRecipe {
             unreadable_blocks: 0,

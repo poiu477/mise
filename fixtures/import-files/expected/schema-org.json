@@ -1,0 +1,86 @@
+[
+  {
+    "format": "schema.org JSON",
+    "path": "miso-glazed-squash.json",
+    "photo": null,
+    "record": {
+      "description": "Roasted squash wedges under a sticky miso and honey glaze.",
+      "external_id": "https://recipes.example/miso-glazed-squash",
+      "hero_image": null,
+      "ingredients": [
+        {
+          "key": "1",
+          "name": "1 butternut squash, cut into wedges"
+        },
+        {
+          "key": "2",
+          "name": "2 TBSP white miso"
+        },
+        {
+          "key": "3",
+          "name": "1 TBSP honey"
+        },
+        {
+          "key": "4",
+          "name": "1 TBSP rice vinegar"
+        },
+        {
+          "key": "5",
+          "name": "2 tsp olive oil"
+        },
+        {
+          "key": "6",
+          "name": "1 tsp sesame seeds"
+        }
+      ],
+      "meta": {
+        "author": "Dana Whitfield",
+        "categories": [
+          "Side dish"
+        ],
+        "cook_time": "PT35M",
+        "cuisines": [
+          "Japanese"
+        ],
+        "images": [
+          "https://recipes.example/photos/miso-glazed-squash.jpg"
+        ],
+        "prep_time": "PT10M",
+        "tags": [
+          "squash",
+          "miso",
+          "roasting"
+        ],
+        "total_time": "PT45M",
+        "yield_text": "4 servings"
+      },
+      "steps": [
+        {
+          "images": [],
+          "index": 1,
+          "text": "Heat the oven to 425°F. Toss the squash with the olive oil on a sheet pan."
+        },
+        {
+          "images": [],
+          "index": 2,
+          "text": "Roast for 25 minutes, until browned at the edges."
+        },
+        {
+          "images": [],
+          "index": 3,
+          "text": "Whisk the miso, honey and vinegar, brush it over the squash and roast 10 minutes more."
+        },
+        {
+          "images": [],
+          "index": 4,
+          "text": "Scatter with the sesame seeds to serve."
+        }
+      ],
+      "title": "Miso-Glazed Squash",
+      "url": "https://recipes.example/miso-glazed-squash",
+      "yields": [
+        4.0
+      ]
+    }
+  }
+]

@@ -302,6 +302,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import the recipes in a file another recipe app exported: schema.org JSON, a Nextcloud Cookbook folder (zipped)
+         *     or `recipe.json`, a Mealie or Tandoor export zip, or a Paprika export (`.paprikarecipes`) or recipe. The body is
+         *     the file itself, at most 100 MB, sent as `application/octet-stream`; what it is comes from what it holds. Each
+         *     recipe becomes a version only this household sees, grouped into a dish like any other, with the photo the file
+         *     keeps for it (photos it only links to aren't fetched). Importing an unchanged file again changes nothing; a recipe
+         *     changed in the app since becomes a new version. Something that looked like a recipe but couldn't be read is
+         *     listed and the rest imported.
+         */
+        post: operations["import_file"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/kitchen-tokens": {
         parameters: {
             query?: never;
@@ -936,8 +961,22 @@ export interface components {
          * @enum {string}
          */
         ErrorCode: "not_found" | "bad_request" | "unauthorized" | "bad_credentials" | "forbidden" | "method_not_allowed" | "conflict" | "account_changed" | "payload_too_large" | "too_many_requests" | "internal" | "site_failed";
+        /**
+         * Format: binary
+         * @description An export file's bytes, as the API document describes the request body.
+         */
+        ExportFile: string;
         ExtraChange: {
             checked: boolean;
+        };
+        /** @description What importing a file did. */
+        FileImport: {
+            /** @description The apps its recipes came from, by name ("Paprika"); usually one. */
+            formats: string[];
+            /** @description Each recipe, in the order the file lists them. */
+            recipes: components["schemas"]["ImportedRecipe"][];
+            /** @description What looked like a recipe but couldn't be read; the rest was imported. */
+            skipped: components["schemas"]["SkippedEntry"][];
         };
         /** @description Foods matching a search, the closest names first. */
         FoodList: {
@@ -1398,6 +1437,13 @@ export interface components {
         ShoppingSettings: {
             /** @description How the household reads weights on its list. */
             weight_unit: components["schemas"]["Weights"];
+        };
+        /** @description Something in the file that looked like a recipe but couldn't be read. */
+        SkippedEntry: {
+            /** @description Where in the file it was: `recipes/soup/soup.json`. */
+            path: string;
+            /** @description Why it was left out: "not valid JSON (…)", "the recipe has no name". */
+            reason: string;
         };
         Step: {
             /** @description Some wording came from the nearest published yield; worth a second look. */
@@ -2581,6 +2627,91 @@ export interface operations {
             };
             /** @description The site didn't answer, took too long, redirected too often or answered with an error */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    import_file: {
+        parameters: {
+            query?: {
+                /**
+                 * @description The file's name, such as `My Recipes.paprikarecipes`. What a file is comes from what it holds; the name is
+                 *     used in messages, and tells a Nextcloud Cookbook `recipe.json` sent on its own from other schema.org JSON.
+                 */
+                name?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The export file */
+        requestBody: {
+            content: {
+                "application/octet-stream": components["schemas"]["ExportFile"];
+            };
+        };
+        responses: {
+            /** @description The file's recipes, imported */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileImport"];
+                };
+            };
+            /** @description The body isn't sent as an application type, or the file holds no recipe mise reads or more than 2,000, is a zip mise can't unpack, or unpacks past the limits (300 MB, 20,000 files, 25 MB for any one) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The file is over 100 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

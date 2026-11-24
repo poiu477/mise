@@ -1,4 +1,4 @@
-//! Importing recipes into the data core: seed bundles, and schema.org Recipe data from web pages and files.
+//! Importing recipes into the data core: seed bundles, web pages, and the files other recipe apps export.
 
 #![warn(missing_docs)]
 
@@ -7,7 +7,9 @@ pub mod curate;
 pub mod dish_decisions;
 pub mod dishes;
 pub mod fetch;
+pub mod files;
 pub mod foods;
+pub mod import;
 pub mod media;
 pub mod options;
 pub mod prune;

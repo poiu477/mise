@@ -157,9 +157,9 @@ rule that lets only the proxy reach port 8080 does what `127.0.0.1` would.
 - **Nginx Proxy Manager:** a proxy host for `mise.example.com` forwarding to `http://<mise host>:8080`, with an SSL
   certificate and **Force SSL** on.
 
-A recipe's photo is uploaded in one request of up to 20 MB. Caddy and Traefik pass that as they come; nginx and
-Nginx Proxy Manager stop at 1 MB unless told otherwise (`client_max_body_size 20m;` in the `server` block, or in
-the proxy host's custom configuration).
+A recipe's photo is uploaded in one request of up to 20 MB, and an export file to import in one of up to 100 MB.
+Caddy and Traefik pass those as they come; nginx and Nginx Proxy Manager stop at 1 MB unless told otherwise
+(`client_max_body_size 100m;` in the `server` block, or in the proxy host's custom configuration).
 
 mise sends no HSTS header. Once HTTPS works for good, the proxy can add one, for example Caddy's
 `header Strict-Transport-Security "max-age=31536000"`. Browsers then refuse plain HTTP to that name for a year, so
@@ -240,7 +240,25 @@ lifts the address and port checks for everyone who can sign in, so anyone with a
 fetch from the home network (an admin page, a router) and see whether it answers. Leave it off unless every account
 belongs to people you'd trust with that. The server logs a warning at start while it is on.
 
-## 9. Sharing between households
+## 9. Importing from files
+
+The import page also takes the files other recipe apps export, and `mise import file <path>` takes the same files or
+an unzipped folder of them:
+
+| App | The file to bring |
+| --- | --- |
+| Paprika | An export in Paprika Recipe Format (`.paprikarecipes`), or one recipe (`.paprikarecipe`) |
+| Mealie | A recipe export: a zip holding `recipes/<slug>/<slug>.json` for each recipe, its photo beside it |
+| Tandoor | An export in Tandoor's own (Default) format: a zip holding a zip for each recipe |
+| Nextcloud Cookbook | The `Recipes` folder from Nextcloud Files, downloaded as a zip, or one recipe's `recipe.json` |
+| Anything else | A recipe saved as schema.org JSON (`"@type": "Recipe"`) |
+
+A file is read for what it holds, whatever it is called. Each recipe becomes a version only the importing household
+sees, with the photo the file keeps for it; a photo the file only links to isn't fetched. Importing the same export
+again changes nothing, and a recipe changed in the app since becomes a new version. A file may be up to 100 MB, and
+unpack to at most 300 MB and 20,000 files; one file imports at a time.
+
+## 10. Sharing between households
 
 A household's own recipes and forks start private. In the web app's account page a household can choose to share
 them, by default or one at a time, with the households it adds as partners, or with every household on the install.

@@ -1,0 +1,33 @@
+{
+  "@context": "http://schema.org",
+  "@type": "Recipe",
+  "id": "1490",
+  "name": "Spiced Red Lentil Soup",
+  "description": "",
+  "url": "https://recipes.example/spiced-red-lentil-soup",
+  "image": "https://recipes.example/photos/lentil-soup.jpg",
+  "imageUrl": "/apps/cookbook/webapp/recipes/1490/image?size=full",
+  "prepTime": "PT0H10M0S",
+  "cookTime": "PT0H25M0S",
+  "totalTime": "",
+  "recipeCategory": "Soups",
+  "keywords": "lentils,vegan",
+  "recipeYield": 4,
+  "tool": [],
+  "recipeIngredient": [
+    "1 onion, chopped",
+    "2 garlic cloves, crushed",
+    "1 TBSP curry powder",
+    "1 cup red lentils, rinsed",
+    "4 cups vegetable stock",
+    "1 can coconut milk"
+  ],
+  "recipeInstructions": [
+    { "@type": "HowToStep", "text": "Soften the onion and garlic in a little oil, then stir in the curry powder." },
+    { "@type": "HowToStep", "text": "Add the lentils and stock and simmer for 20 minutes, until the lentils collapse." },
+    { "@type": "HowToStep", "text": "Stir in the coconut milk and blend until smooth." }
+  ],
+  "nutrition": {},
+  "dateCreated": "2026-03-09T12:00:00+0000",
+  "dateModified": "2026-03-09T12:00:00+0000"
+}
