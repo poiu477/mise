@@ -183,15 +183,26 @@ jobs too. A fork's pipeline needs a runner set up the same way for this one job.
 
 A Docker runner's disk fills unless something prunes it, and no job does that for the host. The security scanners'
 images sit on tags GitLab moves every day or two (`gitlab-advanced-sast:2` is 1.1 GB), and each pull leaves the
-old copy behind as a `<none>` image; on a 50 GB runner that filled the disk in under two weeks (2026-11). Each
-runner host runs this from cron, in `/etc/cron.d/docker-prune`:
+old copy behind as a `<none>` image; on a 50 GB runner that filled the disk in under two weeks (2026-11). The job
+caches grow too: each is a Docker volume, one per parallel job slot, holding the Rust `target/` archive and the
+downloaded crates, and nothing trims them (GitLab's "Clear runner caches" starts new ones beside the old). On a
+140 GB runner, 26 of them reached 92 GB (2026-11-24). Each runner host runs this from cron, in
+`/etc/cron.d/docker-prune`:
 
 ```text
 # Old scanner images left behind when their tags move (no run uses them again), daily.
 15 4 * * * root docker image prune -f >/dev/null 2>&1
 # Build cache not used in a week; anything a recent run touched stays.
 45 4 * * * root docker builder prune -f --filter until=168h >/dev/null 2>&1
+# The runner's own cache volumes and containers no job is using, weekly (Sunday): they only grow, and jobs rebuild them.
+30 5 * * 0 root /usr/share/gitlab-runner/clear-docker-cache >/dev/null 2>&1
 ```
+
+`clear-docker-cache` comes with the gitlab-runner package, and GitLab's Docker executor documentation recommends
+running it from cron about once a week. It prunes only what carries the runner's label
+(`com.gitlab.gitlab-runner.managed=true`), and passes `--all` to `docker volume prune` on Docker 23 and later, which
+the runner's named cache volumes need. A running job's volumes are in use, so it never pulls one out from under a
+job; the cost is one cold Rust build a week on each runner.
 
 Images are pruned by whether a tag still points at them, not by age: an image's age is when it was built upstream,
 so a time limit would delete `rust:1.100.0-bookworm` while every job still uses it. Build cache is pruned by when it
