@@ -2,7 +2,8 @@
 //!
 //! Settings come from the environment (see .env.example): DATABASE_URL, MEDIA_ROOT, MISE_BIND, MISE_WEB_DIR
 //! (the built web app, default ./web/dist when present), MISE_MIGRATE (run migrations at start, default on) and
-//! IMPORT_ALLOW_PRIVATE (let imports fetch from private and local addresses, default off).
+//! IMPORT_ALLOW_PRIVATE (let imports fetch from private and local addresses, default off) and SHARING_MAX_LEVEL (the
+//! most a household may share its recipes with: private, partners or install, the default).
 //!
 //! `mise-server openapi` prints the OpenAPI document and exits, without a database (the web app's types are
 //! generated from it).
@@ -47,6 +48,11 @@ async fn main() -> anyhow::Result<()> {
     if migrate {
         mise_db::migrate(&pool).await?;
     }
+    let cap = mise_api::sharing::cap_from_env()?;
+    mise_api::sharing::set_cap(&pool, cap)
+        .await
+        .context("storing SHARING_MAX_LEVEL")?;
+    tracing::info!(sharing_max_level = cap.as_str(), "sharing");
     let auth = mise_api::auth::AuthConfig::from_env()?;
     tracing::info!(local = auth.local, oidc = auth.oidc.is_some(), public_base_url = ?auth.public_base_url.as_ref().map(|u| u.as_str()), "sign-in");
     let state = mise_api::AppState {

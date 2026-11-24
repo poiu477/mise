@@ -40,6 +40,7 @@ services:
       OIDC_ADMIN_GROUP: ${OIDC_ADMIN_GROUP:-}
       OIDC_HOUSEHOLD: ${OIDC_HOUSEHOLD:-}
       IMPORT_ALLOW_PRIVATE: ${IMPORT_ALLOW_PRIVATE:-false}
+      SHARING_MAX_LEVEL: ${SHARING_MAX_LEVEL:-install}
       RUST_LOG: ${RUST_LOG:-info,sqlx=error,tower_http=warn}
     ports:
       # Home network by default; bind to 127.0.0.1 instead when only a reverse proxy should reach it.

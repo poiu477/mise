@@ -12,6 +12,7 @@ pub mod media;
 pub mod plan;
 pub mod recipes;
 pub mod review;
+pub mod sharing;
 pub mod shopping;
 pub mod variants;
 
@@ -60,10 +61,12 @@ pub struct AppState {
         shopping::get, shopping::mark, shopping::add_extra, shopping::update_extra, shopping::remove_extra, shopping::add_staple, shopping::remove_staple,
         shopping::settings, shopping::update_settings, shopping::set_food_weights,
         review::list, review::decide,
+        sharing::get, sharing::set_default, sharing::add_partner, sharing::remove_partner,
     ),
     tags(
         (name = "dishes", description = "Browse and search dishes"), (name = "media", description = "Photos"),
         (name = "recipes", description = "Recipes a household writes itself"),
+        (name = "sharing", description = "How far a household's own recipes are seen, and the households it shares with"),
         (name = "plan", description = "The household's weekly plan"), (name = "shopping", description = "The shopping list worked out from the plan"),
         (name = "auth", description = "Signing in"), (name = "account", description = "The signed-in account"),
         (name = "admin", description = "Accounts and households (admins)"),
@@ -255,6 +258,12 @@ fn api_routes() -> Router<AppState> {
         )
         .route("/pantry-staples", post(shopping::add_staple))
         .route("/pantry-staples/{food_id}", delete(shopping::remove_staple))
+        .route("/household", get(sharing::get))
+        .route("/household/sharing", put(sharing::set_default))
+        .route(
+            "/household/partners/{id}",
+            put(sharing::add_partner).delete(sharing::remove_partner),
+        )
         .route("/review-items", get(review::list))
         .route("/review-items/{id}/decision", post(review::decide))
 }

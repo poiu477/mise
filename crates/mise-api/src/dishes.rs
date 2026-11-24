@@ -183,6 +183,9 @@ pub struct VariantSummary {
     /// For the household's own version of another (a fork), the version it was made from, while the household can
     /// still see it.
     pub original: Option<Original>,
+    /// Another household's own version, shared with this one: that household's name. It can be read and forked, not
+    /// changed.
+    pub shared_by: Option<String>,
 }
 
 /// The version a fork was made from.
@@ -211,8 +214,8 @@ pub struct Dish {
 /// id, slug, title, subtitle, content type, default version.
 type DishRow = (Uuid, String, String, Option<String>, String, Option<Uuid>);
 
-/// A version on a dish page: id, title, subtitle, published, has steps, yields, attributes, photo, editable, and its
-/// original's id, title and author.
+/// A version on a dish page: id, title, subtitle, published, has steps, yields, attributes, photo, editable, its
+/// original's id, title and author, and the household sharing it.
 type VariantRow = (
     Uuid,
     String,
@@ -224,6 +227,7 @@ type VariantRow = (
     Option<Uuid>,
     bool,
     Option<Uuid>,
+    Option<String>,
     Option<String>,
     Option<String>,
 );
@@ -278,7 +282,8 @@ pub async fn get(
                 coalesce((SELECT jsonb_object_agg(a.key, a.value) FROM variant_attributes a WHERE a.variant_id = v.id), '{}'),
                 (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1),
                 v.origin = 'user' AND v.household_id IS NOT DISTINCT FROM $2,
-                p.id, p.title, coalesce(src.name, h.name)
+                p.id, p.title, coalesce(src.name, h.name),
+                (SELECT o.name FROM households o WHERE o.id = v.household_id AND o.id <> $2)
          FROM variants v
          LEFT JOIN variants p ON p.id = v.parent_variant_id AND v.origin = 'user' AND visible_to(p, $2)
          LEFT JOIN source_records sr ON sr.id = p.source_record_id
@@ -292,7 +297,21 @@ pub async fn get(
     .await?
     .into_iter()
     .map(
-        |(id, title, subtitle, published_at, has_steps, yields, attributes, hero, editable, parent, parent_title, by)| {
+        |(
+            id,
+            title,
+            subtitle,
+            published_at,
+            has_steps,
+            yields,
+            attributes,
+            hero,
+            editable,
+            parent,
+            parent_title,
+            by,
+            shared_by,
+        )| {
             VariantSummary {
                 id,
                 title,
@@ -304,6 +323,7 @@ pub async fn get(
                 image: hero.map(Image::new),
                 editable,
                 original: parent.zip(parent_title).map(|(id, title)| Original { id, title, by }),
+                shared_by,
             }
         },
     )

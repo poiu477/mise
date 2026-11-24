@@ -240,6 +240,18 @@ lifts the address and port checks for everyone who can sign in, so anyone with a
 fetch from the home network (an admin page, a router) and see whether it answers. Leave it off unless every account
 belongs to people you'd trust with that. The server logs a warning at start while it is on.
 
+## 9. Sharing between households
+
+A household's own recipes and forks start private. In the web app's account page a household can choose to share
+them, by default or one at a time, with the households it adds as partners, or with every household on the install.
+Others can read a shared recipe and make their own version of it, but not change it; plans, shopping lists and
+preferences are never shared.
+
+`SHARING_MAX_LEVEL` in `.env` caps how far any household can share: `install` (the default), `partners` or
+`private`. Set it and restart the app. Lowering it takes effect at once, also for what was shared before: a recipe
+shared with the install is then seen only by its household's partners, or by no one else at all. Raising it again
+restores what each household chose.
+
 ## Commands
 
 The `mise` admin command is in the image: `docker compose exec app mise --help`. Account recovery is

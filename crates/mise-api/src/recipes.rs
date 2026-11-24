@@ -1,12 +1,12 @@
 //! Recipes a household writes itself: create one, read it back as it was written, change it, give it a photo,
 //! delete it.
 //!
-//! A written recipe is a version like any other (`origin = 'user'`, owned by the household, private to it), so the
-//! dish page, search, the plan and the shopping list treat it as they treat a seed version. It gets a dish of its
-//! own, marked as made by a person, which grouping leaves alone. Ingredient lines arrive as text ("2 cups flour,
-//! sifted") and are read into an amount, a unit, a name and a note (`mise_core::ingredient_line`); each name is
-//! matched to a food exactly as an import's is, unless the request names the food. The line's text is kept, so
-//! reading the recipe back gives what was typed.
+//! A written recipe is a version like any other (`origin = 'user'`, owned by the household, seen as far as its
+//! visibility says), so the dish page, search, the plan and the shopping list treat it as they treat a seed version.
+//! Only its household changes it. It gets a dish of its own, marked as made by a person, which grouping leaves alone.
+//! Ingredient lines arrive as text ("2 cups flour, sifted") and are read into an amount, a unit, a name and a note
+//! (`mise_core::ingredient_line`); each name is matched to a food exactly as an import's is, unless the request names
+//! the food. The line's text is kept, so reading the recipe back gives what was typed.
 //!
 //! A household can also make its own version of any version it can see (a fork): a written recipe like these, on
 //! the original's dish rather than one of its own, naming the original as its parent.
@@ -40,6 +40,7 @@ use crate::{
     error::{ApiError, ApiResult},
     extract::{JsonBody, Path},
     media::Image,
+    sharing::{self, Visibility},
 };
 
 /// The longest title and subtitle, in characters.
@@ -91,6 +92,9 @@ pub struct RecipeInput {
     pub ingredients: Vec<LineInput>,
     /// At most 100 steps of at most 4000 characters, in order; blank ones are dropped.
     pub steps: Vec<String>,
+    /// Who else sees it: left out, a new recipe takes the household's default and a changed one keeps what it had.
+    /// No more open than the install allows.
+    pub visibility: Option<Visibility>,
 }
 
 /// A food, by id and name.
@@ -132,6 +136,8 @@ pub struct Recipe {
     pub ingredients: Vec<RecipeLine>,
     pub steps: Vec<String>,
     pub image: Option<Image>,
+    /// Who else sees it.
+    pub visibility: Visibility,
 }
 
 /// One ingredient line checked and read.
@@ -466,11 +472,13 @@ async fn load(tx: &mut Transaction<'_, Postgres>, id: Uuid, household: Uuid) -> 
         Option<String>,
         Option<f64>,
         Option<Uuid>,
+        String,
     );
-    let (title, subtitle, description, dish_slug, servings, hero): Row = sqlx::query_as(
+    let (title, subtitle, description, dish_slug, servings, hero, visibility): Row = sqlx::query_as(
         "SELECT v.title, v.subtitle, v.description, d.slug,
                 (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id),
-                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1)
+                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1),
+                v.visibility
          FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
          WHERE v.id = $1 AND v.origin = 'user' AND v.household_id = $2",
     )
@@ -525,11 +533,13 @@ async fn load(tx: &mut Transaction<'_, Postgres>, id: Uuid, household: Uuid) -> 
         ingredients,
         steps,
         image: hero.map(Image::new),
+        visibility: Visibility::parse(&visibility).unwrap_or(Visibility::Private),
     })
 }
 
-/// Write a recipe. It belongs to the household, which alone can see it, and gets a dish of its own. Answers with
-/// the recipe as stored: each line with what was read from it and the food it is matched to.
+/// Write a recipe. It belongs to the household, which alone can change it, and gets a dish of its own; it is seen as
+/// far as `visibility` says, the household's default when left out. Answers with the recipe as stored: each line
+/// with what was read from it and the food it is matched to.
 #[utoipa::path(
     post, path = "/api/v1/recipes", operation_id = "create_recipe", tag = "recipes", request_body = RecipeInput,
     responses(
@@ -545,8 +555,13 @@ pub async fn create(
     Extension(me): Extension<CurrentUser>,
     JsonBody(input): JsonBody<RecipeInput>,
 ) -> ApiResult<Json<Recipe>> {
+    let asked = input.visibility;
     let recipe = check(input)?;
     let mut tx = s.pool.begin().await?;
+    let visibility = match asked {
+        Some(v) => sharing::allowed(&mut tx, v).await.map(|()| v)?,
+        None => sharing::default_for(&mut tx, me.household_id).await?,
+    };
     check_foods(&mut tx, me.household_id, &recipe.lines).await?;
     take_turn(&mut tx).await?;
     let (dish, variant) = (Uuid::now_v7(), Uuid::now_v7());
@@ -565,8 +580,8 @@ pub async fn create(
     .await?;
     sqlx::query(
         "INSERT INTO variants (id, dish_id, dish_pinned, origin, household_id, title, subtitle, description,
-                               published_at, has_steps, meta, content_hash)
-         VALUES ($1, $2, true, 'user', $3, $4, $5, $6, now(), $7, '{\"content_type\": \"recipe\"}', $8)",
+                               published_at, has_steps, meta, content_hash, visibility)
+         VALUES ($1, $2, true, 'user', $3, $4, $5, $6, now(), $7, '{\"content_type\": \"recipe\"}', $8, $9)",
     )
     .bind(variant)
     .bind(dish)
@@ -576,6 +591,7 @@ pub async fn create(
     .bind(&recipe.description)
     .bind(!recipe.steps.is_empty())
     .bind(recipe.content_hash())
+    .bind(visibility.as_str())
     .execute(&mut *tx)
     .await?;
     write_parts(&mut tx, variant, &recipe).await?;
@@ -625,8 +641,12 @@ pub async fn update(
     Path(id): Path<Uuid>,
     JsonBody(input): JsonBody<RecipeInput>,
 ) -> ApiResult<Json<Recipe>> {
+    let asked = input.visibility;
     let recipe = check(input)?;
     let mut tx = s.pool.begin().await?;
+    if let Some(v) = asked {
+        sharing::allowed(&mut tx, v).await?;
+    }
     take_turn(&mut tx).await?;
     // The dish follows the recipe only when it is the recipe's own: one a person made that opens on this version.
     let own_dish: Option<(Uuid, String)> = sqlx::query_as(
@@ -643,7 +663,8 @@ pub async fn update(
     check_foods(&mut tx, me.household_id, &recipe.lines).await?;
 
     sqlx::query(
-        "UPDATE variants SET title = $2, subtitle = $3, description = $4, has_steps = $5, content_hash = $6
+        "UPDATE variants SET title = $2, subtitle = $3, description = $4, has_steps = $5, content_hash = $6,
+                            visibility = coalesce($7, visibility)
          WHERE id = $1",
     )
     .bind(id)
@@ -652,6 +673,7 @@ pub async fn update(
     .bind(&recipe.description)
     .bind(!recipe.steps.is_empty())
     .bind(recipe.content_hash())
+    .bind(asked.map(Visibility::as_str))
     .execute(&mut *tx)
     .await?;
     let facts = line_facts(&mut tx, id).await?;
@@ -790,13 +812,14 @@ pub async fn fork(
         steps,
     };
     let facts = line_facts(&mut tx, id).await?;
+    let visibility = sharing::default_for(&mut tx, me.household_id).await?;
 
     let copy = Uuid::now_v7();
     // Pinned to the dish, so grouping leaves it where it was made, as it leaves a written recipe.
     sqlx::query(
         "INSERT INTO variants (id, dish_id, dish_pinned, origin, parent_variant_id, household_id, title, subtitle,
-                               description, published_at, has_steps, meta, content_hash)
-         VALUES ($1, $2, true, 'user', $3, $4, $5, $6, $7, now(), $8, $9, $10)",
+                               description, published_at, has_steps, meta, content_hash, visibility)
+         VALUES ($1, $2, true, 'user', $3, $4, $5, $6, $7, now(), $8, $9, $10, $11)",
     )
     .bind(copy)
     .bind(dish)
@@ -808,6 +831,7 @@ pub async fn fork(
     .bind(!recipe.steps.is_empty())
     .bind(meta)
     .bind(recipe.content_hash())
+    .bind(visibility.as_str())
     .execute(&mut *tx)
     .await?;
     write_parts(&mut tx, copy, &recipe).await?;
