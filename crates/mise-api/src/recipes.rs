@@ -758,10 +758,12 @@ pub async fn fork(
         Option<String>,
         serde_json::Value,
         Option<f64>,
+        Option<Uuid>,
     );
-    let (dish, title, subtitle, description, meta, servings): Source = sqlx::query_as(
+    let (dish, title, subtitle, description, meta, servings, owner): Source = sqlx::query_as(
         "SELECT v.dish_id, v.title, v.subtitle, v.description, v.meta - 'nutrition',
-                (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id)
+                (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id),
+                v.household_id
          FROM variants v WHERE v.id = $1 AND v.dish_id IS NOT NULL AND visible_to(v, $2)",
     )
     .bind(id)
@@ -820,7 +822,12 @@ pub async fn fork(
         steps,
     };
     let facts = line_facts(&mut tx, id).await?;
-    let visibility = sharing::default_for(&mut tx, me.household_id).await?;
+    // A copy of another household's recipe starts private, whatever this household's default: that household chose
+    // who sees it, and sharing the copy further is this household's choice to make in the editor, not a default's.
+    let visibility = match owner {
+        Some(owner) if owner != me.household_id => Visibility::Private,
+        _ => sharing::default_for(&mut tx, me.household_id).await?,
+    };
 
     let copy = Uuid::now_v7();
     // Pinned to the dish, so grouping leaves it where it was made, as it leaves a written recipe.
@@ -1083,6 +1090,7 @@ pub struct LinesRead {
 )]
 pub async fn read_lines(
     State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
     JsonBody(input): JsonBody<LinesInput>,
 ) -> ApiResult<Json<LinesRead>> {
     let lines = check_lines(
@@ -1095,17 +1103,23 @@ pub async fn read_lines(
             })
             .collect(),
     )?;
-    // Foods are found by the same key the matcher uses, so what shows here is what saving will choose.
+    // Foods are found by the same key the matcher uses, so what shows here is what saving will choose; only those
+    // the household could find by searching (`foods::KNOWN_FOOD`), so a food named only in another household's
+    // private recipe doesn't show its name here.
     let keys: Vec<String> = lines.iter().map(|l| singular_key(l.name())).collect();
-    let foods: HashMap<String, FoodRef> = sqlx::query_as::<_, (String, Uuid, String)>(
-        "SELECT a.alias, f.id, f.name FROM food_aliases a JOIN foods f ON f.id = a.food_id WHERE a.alias = ANY($1)",
-    )
-    .bind(&keys)
-    .fetch_all(&s.pool)
-    .await?
-    .into_iter()
-    .map(|(alias, id, name)| (alias, FoodRef { id, name }))
-    .collect();
+    let foods: HashMap<String, FoodRef> =
+        sqlx::query_as::<_, (String, Uuid, String)>(sqlx::AssertSqlSafe(format!(
+            "SELECT a.alias, f.id, f.name FROM food_aliases a JOIN foods f ON f.id = a.food_id
+             WHERE a.alias = ANY($2) AND {}",
+            crate::foods::KNOWN_FOOD
+        )))
+        .bind(me.household_id)
+        .bind(&keys)
+        .fetch_all(&s.pool)
+        .await?
+        .into_iter()
+        .map(|(alias, id, name)| (alias, FoodRef { id, name }))
+        .collect();
     let lines = lines
         .into_iter()
         .zip(keys)

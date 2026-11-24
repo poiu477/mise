@@ -125,7 +125,9 @@ old addresses go needs nothing else.
 
 The `backup` service writes `BACKUP_DIR/mise-<date>.dump` every night at `BACKUP_HOUR` (default 03:00 in the
 container's time zone) and keeps `BACKUP_DAYS` (default 14). Copy that folder off the machine with the rest of your
-backups; photos are best backed up from `MEDIA_DIR` directly. To restore:
+backups. The dump holds no photos, so **back up `MEDIA_DIR` as well**: photos imported from an archive could be made
+again from it, but photos uploaded in the app or imported from a link or a file exist nowhere else. Restore the two
+from the same night, so every photo the database names is there. To restore:
 
 ```bash
 docker compose stop app

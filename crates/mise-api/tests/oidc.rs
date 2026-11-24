@@ -199,6 +199,8 @@ async fn provider() -> Arc<Provider> {
 struct Sso {
     app: TestApp,
     idp: Arc<Provider>,
+    /// Each sign-in's state cookie, by the state it carries: what the browser that started it holds.
+    browser: std::sync::Mutex<HashMap<String, String>>,
 }
 
 impl Deref for Sso {
@@ -217,8 +219,14 @@ struct Finished {
 }
 
 impl Sso {
-    /// Start the fake provider and an app that trusts it; None when there is no database (outside CI).
+    /// Start the fake provider and an app that trusts it, letting anyone it signs in make an account; None when
+    /// there is no database (outside CI).
     async fn new() -> Option<Sso> {
+        Sso::with(None, true).await
+    }
+
+    /// As `new`, with sign-in limited to `allowed_group` and accounts made at sign-in only when `open_signup`.
+    async fn with(allowed_group: Option<&str>, open_signup: bool) -> Option<Sso> {
         let idp = provider().await;
         let app = TestApp::with_oidc(OidcConfig {
             issuer: IssuerUrl::new(idp.issuer.clone()).unwrap(),
@@ -228,9 +236,15 @@ impl Sso {
             scopes: vec!["email".into(), "profile".into()],
             admin_group: Some("mise-admins".into()),
             household: None,
+            allowed_group: allowed_group.map(str::to_owned),
+            open_signup,
         })
         .await?;
-        Some(Sso { app, idp })
+        Some(Sso {
+            app,
+            idp,
+            browser: Default::default(),
+        })
     }
 
     /// Start a sign-in and check the redirect to the provider; returns the state and nonce it carries.
@@ -244,6 +258,13 @@ impl Sso {
             )
             .await;
         assert_eq!(reply.status, StatusCode::SEE_OTHER);
+        let cookie = reply
+            .cookie("mise_oidc_state")
+            .expect("starting a sign-in sets the state cookie");
+        assert!(
+            cookie.contains("HttpOnly") && cookie.contains("SameSite=Lax"),
+            "{cookie}"
+        );
         let to = url::Url::parse(reply.header(header::LOCATION).unwrap()).unwrap();
         assert_eq!(
             to.as_str().split('?').next().unwrap(),
@@ -272,23 +293,44 @@ impl Sso {
                 claims: Value::Null,
             },
         );
+        let value = format!("mise_oidc_state={}", cookie.split(';').next().unwrap());
+        self.browser
+            .lock()
+            .unwrap()
+            .insert(q["state"].clone(), value);
         (q["state"].clone(), q["nonce"].clone())
     }
 
-    /// The provider sends the browser back with a code; mise exchanges it for an ID token with these claims.
+    /// The provider sends the browser that started the sign-in back with a code; mise exchanges it for an ID token
+    /// with these claims.
     async fn finish(&self, state: &str, alg: Alg, claims: Value) -> Finished {
+        let cookie = self.browser.lock().unwrap().get(state).cloned();
+        self.finish_in(cookie.as_deref(), state, alg, claims).await
+    }
+
+    /// As `finish`, in a browser holding this state cookie (`mise_oidc_state=…`), or none.
+    async fn finish_in(
+        &self,
+        cookie: Option<&str>,
+        state: &str,
+        alg: Alg,
+        claims: Value,
+    ) -> Finished {
         let code = format!("code-for-{state}");
         if let Some(g) = self.idp.grants.lock().unwrap().get_mut(&code) {
             g.alg = alg;
             g.claims = claims;
         }
+        let mut req = TestApp::request(
+            "GET",
+            &format!("/api/auth/oidc/callback?code={code}&state={state}"),
+            As::Nobody,
+        );
+        if let Some(cookie) = cookie {
+            req = req.header(header::COOKIE, cookie);
+        }
         let reply = self
-            .send(
-                "GET",
-                &format!("/api/auth/oidc/callback?code={code}&state={state}"),
-                As::Nobody,
-                None,
-            )
+            .read(req.body(axum::body::Body::empty()).unwrap())
             .await;
         Finished {
             status: reply.status,
@@ -359,6 +401,10 @@ fn refused(f: &Finished, message: &str) {
 
 const DIDNT_WORK: &str = "Single sign-on didn't work. Try again.";
 const EXPIRED: &str = "That sign-in expired. Try again.";
+const ANOTHER_BROWSER: &str = "That sign-in didn't start in this browser. Try again.";
+const NO_ACCOUNT: &str =
+    "There's no account here for you yet: ask an admin to add one with your email address.";
+const NOT_LET_IN: &str = "Your account at the sign-in provider isn't one this install lets in.";
 
 // --- The tests ------------------------------------------------------------------------------------------------
 
@@ -481,10 +527,10 @@ async fn a_sign_in_finishes_once_and_only_with_its_own_state() {
     );
     // Replaying the same reply (code and state) is refused: the state was used up.
     refused(&app.finish(&state, Alg::Rs256, claims).await, EXPIRED);
-    // So is a state mise never issued.
+    // So is a state mise never issued (no browser started it).
     refused(
         &app.finish("made-up-state", Alg::Rs256, alice(&[])).await,
-        EXPIRED,
+        ANOTHER_BROWSER,
     );
     // And a reply with no code.
     let reply = app
@@ -513,4 +559,88 @@ async fn a_turned_off_account_cannot_sign_in() {
         &app.sign_in(Alg::EdDsa, alice(&[])).await,
         "This account is turned off.",
     );
+}
+
+#[tokio::test]
+async fn a_sign_in_finishes_only_in_the_browser_that_started_it() {
+    // Mallory starts a sign-in to her own account, then gets Bob's browser to open the reply: without the cookie
+    // her browser holds, Bob's browser is refused, and isn't signed in to her account.
+    let app = test_app!(Sso::new());
+    let (state, nonce) = app.begin("/plan").await;
+    let mallory = json!({"sub": "mallory", "preferred_username": "mallory"});
+    let claims = app.claims(&nonce, mallory);
+    refused(
+        &app.finish_in(None, &state, Alg::Rs256, claims.clone())
+            .await,
+        ANOTHER_BROWSER,
+    );
+    // Another sign-in's cookie is no better.
+    let (other, _) = app.begin("/plan").await;
+    let others = app.browser.lock().unwrap()[&other].clone();
+    refused(
+        &app.finish_in(Some(&others), &state, Alg::Rs256, claims.clone())
+            .await,
+        ANOTHER_BROWSER,
+    );
+    assert_eq!(app.users().await, 0);
+    // Her own browser still finishes it.
+    signed_in(&app.finish(&state, Alg::Rs256, claims).await, "/plan");
+}
+
+#[tokio::test]
+async fn by_default_only_people_with_an_account_sign_in() {
+    let app = test_app!(Sso::with(None, false));
+    // A stranger the provider vouches for gets no account.
+    refused(&app.sign_in(Alg::Rs256, alice(&[])).await, NO_ACCOUNT);
+    assert_eq!(app.users().await, 0);
+
+    // One an admin added, by the email the provider vouches for, signs in to it.
+    let admin = app.setup_owner().await;
+    let cook = app
+        .json(
+            "POST",
+            "/api/v1/users",
+            &admin,
+            Some(json!({"username": "alice", "email": "alice@example.test"})),
+        )
+        .await;
+    let cookie = signed_in(&app.sign_in(Alg::Rs256, alice(&[])).await, "/plan");
+    let me = app.json("GET", "/api/v1/me", &cookie, None).await;
+    assert_eq!(me["id"], cook["id"]);
+}
+
+#[tokio::test]
+async fn an_allowed_group_decides_who_signs_in() {
+    let app = test_app!(Sso::with(Some("mise-users"), false));
+    refused(
+        &app.sign_in(Alg::Rs256, alice(&["cooks"])).await,
+        NOT_LET_IN,
+    );
+    assert_eq!(app.users().await, 0);
+    // A member gets an account; so does an admin-group member.
+    signed_in(
+        &app.sign_in(Alg::Rs256, alice(&["mise-users"])).await,
+        "/plan",
+    );
+    let bea = json!({"sub": "bea-1", "preferred_username": "bea", "groups": ["mise-admins"]});
+    signed_in(&app.sign_in(Alg::Rs256, bea).await, "/plan");
+    assert_eq!(app.users().await, 2);
+    // Leaving the group at the provider ends signing in.
+    refused(&app.sign_in(Alg::Rs256, alice(&[])).await, NOT_LET_IN);
+}
+
+#[tokio::test]
+async fn an_admins_email_never_links_to_a_sign_on() {
+    let app = test_app!(Sso::new());
+    app.setup_owner().await;
+    sqlx::query("UPDATE users SET email = 'owner@example.test' WHERE is_admin")
+        .execute(&app.pool)
+        .await
+        .unwrap();
+    let claimant = json!({"sub": "x-1", "email": "owner@example.test", "email_verified": true, "preferred_username": "owner"});
+    refused(
+        &app.sign_in(Alg::Rs256, claimant).await,
+        "That email address belongs to an admin account, which single sign-on doesn't take over: sign in with its password.",
+    );
+    assert_eq!(app.users().await, 1);
 }
