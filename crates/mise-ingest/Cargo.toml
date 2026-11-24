@@ -12,7 +12,6 @@ hex = "0.4.3"
 html5ever = "0.40.1"
 image = { version = "0.25.8", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 mise-core = { version = "0.1.0", path = "../mise-core" }
-mise-db = { version = "0.1.0", path = "../mise-db" }
 rayon = "1.12.0"
 # Fetching a page to import. The same build of reqwest single sign-on already uses: rustls, no system proxy.
 reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls"] }

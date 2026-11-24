@@ -1742,11 +1742,9 @@ dependencies = [
 name = "mise-core"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "regex",
  "serde",
  "serde_json",
- "thiserror 2.0.21",
  "uuid",
 ]
 
@@ -1755,7 +1753,6 @@ name = "mise-db"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "mise-core",
  "sqlx",
  "tracing",
 ]
@@ -1770,7 +1767,6 @@ dependencies = [
  "html5ever",
  "image",
  "mise-core",
- "mise-db",
  "rayon",
  "reqwest",
  "serde",
