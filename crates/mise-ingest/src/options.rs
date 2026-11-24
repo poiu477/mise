@@ -18,11 +18,11 @@ use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Datelike, Utc};
 use mise_core::proteins::{ounces, protein_of};
 use mise_core::text::normalize_name;
 use serde_json::json;
 use sqlx::PgPool;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 /// A protein amount this many times the dish's usual amount counts as a double portion.
@@ -54,7 +54,7 @@ struct VariantRow {
     id: Uuid,
     dish_id: Uuid,
     title: String,
-    published: Option<DateTime<Utc>>,
+    published: Option<OffsetDateTime>,
     is_default: bool,
 }
 

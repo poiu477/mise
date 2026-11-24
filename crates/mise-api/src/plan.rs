@@ -1,8 +1,8 @@
 //! The household's weekly plan: dishes with a chosen version and serving count.
 
 use axum::{Extension, Json, extract::State};
-use chrono::{Datelike, Days, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
+use time::{Date, OffsetDateTime};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -18,13 +18,13 @@ use crate::{
 #[derive(Deserialize, IntoParams)]
 pub struct WeekParams {
     /// Any day in the week (default: today).
-    pub week: Option<NaiveDate>,
+    pub week: Option<Date>,
 }
 
 /// The Monday of the week holding `day`, today when none is given. Weeks are stored by their Monday.
-pub fn monday(day: Option<NaiveDate>) -> NaiveDate {
-    let d = day.unwrap_or_else(|| Utc::now().date_naive());
-    d - Days::new(d.weekday().num_days_from_monday().into())
+pub fn monday(day: Option<Date>) -> Date {
+    let d = day.unwrap_or_else(|| OffsetDateTime::now_utc().date());
+    d - time::Duration::days(d.weekday().number_days_from_monday().into())
 }
 
 #[derive(Serialize, ToSchema)]
@@ -43,7 +43,7 @@ pub struct PlanEntry {
 #[derive(Serialize, ToSchema)]
 pub struct Plan {
     /// The Monday.
-    pub week: NaiveDate,
+    pub week: Date,
     pub entries: Vec<PlanEntry>,
 }
 
@@ -60,7 +60,7 @@ type EntryRow = (
 
 /// A week's plan, with only the versions the household can see: one it can no longer see drops out rather than
 /// showing another household's recipe.
-async fn load(s: &AppState, household: Uuid, week: NaiveDate) -> ApiResult<Plan> {
+async fn load(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan> {
     let rows: Vec<EntryRow> = sqlx::query_as(
         "SELECT e.id, e.variant_id, d.slug, v.title, v.subtitle, e.servings::float8,
                 ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id ORDER BY y.servings),
@@ -119,7 +119,7 @@ pub async fn get(
 #[derive(Deserialize, ToSchema)]
 pub struct NewEntry {
     /// Any day in the week (default: today).
-    pub week: Option<NaiveDate>,
+    pub week: Option<Date>,
     pub variant_id: Uuid,
     /// Default: 2 where published, else the smallest published size.
     pub servings: Option<f64>,
@@ -195,7 +195,7 @@ pub async fn update(
     JsonBody(b): JsonBody<EntryChange>,
 ) -> ApiResult<Json<Plan>> {
     check_servings(b.servings)?;
-    let week: NaiveDate = sqlx::query_scalar("UPDATE plan_entries SET servings = $3::float8::numeric WHERE id = $1 AND household_id = $2 RETURNING week")
+    let week: Date = sqlx::query_scalar("UPDATE plan_entries SET servings = $3::float8::numeric WHERE id = $1 AND household_id = $2 RETURNING week")
         .bind(id)
         .bind(me.household_id)
         .bind(b.servings)
@@ -221,7 +221,7 @@ pub async fn remove(
     Extension(me): Extension<CurrentUser>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Plan>> {
-    let week: NaiveDate = sqlx::query_scalar(
+    let week: Date = sqlx::query_scalar(
         "DELETE FROM plan_entries WHERE id = $1 AND household_id = $2 RETURNING week",
     )
     .bind(id)
@@ -238,9 +238,9 @@ mod tests {
 
     #[test]
     fn weeks_start_on_monday() {
-        let d = |y, m, dd| NaiveDate::from_ymd_opt(y, m, dd);
-        assert_eq!(monday(d(2026, 11, 1)), d(2026, 10, 26).unwrap()); // a Sunday
-        assert_eq!(monday(d(2026, 11, 2)), d(2026, 11, 2).unwrap()); // a Monday
-        assert_eq!(monday(d(2026, 1, 1)), d(2025, 12, 29).unwrap()); // across a year
+        use time::macros::date;
+        assert_eq!(monday(Some(date!(2026 - 11 - 01))), date!(2026 - 10 - 26)); // a Sunday
+        assert_eq!(monday(Some(date!(2026 - 11 - 02))), date!(2026 - 11 - 02)); // a Monday
+        assert_eq!(monday(Some(date!(2026 - 01 - 01))), date!(2025 - 12 - 29)); // across a year
     }
 }

@@ -16,12 +16,12 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
 use mise_core::dish_titles::{clean_title, core_similarity, protein_core, title_key};
 use mise_core::proteins::protein_of;
 use mise_core::text::{normalize_name, slugify};
 use serde_json::json;
 use sqlx::PgPool;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 /// Title similarity (Sørensen–Dice on letter pairs) and shipped-ingredient overlap a renamed copy needs to
@@ -86,7 +86,7 @@ struct V {
     content_type: String,
     has_steps: bool,
     has_hero: bool,
-    published: Option<chrono::DateTime<chrono::Utc>>,
+    published: Option<OffsetDateTime>,
     /// The household that owns the version; none for seed and bundle versions, which everyone sees.
     household_id: Option<Uuid>,
 }
@@ -151,7 +151,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     .await
     .context("loading pinned versions")?;
     // Deleting a dish below drops its retired slugs (they cascade), so they are written back at the end.
-    let old_retired: Vec<(String, Uuid, DateTime<Utc>)> = sqlx::query_as(
+    let old_retired: Vec<(String, Uuid, OffsetDateTime)> = sqlx::query_as(
         "SELECT r.slug, r.dish_id, r.retired_at FROM retired_slugs r JOIN dishes d ON d.id = r.dish_id WHERE d.origin = 'grouped'",
     )
     .fetch_all(&mut *tx)
@@ -499,8 +499,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
             .expect("components are never empty");
         // The dish is named by its most common cleaned title (ties go to the most recent), not by whichever
         // version happens to be the default: that one may be a protein swap or carry a word like "Organic".
-        let mut counts: HashMap<String, (usize, Option<chrono::DateTime<chrono::Utc>>)> =
-            HashMap::new();
+        let mut counts: HashMap<String, (usize, Option<OffsetDateTime>)> = HashMap::new();
         for &m in named_by {
             let e = counts.entry(clean_title(&vs[m].title)).or_default();
             e.0 += votes(m);
@@ -627,7 +626,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     // 5. Retired slugs: those from before, following their dish to its heir, then the previous slug of every dish
     //    that changed its slug or joined another dish (a newer retirement replaces an older one). A slug a live
     //    dish holds is never kept retired, so the live dish always answers to it.
-    let mut retired: HashMap<String, (Uuid, Option<DateTime<Utc>>)> = HashMap::new();
+    let mut retired: HashMap<String, (Uuid, Option<OffsetDateTime>)> = HashMap::new();
     for (slug, d, at) in old_retired {
         if let Some(&c) = heir.get(&d) {
             retired.insert(slug, (made[c].0, Some(at)));

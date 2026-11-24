@@ -14,9 +14,9 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use time::OffsetDateTime;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -131,12 +131,16 @@ pub(super) async fn me(pool: &PgPool, id: Uuid) -> ApiResult<super::routes::Me> 
 pub struct KitchenToken {
     pub id: Uuid,
     pub name: String,
-    pub created_at: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
     /// When its link was opened on the device; null while the link waits.
-    pub linked_at: Option<DateTime<Utc>>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub linked_at: Option<OffsetDateTime>,
     /// When an unopened link stops working; null once it has been opened.
-    pub link_expires_at: Option<DateTime<Utc>>,
-    pub last_used_at: Option<DateTime<Utc>>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub link_expires_at: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub last_used_at: Option<OffsetDateTime>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -157,10 +161,10 @@ pub struct NewKitchenToken {
 type Row = (
     Uuid,
     String,
-    DateTime<Utc>,
-    Option<DateTime<Utc>>,
-    Option<DateTime<Utc>>,
-    Option<DateTime<Utc>>,
+    OffsetDateTime,
+    Option<OffsetDateTime>,
+    Option<OffsetDateTime>,
+    Option<OffsetDateTime>,
 );
 
 fn info((id, name, created_at, linked_at, link_expires_at, last_used_at): Row) -> KitchenToken {
