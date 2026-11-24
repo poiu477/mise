@@ -78,18 +78,6 @@ status.md if it changed either.
 - **Done when:** a test per format imports its fixture to the expected records; a browser journey uploads one file
   and opens the dish.
 
-### T30 · Forks: your own version of any dish
-
-- "Make my own version" on any version you can see copies it into the household (`parent_variant_id` keeps the
-  lineage, and the dish page names the original and its author) and opens it in the editor
-  (`web/src/pages/EditorPage.tsx`, which edits any version the dish page marks `editable`). A fork joins the same
-  dish as one of its versions, pinned there as a written recipe is pinned in its own.
-- **Touches:** `crates/mise-api/src/`, `web/src/`.
-- **Needs:** T29.
-- **Done when:** API tests fork a seed version and one of the household's own, and show the original is unchanged
-  and the fork belongs to the forking household; a browser journey forks, edits an amount, and sees both versions on
-  the dish page.
-
 ### T31 · Sharing between households
 
 As the design has it: each household sets a default visibility for the recipes and forks it makes, and any one can
@@ -163,9 +151,9 @@ Phase 3, still to build:
 - Nextcloud Tasks (the list as CalDAV to-dos) and Calendar (the plan as events or an iCal feed).
 - Days in the plan (meals belong to a week today).
 
-Phase 4, kitchen and imports, is broken into T22 to T33 under Ready: import from files, forks and sharing are left
-(recipes owned by a household, T22, kitchen mode, T24, import from a link, T26, writing recipes and the editor, T28
-and T29, review queues in the web app, T32, and printable cards, T33, are done). Its gate, T24's kitchen journey
-and T25's 20 sample pages, passes.
+Phase 4, kitchen and imports, is broken into T22 to T33 under Ready: import from files and sharing are left (recipes
+owned by a household, T22, kitchen mode, T24, import from a link, T26, writing recipes and the editor, T28 and T29,
+forks, T30, review queues in the web app, T32, and printable cards, T33, are done). Its gate, T24's kitchen journey and
+T25's 20 sample pages, passes.
 
 Break a phase item into Ready tasks, in the shape above, before starting it.

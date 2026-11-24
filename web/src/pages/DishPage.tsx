@@ -13,6 +13,7 @@ import {
   type Selection,
 } from "../choose";
 import { AddToPlan } from "../components/AddToPlan";
+import { OwnVersion } from "../components/OwnVersion";
 import { Servings } from "../components/Servings";
 import { StepText } from "../components/StepText";
 import { allergens, difficulty, minutes } from "../recipe";
@@ -145,6 +146,19 @@ export function DishPage() {
           <p className="sub">{v?.subtitle ?? chosen.subtitle}</p>
         )}
         {chosen.title !== dish.title && <p className="meta">This version: {chosen.title}</p>}
+        {chosen.original && (
+          <p className="meta">
+            {chosen.editable ? "Your own version of " : "Made from "}
+            <button
+              type="button"
+              className="link"
+              onClick={() => update(() => ({ v: chosen.original!.id }))}
+            >
+              {chosen.original.title}
+            </button>
+            {chosen.original.by && `, from ${chosen.original.by}`}
+          </p>
+        )}
         <p className="meta">
           {[prep && `${prep} min`, difficulty(v?.meta.difficulty), year(chosen.published_at)]
             .filter(Boolean)
@@ -197,6 +211,7 @@ export function DishPage() {
           Print a recipe card
         </Link>
         {chosen.editable && <Link to={`/recipes/${chosen.id}/edit`}>Edit recipe</Link>}
+        <OwnVersion variantId={chosen.id} />
       </p>
       {v && !v.official && <ScaledNotice v={v} servings={servings} />}
 
@@ -286,6 +301,7 @@ export function DishPage() {
                   <span>{x.title}</span>
                   <span className="meta">
                     {[
+                      x.editable && "yours",
                       year(x.published_at),
                       x.yields.length && `serves ${x.yields.join("/")}`,
                       !x.has_steps && "no steps",

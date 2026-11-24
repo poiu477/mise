@@ -1,8 +1,8 @@
 // The household's journeys through mise in a real browser, on the demo recipes (fixtures/demo-bundle), from an
-// empty install: first-run setup, cooking at any serving count, an old dish address, writing a recipe, printing a
-// recipe card, answering the review queue, planning a week, shopping (offline too), importing a recipe from a
-// link, a kitchen screen, phone layout, accessibility and signing out. They run in order and share
-// one browser session, as a person would.
+// empty install: first-run setup, cooking at any serving count, an old dish address, writing a recipe, making the
+// household's own version of a dish, printing a recipe card, answering the review queue, planning a week, shopping
+// (offline too), importing a recipe from a link, a kitchen screen, phone layout, accessibility and signing out. They
+// run in order and share one browser session, as a person would.
 //
 // The browser is in New York on a Sunday evening, when the date by UTC is already Monday. The app plans and shops
 // the week by the viewer's own calendar, while the server, asked for no week, answers for its own by UTC. So in
@@ -185,7 +185,7 @@ test("a recipe is written from nothing, corrected, photographed, cooked at anoth
   await page.getByRole("button", { name: "Save recipe" }).click();
 
   // Saved, it is a dish like any other, with its photo.
-  await expect(page).toHaveURL(/\/dishes\/garlic-toast$/);
+  await expect(page).toHaveURL(/\/dishes\/garlic-toast\?v=[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Garlic Toast");
   const hero = page.locator(".hero img");
   await expect(hero).toHaveAttribute("src", /\/api\/v1\/media\/[0-9a-f-]+\/1200$/);
@@ -209,7 +209,7 @@ test("a recipe is written from nothing, corrected, photographed, cooked at anoth
   await expect(readingOf("hard cheese").locator(".food")).toHaveText("Parmesan");
   await page.getByLabel("Title", { exact: true }).fill("Garlic Cheese Toast");
   await page.getByRole("button", { name: "Save recipe" }).click();
-  await expect(page).toHaveURL(/\/dishes\/garlic-cheese-toast$/);
+  await expect(page).toHaveURL(/\/dishes\/garlic-cheese-toast\?v=[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Garlic Cheese Toast");
   await page.goto("/dishes/garlic-toast");
   await expect(page).toHaveURL(/\/dishes\/garlic-cheese-toast$/);
@@ -221,6 +221,46 @@ test("a recipe is written from nothing, corrected, photographed, cooked at anoth
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/dishes/garlic-cheese-toast");
   await expect(page.getByText("No such dish.")).toBeVisible();
+});
+
+test("the household makes its own version of a dish, changes it, and keeps both", async () => {
+  await page.goto("/dishes/weeknight-tomato-pasta");
+  await expect(amountOf("Spaghetti")).toHaveText("6 oz");
+  await page.getByRole("button", { name: "Make my own version" }).click();
+
+  // The copy opens in the editor with its lines written out, ready to change.
+  await expect(page.getByRole("heading", { name: "Edit recipe" })).toBeVisible();
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Weeknight Tomato Pasta");
+  const lines = page.getByLabel("Ingredients");
+  await expect(lines).toHaveValue(/^6 oz Spaghetti\n1 can Crushed Tomatoes\n/);
+  await lines.fill((await lines.inputValue()).replace("6 oz Spaghetti", "8 oz Spaghetti"));
+  await expect(readingOf("Spaghetti").locator(".reading")).toHaveText("8 oz · Spaghetti");
+  await page.getByRole("button", { name: "Save recipe" }).click();
+
+  // Saved, the dish shows the household's version, naming the one it came from, and has both.
+  await expect(page).toHaveURL(/\/dishes\/weeknight-tomato-pasta\?v=[0-9a-f-]+$/);
+  await expect(amountOf("Spaghetti")).toHaveText("8 oz");
+  await expect(page.getByText("Your own version of")).toBeVisible();
+  await page.getByText("All 2 versions").click();
+  const versions = page.locator(".history li");
+  await expect(versions).toHaveCount(2);
+  await expect(versions.filter({ hasText: "yours" })).toHaveCount(1);
+
+  // The original is as it was.
+  await versions.filter({ hasNotText: "yours" }).getByRole("button").click();
+  await expect(amountOf("Spaghetti")).toHaveText("6 oz");
+  await expect(page.getByText("Your own version of")).toBeHidden();
+  await expect(page.getByRole("link", { name: "Edit recipe" })).toBeHidden();
+
+  // Deleted, the copy is gone, and the journeys after this one start from the demo recipes alone.
+  await versions.filter({ hasText: "yours" }).getByRole("button").click();
+  await page.getByRole("link", { name: "Edit recipe" }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete recipe" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/dishes/weeknight-tomato-pasta");
+  await expect(page.getByText(/All \d+ versions/)).toBeHidden();
+  await expect(amountOf("Spaghetti")).toHaveText("6 oz");
 });
 
 test("a serving count the server refuses says why, on the dish page and its card", async () => {

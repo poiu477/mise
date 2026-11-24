@@ -36,7 +36,8 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
   `preferred_versions` (how often each version was had) steer grouping and the default version. `retired_slugs` keep
   the addresses a dish used to have, so a renamed dish still opens from an old link. A recipe written in the app
   is a variant with `origin = 'user'` and no source record, in a dish of its own (`dishes.origin = 'user'`, the
-  variant `dish_pinned`), which grouping leaves alone.
+  variant `dish_pinned`), which grouping leaves alone. A fork, the household's own version of another, is the same
+  kind of variant in the original's dish, pinned there, with `parent_variant_id` naming the original.
 - **Ingredients.** Each `ingredient_line` belongs to a variant and points at one `food`; `line_amounts` hold its
   amount at each published yield. `shipped = false` marks pantry lines (salt, oil) the household is expected to have.
   `text` keeps a line as it was typed ("2 cups flour, sifted") for a recipe written in the app.
