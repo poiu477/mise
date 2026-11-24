@@ -2,7 +2,7 @@
 //! and a note. Recipes typed into the app and lines imported from web pages come as one text; the rest of mise
 //! works on the parts.
 
-use crate::quantity::{Unit, parse_number};
+use crate::quantity::{Quantity, Unit, format_exact, parse_number};
 
 /// One ingredient line, read. "1 (14 oz) can diced tomatoes, drained" is 1 can of "diced tomatoes", with the note
 /// "14 oz; drained".
@@ -40,6 +40,22 @@ impl Line {
             }
             .to_string()
         })
+    }
+
+    /// The line written out as a cook would type it, which `parse` reads back to the same line: "1¼ cups flour,
+    /// sifted", "2 cloves garlic", "3 eggs", "salt, to taste". The amount is kept as it is ("1.3 cups"), not
+    /// rounded to a kitchen measure. A copy of a version opens in the editor as these.
+    pub fn text(&self) -> String {
+        let mut text = match (self.amount, &self.unit) {
+            (Some(a), Some(u)) => format!("{} {}", Quantity::new(a, u.clone()).exact(), self.name),
+            (Some(a), None) => format!("{} {}", format_exact(a), self.name),
+            (None, _) => self.name.clone(),
+        };
+        if let Some(note) = self.note.as_deref().filter(|n| !n.is_empty()) {
+            text.push_str(", ");
+            text.push_str(note);
+        }
+        text
     }
 }
 
@@ -618,6 +634,66 @@ mod tests {
             "1 to taste",
         ] {
             parse(text);
+        }
+    }
+
+    /// A line built from stored parts, as a copied version's lines are.
+    fn stored(amount: Option<f64>, unit: Option<&str>, name: &str, note: Option<&str>) -> Line {
+        Line {
+            amount,
+            unit: amount.and(unit).and_then(Unit::parse),
+            name: name.to_string(),
+            note: note.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn a_line_written_out_reads_back_the_same() {
+        for (line, text) in [
+            (
+                stored(Some(1.25), Some("cup"), "flour", Some("sifted")),
+                "1¼ cups flour, sifted",
+            ),
+            (
+                stored(Some(2.0), Some("clove"), "garlic", None),
+                "2 cloves garlic",
+            ),
+            (
+                stored(Some(3.0), Some("unit"), "large eggs", None),
+                "3 large eggs",
+            ),
+            (
+                stored(Some(1.5), Some("tablespoon"), "olive oil", None),
+                "1½ TBSP olive oil",
+            ),
+            (
+                stored(Some(0.75), Some("teaspoon"), "ground cumin", None),
+                "¾ tsp ground cumin",
+            ),
+            (
+                stored(Some(6.0), Some("ounce"), "spaghetti", None),
+                "6 oz spaghetti",
+            ),
+            (
+                stored(Some(1.3), Some("cup"), "stock", None),
+                "1.3 cups stock",
+            ),
+            (
+                stored(Some(1.0), Some("can"), "chickpeas", Some("drained")),
+                "1 can chickpeas, drained",
+            ),
+            (
+                stored(Some(1.0), Some("pinch"), "chili flakes", None),
+                "1 pinch chili flakes",
+            ),
+            (
+                stored(None, None, "salt", Some("to taste")),
+                "salt, to taste",
+            ),
+            (stored(None, None, "fresh basil", None), "fresh basil"),
+        ] {
+            assert_eq!(line.text(), text);
+            assert_eq!(parse(text), line, "{text:?} reads back differently");
         }
     }
 }

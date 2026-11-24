@@ -742,6 +742,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/variants/{id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make the household's own version of any version it can see, a published one or one of its own: a copy it can
+         *     change, on the same dish, with the same option values, naming the version it came from. The copy is written for
+         *     one serving count, the smallest the original was published for, and every other count is worked out from it,
+         *     as for a recipe written in the app. Its lines open in the editor as text ("1¼ cups flour, sifted") and keep their
+         *     foods, allergens and pantry marks; its photo is the original's. Answers with the copy as `GET
+         *     /api/v1/recipes/{id}` would, ready to edit.
+         */
+        post: operations["fork_variant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1081,6 +1105,14 @@ export interface components {
             password?: string | null;
             username: string;
         };
+        /** @description The version a fork was made from. */
+        Original: {
+            /** @description Who it is by: the source it was published or imported from, or the household that wrote it. */
+            by?: string | null;
+            /** Format: uuid */
+            id: string;
+            title: string;
+        };
         PasswordChange: {
             /** @description Required when the account already has a password. */
             current?: string | null;
@@ -1382,6 +1414,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             image?: components["schemas"]["Image"] | null;
+            original?: components["schemas"]["Original"] | null;
             /** Format: date-time */
             published_at?: string | null;
             subtitle?: string | null;
@@ -4855,6 +4888,82 @@ export interface operations {
             };
             /** @description Not signed in: no session or token, or one that has ended */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such version, or not one this household can see */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    fork_variant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The household's own copy, stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            /** @description The id isn't a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

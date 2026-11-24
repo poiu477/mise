@@ -4,7 +4,9 @@
 //! dish, or when separate lineages share the same cleaned title and subtitle. Copies that look like a recipe
 //! reused as a template for a different dish are left apart and queued for review. Decisions recorded in
 //! `dish_decisions` override all of this: decided merges are applied last, and decided pairs are not queued
-//! again. Variants pinned by a person, and dishes a person made, are never touched.
+//! again. Dishes a person made are never touched, and nor is where a person pinned a version: a household's own
+//! version of a published one (a fork) is pinned in the original's dish, and after every run it is in whatever that
+//! dish became, or in a dish of its own when nothing of that dish is left.
 //!
 //! A household's own imported versions group like any others, with one limit: they may join a dish everyone sees, but
 //! never a dish only another household can see. A dish everyone sees takes its name and the version it opens on from
@@ -140,6 +142,14 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         old_dish.insert(v, d);
         old_slug.insert(d, slug);
     }
+    // Forks pinned in a grouped dish are set aside while it is rebuilt, and put back in whatever it becomes.
+    let pinned: Vec<(Uuid, Uuid, String, Option<String>, String)> = sqlx::query_as(
+        "SELECT v.id, v.dish_id, v.title, v.subtitle, d.content_type::text FROM variants v
+         JOIN dishes d ON d.id = v.dish_id WHERE d.origin = 'grouped' AND v.dish_pinned",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .context("loading pinned versions")?;
     // Deleting a dish below drops its retired slugs (they cascade), so they are written back at the end.
     let old_retired: Vec<(String, Uuid, DateTime<Utc>)> = sqlx::query_as(
         "SELECT r.slug, r.dish_id, r.retired_at FROM retired_slugs r JOIN dishes d ON d.id = r.dish_id WHERE d.origin = 'grouped'",
@@ -149,7 +159,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     .context("loading retired slugs")?;
 
     // Start over for everything the job owns.
-    sqlx::query("UPDATE variants v SET dish_id = NULL FROM dishes d WHERE d.id = v.dish_id AND d.origin = 'grouped' AND NOT v.dish_pinned")
+    sqlx::query("UPDATE variants v SET dish_id = NULL FROM dishes d WHERE d.id = v.dish_id AND d.origin = 'grouped'")
         .execute(&mut *tx)
         .await?;
     sqlx::query("UPDATE dishes SET default_variant_id = NULL WHERE origin = 'grouped'")
@@ -165,7 +175,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let vs: Vec<V> = sqlx::query_as(
         "SELECT id, title, subtitle, parent_variant_id, coalesce(meta->>'content_type', 'recipe') AS content_type,
                 has_steps, (meta->'media'->>'hero') IS NOT NULL AS has_hero, published_at AS published, household_id
-         FROM variants WHERE dish_id IS NULL ORDER BY id",
+         FROM variants WHERE dish_id IS NULL AND NOT dish_pinned ORDER BY id",
     )
     .fetch_all(&mut *tx)
     .await?;
@@ -180,7 +190,7 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
     let rows: Vec<(Uuid, Uuid, String)> = sqlx::query_as(
         "SELECT il.variant_id, il.food_id, f.name FROM ingredient_lines il
          JOIN variants v ON v.id = il.variant_id JOIN foods f ON f.id = il.food_id
-         WHERE v.dish_id IS NULL AND il.shipped",
+         WHERE v.dish_id IS NULL AND NOT v.dish_pinned AND il.shipped",
     )
     .fetch_all(&mut *tx)
     .await?;
@@ -574,6 +584,45 @@ pub async fn group_dishes(pool: &PgPool) -> Result<GroupStats> {
         .execute(&mut *tx)
         .await
         .context("assigning variants")?;
+    for (v, old, title, subtitle, content_type) in pinned {
+        let dish = match heir.get(&old) {
+            Some(&c) => made[c].0,
+            // Nothing of its dish is left: it gets a dish of its own, as a recipe written in the app has.
+            None => {
+                let base = match slugify(&title) {
+                    s if s.is_empty() => "recipe".to_string(),
+                    s => s,
+                };
+                let mut slug = base.clone();
+                let mut n = 2;
+                while !slugs.insert(slug.clone()) {
+                    slug = format!("{base}-{n}");
+                    n += 1;
+                }
+                let id = Uuid::now_v7();
+                sqlx::query(
+                    "INSERT INTO dishes (id, title, subtitle, slug, content_type, default_variant_id, origin)
+                     VALUES ($1, $2, $3, $4, $5::content_type, $6, 'user')",
+                )
+                .bind(id)
+                .bind(&title)
+                .bind(&subtitle)
+                .bind(&slug)
+                .bind(&content_type)
+                .bind(v)
+                .execute(&mut *tx)
+                .await
+                .context("giving a fork a dish of its own")?;
+                id
+            }
+        };
+        sqlx::query("UPDATE variants SET dish_id = $2 WHERE id = $1")
+            .bind(v)
+            .bind(dish)
+            .execute(&mut *tx)
+            .await
+            .context("putting a fork back in its dish")?;
+    }
 
     // 5. Retired slugs: those from before, following their dish to its heir, then the previous slug of every dish
     //    that changed its slug or joined another dish (a newer retirement replaces an older one). A slug a live

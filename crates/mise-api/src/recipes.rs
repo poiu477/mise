@@ -7,6 +7,9 @@
 //! sifted") and are read into an amount, a unit, a name and a note (`mise_core::ingredient_line`); each name is
 //! matched to a food exactly as an import's is, unless the request names the food. The line's text is kept, so
 //! reading the recipe back gives what was typed.
+//!
+//! A household can also make its own version of any version it can see (a fork): a written recipe like these, on
+//! the original's dish rather than one of its own, naming the original as its parent.
 
 use std::collections::HashMap;
 
@@ -19,6 +22,7 @@ use axum::{
 use mise_core::{
     food_names::singular_key,
     ingredient_line::{self, Line},
+    quantity::Unit,
     text::slugify,
 };
 use mise_ingest::media::{MAX_UPLOAD_PIXELS, UploadError};
@@ -385,6 +389,73 @@ async fn write_parts(
     Ok(())
 }
 
+/// What a line knows that the editor doesn't show: whether the kit shipped it, and its allergens. Kept by food, and
+/// by name for a line with no food yet.
+struct LineFacts {
+    food_id: Option<Uuid>,
+    name: String,
+    shipped: Option<bool>,
+    allergens: Vec<String>,
+}
+
+/// The facts of a version's lines that have any.
+async fn line_facts(
+    tx: &mut Transaction<'_, Postgres>,
+    variant: Uuid,
+) -> ApiResult<Vec<LineFacts>> {
+    Ok(
+        sqlx::query_as::<_, (Option<Uuid>, String, Option<bool>, Vec<String>)>(
+            "SELECT food_id, raw_name, shipped, allergens FROM ingredient_lines
+         WHERE variant_id = $1 AND (shipped IS NOT NULL OR allergens <> '{}') ORDER BY position",
+        )
+        .bind(variant)
+        .fetch_all(&mut **tx)
+        .await?
+        .into_iter()
+        .map(|(food_id, name, shipped, allergens)| LineFacts {
+            food_id,
+            name: singular_key(&name),
+            shipped,
+            allergens,
+        })
+        .collect(),
+    )
+}
+
+/// Gives each of a version's lines the facts of the line it replaces: the one for the same food, or with the same
+/// name when either has no food. Rewriting a recipe, or copying one, then keeps "Contains: milk" and which items
+/// come from the pantry for every ingredient still in it.
+async fn carry_facts(
+    tx: &mut Transaction<'_, Postgres>,
+    variant: Uuid,
+    facts: &[LineFacts],
+) -> ApiResult<()> {
+    if facts.is_empty() {
+        return Ok(());
+    }
+    let lines: Vec<(Uuid, Option<Uuid>, String)> =
+        sqlx::query_as("SELECT id, food_id, raw_name FROM ingredient_lines WHERE variant_id = $1")
+            .bind(variant)
+            .fetch_all(&mut **tx)
+            .await?;
+    for (id, food_id, name) in lines {
+        let name = singular_key(&name);
+        let same = |f: &&LineFacts| match (food_id, f.food_id) {
+            (Some(a), Some(b)) => a == b,
+            _ => f.name == name,
+        };
+        if let Some(f) = facts.iter().find(same) {
+            sqlx::query("UPDATE ingredient_lines SET shipped = $2, allergens = $3 WHERE id = $1")
+                .bind(id)
+                .bind(f.shipped)
+                .bind(&f.allergens)
+                .execute(&mut **tx)
+                .await?;
+        }
+    }
+    Ok(())
+}
+
 /// The recipe `id` as it was written, for the household that wrote it; not found for anyone else, and for a
 /// version that wasn't written in the app.
 async fn load(tx: &mut Transaction<'_, Postgres>, id: Uuid, household: Uuid) -> ApiResult<Recipe> {
@@ -583,6 +654,7 @@ pub async fn update(
     .bind(recipe.content_hash())
     .execute(&mut *tx)
     .await?;
+    let facts = line_facts(&mut tx, id).await?;
     // Amounts go with their lines, and a step's photos with the step.
     for delete in [
         "DELETE FROM variant_yields WHERE variant_id = $1",
@@ -619,7 +691,140 @@ pub async fn update(
         }
     }
     write_parts(&mut tx, id, &recipe).await?;
+    carry_facts(&mut tx, id, &facts).await?;
     let stored = load(&mut tx, id, me.household_id).await?;
+    tx.commit().await?;
+    Ok(Json(stored))
+}
+
+/// Make the household's own version of any version it can see, a published one or one of its own: a copy it can
+/// change, on the same dish, with the same option values, naming the version it came from. The copy is written for
+/// one serving count, the smallest the original was published for, and every other count is worked out from it,
+/// as for a recipe written in the app. Its lines open in the editor as text ("1¼ cups flour, sifted") and keep their
+/// foods, allergens and pantry marks; its photo is the original's. Answers with the copy as `GET
+/// /api/v1/recipes/{id}` would, ready to edit.
+#[utoipa::path(
+    post, path = "/api/v1/variants/{id}/fork", operation_id = "fork_variant", tag = "recipes", params(("id" = Uuid, Path)),
+    responses(
+        (status = 200, description = "The household's own copy, stored", body = Recipe),
+        (status = 400, description = "The id isn't a UUID", body = crate::error::ErrorBody),
+        (status = 404, description = "No such version, or not one this household can see", body = crate::error::ErrorBody),
+        crate::error::SignedIn,
+        crate::error::ReadOnlyToken
+    )
+)]
+pub async fn fork(
+    State(s): State<AppState>,
+    Extension(me): Extension<CurrentUser>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<Recipe>> {
+    let mut tx = s.pool.begin().await?;
+    take_turn(&mut tx).await?;
+    // Nutrition is left behind: it stops being true at the first change.
+    type Source = (
+        Uuid,
+        String,
+        Option<String>,
+        Option<String>,
+        serde_json::Value,
+        Option<f64>,
+    );
+    let (dish, title, subtitle, description, meta, servings): Source = sqlx::query_as(
+        "SELECT v.dish_id, v.title, v.subtitle, v.description, v.meta - 'nutrition',
+                (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id)
+         FROM variants v WHERE v.id = $1 AND v.dish_id IS NOT NULL AND visible_to(v, $2)",
+    )
+    .bind(id)
+    .bind(me.household_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+    // A version without amounts has no yield; its copy is written for two, the size a dish page opens at.
+    let servings = servings.unwrap_or(2.0);
+    type LineRow = (
+        String,
+        Option<String>,
+        Option<Uuid>,
+        Option<String>,
+        Option<f64>,
+        Option<String>,
+    );
+    let lines = sqlx::query_as::<_, LineRow>(
+        "SELECT il.raw_name, il.note, il.food_id, il.text, la.amount::float8, la.unit
+         FROM ingredient_lines il
+         LEFT JOIN line_amounts la ON la.line_id = il.id AND la.servings = $2::float8::numeric
+         WHERE il.variant_id = $1 ORDER BY il.position",
+    )
+    .bind(id)
+    .bind(servings)
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .map(|(name, note, food_id, text, amount, unit)| {
+        let read = Line {
+            amount,
+            unit: amount.and(unit.as_deref()).and_then(Unit::parse),
+            name,
+            note,
+        };
+        // A line typed into the app, or read from a page, keeps its words; any other is written out from its parts.
+        let text = text.unwrap_or_else(|| read.text());
+        CheckedLine {
+            text,
+            food_id,
+            read,
+        }
+    })
+    .collect();
+    let steps: Vec<String> =
+        sqlx::query_scalar("SELECT text FROM steps WHERE variant_id = $1 ORDER BY position")
+            .bind(id)
+            .fetch_all(&mut *tx)
+            .await?;
+    let recipe = Checked {
+        title,
+        subtitle,
+        description,
+        servings,
+        lines,
+        steps,
+    };
+    let facts = line_facts(&mut tx, id).await?;
+
+    let copy = Uuid::now_v7();
+    // Pinned to the dish, so grouping leaves it where it was made, as it leaves a written recipe.
+    sqlx::query(
+        "INSERT INTO variants (id, dish_id, dish_pinned, origin, parent_variant_id, household_id, title, subtitle,
+                               description, published_at, has_steps, meta, content_hash)
+         VALUES ($1, $2, true, 'user', $3, $4, $5, $6, $7, now(), $8, $9, $10)",
+    )
+    .bind(copy)
+    .bind(dish)
+    .bind(id)
+    .bind(me.household_id)
+    .bind(&recipe.title)
+    .bind(&recipe.subtitle)
+    .bind(&recipe.description)
+    .bind(!recipe.steps.is_empty())
+    .bind(meta)
+    .bind(recipe.content_hash())
+    .execute(&mut *tx)
+    .await?;
+    write_parts(&mut tx, copy, &recipe).await?;
+    carry_facts(&mut tx, copy, &facts).await?;
+    for copy_rows in [
+        "INSERT INTO variant_attributes (variant_id, key, value)
+         SELECT $2, key, value FROM variant_attributes WHERE variant_id = $1",
+        "INSERT INTO variant_media (variant_id, media_id, role, position)
+         SELECT $2, media_id, 'hero', 0 FROM variant_media WHERE variant_id = $1 AND role = 'hero' LIMIT 1",
+    ] {
+        sqlx::query(copy_rows)
+            .bind(id)
+            .bind(copy)
+            .execute(&mut *tx)
+            .await?;
+    }
+    let stored = load(&mut tx, copy, me.household_id).await?;
     tx.commit().await?;
     Ok(Json(stored))
 }

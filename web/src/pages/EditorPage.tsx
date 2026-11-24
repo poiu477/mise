@@ -174,7 +174,8 @@ function Editor({ recipe }: { recipe: Recipe | null }) {
       saved = gone.data;
     }
     await refresh();
-    navigate(`/dishes/${saved.dish_slug}`);
+    // Straight to the version just saved: a dish with others, as a copy's is, might otherwise open on another.
+    navigate(`/dishes/${saved.dish_slug}?v=${saved.id}`);
   };
 
   /** Deletes the recipe for good, after asking. */

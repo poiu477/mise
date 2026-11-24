@@ -42,8 +42,9 @@ impl Demo {
 
 /// `path` from the API document with its parameters filled in: a real dish and version where the route finds one,
 /// a made-up id elsewhere.
-fn fill(path: &str, version: &str) -> String {
-    let id = if path.contains("/variants/") {
+fn fill(path: &str, method: &str, version: &str) -> String {
+    // A version is read by its real id; anything that changes something (making a fork of it) gets a made-up one.
+    let id = if path.contains("/variants/") && method == "GET" {
         version
     } else {
         SOME_ID
@@ -95,13 +96,13 @@ async fn every_old_address_answers_as_its_new_one_and_says_it_is_deprecated() {
                 "{path} is documented outside /api/v1"
             );
             let reply = app
-                .send(&method, &fill(&path, &version), As::Nobody, None)
+                .send(&method, &fill(&path, &method, &version), As::Nobody, None)
                 .await;
             assert_eq!(deprecation(&reply), None, "{method} {path}");
             continue;
         };
-        let new = fill(&path, &version);
-        let old = format!("/api{}", fill(rest, &version));
+        let new = fill(&path, &method, &version);
+        let old = format!("/api{}", fill(rest, &method, &version));
         // Reads go as they are. Changes go with an empty body, refused alike at both addresses, or to a made-up id,
         // so neither call changes what the other sees. The token, unlike the cookie, survives signing out.
         let body = (method == "POST" || method == "PUT" || method == "PATCH").then(|| json!({}));
