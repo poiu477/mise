@@ -28,13 +28,82 @@ status.md if it changed either.
   image to the registry and creates the release; the test release and image are deleted afterwards. Syntax checks
   alone don't prove the release path.
 
+### T35 · Compile-time checked SQL in `mise-api`
+
+Today every query is a string that sqlx checks only when it runs, so a typo or a query the schema has moved away
+from fails only in the test that happens to run it.
+
+- Every query in `crates/mise-api/src/` becomes a checked macro (`query!`, `query_as!`, `query_scalar!`) against
+  `#[derive(sqlx::FromRow)]` row structs in place of tuple types. A query that must be built at run time (a dynamic
+  `ORDER BY`, a table named in a test) keeps the unchecked form with a comment saying why.
+- Commit the offline metadata (`.sqlx/`, from `cargo sqlx prepare --workspace`) so builds need no database:
+  `SQLX_OFFLINE=true` in the Docker build. `./check`, `.gitlab-ci.yml` and the mirror's `ci.yml` run `cargo sqlx
+  prepare --workspace --check`, so a query that no longer matches the migrations, or stale metadata, fails there.
+- Move each handler's SQL into a module for its domain (recipes, plans, shopping, accounts) beside the handlers, so
+  `recipes.rs` (1,122 lines) splits along what it does. Behaviour stays the same: no route, status or body changes.
+- Say in docs/development.md how to refresh `.sqlx/` after changing a query or a migration.
+- **Touches:** every file in `crates/mise-api/src/`, `.sqlx/`, `check`, `.gitlab-ci.yml`, `.github/workflows/ci.yml`,
+  `Dockerfile`, `docs/development.md`, `docs/architecture.md`.
+- **Needs:** nothing else in flight in `crates/mise-api/src/`: it runs alone.
+- **Done when:** `cargo sqlx prepare --workspace --check` passes in CI and `./check`; a test-only edit that renames a
+  column in one query (not committed) fails `cargo build` with no database; `grep -rn 'sqlx::query(' crates/mise-api/src`
+  finds only the commented exceptions; the API tests, `tests/responses.rs` and the generated `schema.d.ts` are
+  unchanged.
+
+### T36 · Brands as data
+
+The brands matching strips from ingredient names (`BRANDS` in `mise-core/src/food_names.rs`, 43 of them) are data
+kept in code, so adding one means a release. A name marked ® or ™ is already caught without the list.
+
+- Keep brands in the database (a new migration, seeded with today's 43), and let curation add and remove them:
+  `{"op": "brand", "name": "Old Bay"}` and `{"op": "unbrand", ...}` in the food curation file, as `mise food apply`
+  reads it (docs/curation.md). Food matching loads them once a run and passes them to `strip_brand`, which takes the
+  list as an argument; `mise-core` keeps the rules, not the words.
+- **Touches:** `crates/mise-core/src/food_names.rs`, `crates/mise-ingest/src/foods.rs` and `curate.rs`, a new
+  migration, `docs/curation.md`.
+- **Needs:** nothing.
+- **Done when:** `BRANDS` is gone from `mise-core`; a test adds a brand through a curation file and a line naming it
+  unmarked ("Smoky Hollow Paprika") then matches the unbranded food ("Paprika"), and removing it undoes that; the
+  pipeline snapshots (`MISE_UPDATE_SNAPSHOTS` not set) are unchanged.
+
+### T37 · Near-duplicate foods in the review queue
+
+Matching makes a new food for any name it doesn't recognise, and the review queue sees only the matches it was
+unsure of. Two foods that are one ("red onion", "red onions, diced") or a confident wrong match pass unseen.
+
+- After matching, pair the foods matching created (not ones a person made or curated) whose names are near: the
+  same after plural folding and note stripping, or above a similarity threshold (trigram, as `pg_trgm` scores it).
+  Raise each pair as a `food_duplicate` review item with the lines each covers, best first; its answers are `merge`
+  (into the one with more lines, or the other), `keep` (two foods), or `set_parent`, stored as the curation commands
+  store them, so a rebuild keeps the answer. A pair answered `keep` isn't raised again.
+- Report foods per 100 ingredient lines in the import stats and the pipeline snapshot, so a jump shows in review.
+- **Touches:** `crates/mise-ingest/src/foods.rs`, `crates/mise-api/src/review.rs`, `web/src/pages/ReviewPage.tsx`,
+  `fixtures/demo-bundle/snapshots/`, `docs/curation.md`.
+- **Needs:** T38 not in flight (both change the review queue).
+- **Done when:** a test with lines "2 red onions" and "1 red onion, diced" in different versions raises one
+  `food_duplicate` item, answering `merge` leaves one food covering both and survives `match-foods --reset`, and
+  `keep` stops it coming back; the web queue lists and answers it (a browser journey); the pipeline snapshot shows
+  foods per 100 lines.
+
+### T38 · Food swaps in the review queue
+
+Grouping raises `food_swap` items (one food replaced by another between a dish's versions: green beans for broccoli),
+but nothing records an answer, so the review page doesn't list them (status.md, Known issues).
+
+- List `food_swap` items in the API's queue and the web page, with their dishes and versions. Answers: `alias` (two
+  names for one food: a merge), `substitute` (a `food_relations` row of kind `substitute`, both ways), or `keep`
+  (unrelated), stored so a rebuild keeps them and a kept pair isn't raised again.
+- **Touches:** `crates/mise-api/src/review.rs`, `crates/mise-ingest/src/options.rs`, `web/src/pages/ReviewPage.tsx`,
+  `docs/curation.md`.
+- **Needs:** T37 not in flight.
+- **Done when:** API tests answer a swap each way and see the relation (or the merge) and that a kept pair isn't
+  raised again; a browser journey answers one from the review page; status.md's known issue about unlisted swaps is
+  gone.
+
 ## Needs a decision first
 
 Each of these waits on a question in status.md's "Open questions" or on Paul.
 
-- **Database code:** `#[derive(sqlx::FromRow)]` structs, compile-time checked queries with `.sqlx` committed, SQL
-  moved out of handlers into per-domain modules. It touches every file in `crates/mise-api/src/`, so it runs
-  alone, with nothing else in flight there.
 - **Deploy gate:** a CI job that starts the Compose stack on an empty volume, upgrades a database from the previous
   release, and backs up and restores. Needs T10 (a previous release to upgrade from).
 - **Presentation:** README screenshots (taken by Playwright from the demo bundle), a hosted demo (**Paul**: where),

@@ -78,6 +78,12 @@ What a reviewer can rely on today:
 
 ## Known issues and limits
 
+- **English only.** Reading recipes assumes English: unit names, abbreviations and plurals (`mise-core/src/quantity.rs`,
+  `ingredient_line.rs`), plural folding, brand stripping and the narrowing words that make one food a kind of another
+  (`food_names.rs`), step text rewritten for a new yield and the times found in it (`step_amounts.rs`,
+  `step_times.rs`), and the words that say a yield counts servings and the worded times in imported pages
+  (`mise-ingest/src/schema_org.rs`). A recipe in another language imports, but its amounts, foods and yields read
+  poorly. The web app's own text is English too.
 - 36 versions (269 lines) publish 3-serving amounts equal to their 4-serving ones; left as published.
 - Two review items stay open: green beans swapped for broccoli or carrots between versions; nothing records swaps yet,
   so the review page doesn't list food swaps.
