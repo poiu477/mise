@@ -234,6 +234,10 @@ const NEW_USER: (&str, &str) = ("POST", "/api/v1/users");
 const CHANGE_USER: (&str, &str) = ("PATCH", "/api/v1/users/{id}");
 const HOUSEHOLDS: (&str, &str) = ("GET", "/api/v1/households");
 const NEW_HOUSEHOLD: (&str, &str) = ("POST", "/api/v1/households");
+const SHARING: (&str, &str) = ("GET", "/api/v1/household");
+const SHARING_DEFAULT: (&str, &str) = ("PUT", "/api/v1/household/sharing");
+const PARTNER_ADD: (&str, &str) = ("PUT", "/api/v1/household/partners/{id}");
+const PARTNER_REMOVE: (&str, &str) = ("DELETE", "/api/v1/household/partners/{id}");
 const SEARCH: (&str, &str) = ("GET", "/api/v1/dishes");
 const DISH_PAGE: (&str, &str) = ("GET", "/api/v1/dishes/{slug}");
 const VERSION: (&str, &str) = ("GET", "/api/v1/variants/{id}");
@@ -416,12 +420,62 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
     .await;
     c.call(USERS, me, None, 200, "every account").await;
     c.call(HOUSEHOLDS, me, None, 200, "every household").await;
+    let upstairs = c
+        .call(
+            NEW_HOUSEHOLD,
+            me,
+            Some(json!({"name": "Upstairs"})),
+            200,
+            "a household",
+        )
+        .await
+        .body["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // Sharing: the household's default and its partners.
+    let own_household = c
+        .call(SHARING, me, None, 200, "the household's sharing")
+        .await
+        .body["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let level = |l: &str| Some(json!({"default_visibility": l}));
+    c.call(SHARING_DEFAULT, me, level("partners"), 200, "a default")
+        .await;
+    c.call(SHARING_DEFAULT, me, level("everyone"), 400, "no such level")
+        .await;
     c.call(
-        NEW_HOUSEHOLD,
+        SHARING_DEFAULT,
         me,
-        Some(json!({"name": "Upstairs"})),
+        level("private"),
         200,
-        "a household",
+        "back to private",
+    )
+    .await;
+    let partner = format!("/api/v1/household/partners/{upstairs}");
+    c.expect(PARTNER_ADD, &partner, me, None, 200, "a partner")
+        .await;
+    let itself = format!("/api/v1/household/partners/{own_household}");
+    c.expect(PARTNER_ADD, &itself, me, None, 400, "its own household")
+        .await;
+    c.expect(
+        PARTNER_ADD,
+        &fill(PARTNER_ADD.1),
+        me,
+        None,
+        404,
+        "a household that isn't there",
+    )
+    .await;
+    c.expect(
+        PARTNER_REMOVE,
+        &partner,
+        me,
+        None,
+        204,
+        "no longer a partner",
     )
     .await;
     c.call(

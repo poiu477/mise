@@ -28,9 +28,10 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
   verbatim so imports can be re-processed. Each record becomes a `variant`. A record a household imported (a web
   page) belongs to it (`household_id`), like the version made of it; a bundle's belongs to none.
 - **Dishes and variants.** A `dish` is what people choose; its `variants` are the published or forked versions.
-  A variant belongs to one household (`household_id`, with a `visibility`, only `private` so far) or, for seed and
-  bundle versions, to none; the SQL function `visible_to(variant, household)` says whether a household can see it,
-  and a dish shows to a household only through the versions it can see.
+  A variant belongs to one household (`household_id`, with a `visibility`: `private`, `partners` or `install`) or,
+  for seed and bundle versions, to none; the SQL function `visible_to(variant, household)` says whether a household
+  can see it, from that level, the owning household's `household_partners` and the install's `sharing_cap`, and a
+  dish shows to a household only through the versions it can see.
   `variant_yields` are the serving counts a version was published for. `dish_options` (protein, portion, version) are
   derived from the differences between a dish's variants. `dish_decisions` (merge, keep apart) and
   `preferred_versions` (how often each version was had) steer grouping and the default version. `retired_slugs` keep
@@ -54,8 +55,9 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
 - **Review.** `review_items` queue doubtful merges, unmatched names and conflicting evidence for a person. An admin
   answers food matches, food parents and dish merges on the web app's review page (`mise-api`'s `review` module),
   which applies the same curation operation or dish decision as the `mise` command would.
-- **Accounts.** `households` (the sharing boundary), `users`, `user_identities` (OIDC), `sessions`, `api_tokens`,
-  `kitchen_tokens` (a kitchen device's one-time link, then its cookie).
+- **Accounts.** `households` (the sharing boundary, with the `default_visibility` of what each writes and forks;
+  `household_partners` are the households each shares with), `users`, `user_identities` (OIDC), `sessions`,
+  `api_tokens`, `kitchen_tokens` (a kitchen device's one-time link, then its cookie).
 - **Planning.** `plan_entries` (a version and serving count in a household's week, named by its Monday);
   `shopping_marks` (ticked or removed, per food: the key is the food's id, or the name of an unmatched line),
   `shopping_extras` (added by hand), `pantry_staples` (always on hand),

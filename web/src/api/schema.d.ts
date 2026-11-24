@@ -201,6 +201,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/household": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in household's sharing: its default, the install's cap, its partners, and the other households to
+         *     choose them from.
+         */
+        get: operations["get_household_sharing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/household/partners/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Share with another household: from now on it sees what this household shares with its partners. It doesn't
+         *     share back until it adds this one too. Adding one already added changes nothing.
+         */
+        put: operations["add_partner"];
+        post?: never;
+        /**
+         * Stop sharing with a household: what this household shares with its partners is hidden from it at once, while any
+         *     forks it made stay its own. Removing one that isn't a partner changes nothing.
+         */
+        delete: operations["remove_partner"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/household/sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set what the household's new recipes and forks are shared with. Recipes it already has keep theirs. */
+        put: operations["set_household_sharing"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households": {
         parameters: {
             query?: never;
@@ -465,8 +526,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Write a recipe. It belongs to the household, which alone can see it, and gets a dish of its own. Answers with
-         *     the recipe as stored: each line with what was read from it and the food it is matched to.
+         * Write a recipe. It belongs to the household, which alone can change it, and gets a dish of its own; it is seen as
+         *     far as `visibility` says, the household's default when left out. Answers with the recipe as stored: each line
+         *     with what was read from it and the food it is matched to.
          */
         post: operations["create_recipe"];
         delete?: never;
@@ -906,6 +968,28 @@ export interface components {
             id: string;
             name: string;
         };
+        /** @description A household, by id and name. */
+        HouseholdRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        /** @description The signed-in household's sharing. */
+        HouseholdSharing: {
+            /** @description What its new recipes and forks are shared with, unless one says otherwise. */
+            default_visibility: components["schemas"]["Visibility"];
+            /** @description Every other household on the install, by name, to choose partners from. */
+            households: components["schemas"]["HouseholdRef"][];
+            /** Format: uuid */
+            id: string;
+            /** @description The most open level this install allows. */
+            max_visibility: components["schemas"]["Visibility"];
+            name: string;
+            /** @description The households that share with it at `partners`, by name. */
+            partner_of: components["schemas"]["HouseholdRef"][];
+            /** @description The households it shares with at `partners`, by name. */
+            partners: components["schemas"]["HouseholdRef"][];
+        };
         /** @description Links to one photo in every size, for responses. */
         Image: {
             /** Format: uuid */
@@ -1165,6 +1249,8 @@ export interface components {
             steps: string[];
             subtitle?: string | null;
             title: string;
+            /** @description Who else sees it. */
+            visibility: components["schemas"]["Visibility"];
         };
         /** @description A recipe as its writer sends it. */
         RecipeInput: {
@@ -1184,6 +1270,7 @@ export interface components {
             subtitle?: string | null;
             /** @description 1 to 200 characters. */
             title: string;
+            visibility?: components["schemas"]["Visibility"] | null;
         };
         /** @description One ingredient line: what was typed, and what mise read from it. */
         RecipeLine: {
@@ -1257,6 +1344,11 @@ export interface components {
             household?: string | null;
             password: string;
             username: string;
+        };
+        /** @description A household's default visibility. */
+        SharingDefault: {
+            /** @description What new recipes and forks are shared with, unless one says otherwise; no more than the install allows. */
+            default_visibility: components["schemas"]["Visibility"];
         };
         ShoppingExtra: {
             checked: boolean;
@@ -1417,6 +1509,11 @@ export interface components {
             original?: components["schemas"]["Original"] | null;
             /** Format: date-time */
             published_at?: string | null;
+            /**
+             * @description Another household's own version, shared with this one: that household's name. It can be read and forked, not
+             *     changed.
+             */
+            shared_by?: string | null;
             subtitle?: string | null;
             title: string;
             /** @description Serving counts with published amounts. */
@@ -1427,6 +1524,11 @@ export interface components {
          * @enum {string}
          */
         Verdict: "accept" | "reject" | "edit";
+        /**
+         * @description How far a recipe is seen, from least to most.
+         * @enum {string}
+         */
+        Visibility: "private" | "partners" | "install";
         /**
          * @description How weights read: "1 lb 14 oz", "30 oz", "1⅞ lb" or "850 g".
          * @enum {string}
@@ -1986,6 +2088,283 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    get_household_sharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The household's sharing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdSharing"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called from a kitchen device, which reads only the plan and recipes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    add_partner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The other household */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The household's sharing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdSharing"];
+                };
+            };
+            /** @description The id isn't a UUID, or is this household's own */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such household */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    remove_partner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The other household */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No longer a partner */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The id isn't a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_household_sharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharingDefault"];
+            };
+        };
+        responses: {
+            /** @description The household's sharing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdSharing"];
+                };
+            };
+            /** @description The level is more open than the install allows, or the body isn't JSON of the right shape */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not signed in: no session or token, or one that has ended */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Called with a read-only API token or from a kitchen device, neither of which can make changes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description `X-Mise-Account` names another account than the one signed in */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The body is over 2 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The server failed; the details are in its log */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };

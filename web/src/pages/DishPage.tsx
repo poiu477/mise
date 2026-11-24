@@ -146,6 +146,7 @@ export function DishPage() {
           <p className="sub">{v?.subtitle ?? chosen.subtitle}</p>
         )}
         {chosen.title !== dish.title && <p className="meta">This version: {chosen.title}</p>}
+        {chosen.shared_by && <p className="meta">Shared by {chosen.shared_by}</p>}
         {chosen.original && (
           <p className="meta">
             {chosen.editable ? "Your own version of " : "Made from "}
@@ -302,6 +303,7 @@ export function DishPage() {
                   <span className="meta">
                     {[
                       x.editable && "yours",
+                      x.shared_by && `from ${x.shared_by}`,
                       year(x.published_at),
                       x.yields.length && `serves ${x.yields.join("/")}`,
                       !x.has_steps && "no steps",

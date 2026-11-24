@@ -8,14 +8,16 @@ import {
   type Me,
   type TokenInfo,
   type UserInfo,
+  type Visibility,
   type Weights,
 } from "../api/client";
 import { answer, queryClient } from "../api/query";
 import { useAccount, useSession } from "../session";
+import { allowedLevels } from "../sharing";
 import { WEIGHTS } from "../weights";
 
-/** The account page: who is signed in, the household's list units, password, API tokens and, for admins, the
- * review queue, kitchen devices, people and households. Needs the server. */
+/** The account page: who is signed in, the household's list units and sharing, password, API tokens and, for admins,
+ * the review queue, kitchen devices, people and households. Needs the server. */
 export function AccountPage() {
   const { session, signOut } = useSession();
   if (session.status === "offline")
@@ -41,6 +43,7 @@ export function AccountPage() {
         </button>
       </header>
       <ShoppingUnits />
+      <Sharing />
       <PasswordForm me={me} />
       <Tokens />
       {me.is_admin && <ReviewQueue />}
@@ -101,6 +104,100 @@ function ShoppingUnits() {
           </select>
         </label>
       </div>
+      {error && <p className="form-error">{error}</p>}
+    </section>
+  );
+}
+
+/** How far the household's own recipes are seen: its default for new ones, and the households it shares with. */
+function Sharing() {
+  const key = ["household-sharing", useAccount()];
+  const sharing = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => answer(api.GET("/api/v1/household", { signal })),
+  });
+  const [error, setError] = useState("");
+  const s = sharing.data;
+  /** Sends one change; the server's answer, or a reload on a failure, shows what holds. */
+  const send = async (
+    change: () => Promise<{ data?: unknown; error?: unknown; response?: Response }>,
+  ) => {
+    setError("");
+    const {
+      data,
+      error: failed,
+      response,
+    } = await change().catch(() => ({
+      data: undefined,
+      error: { error: "can't reach the server, so that wasn't saved" },
+      response: undefined,
+    }));
+    if (data) queryClient.setQueryData(key, data);
+    else if (response?.status !== 204) setError(errorText(failed));
+    if (!data) await queryClient.invalidateQueries({ queryKey: key });
+  };
+  const setDefault = (v: Visibility) =>
+    send(() => api.PUT("/api/v1/household/sharing", { body: { default_visibility: v } }));
+  const setPartner = (id: string, on: boolean) => {
+    const path = { params: { path: { id } } };
+    return send(() =>
+      on
+        ? api.PUT("/api/v1/household/partners/{id}", path)
+        : api.DELETE("/api/v1/household/partners/{id}", path),
+    );
+  };
+  const partner = (id: string) => !!s?.partners.some((p) => p.id === id);
+  const sharesWithUs = (id: string) => !!s?.partner_of.some((p) => p.id === id);
+
+  return (
+    <section className="panel" aria-labelledby="sharing-h">
+      <h2 id="sharing-h">Sharing</h2>
+      {!s ? (
+        <p className="empty">{sharing.isError ? "Sharing didn't load." : "Loading…"}</p>
+      ) : s.max_visibility === "private" ? (
+        <p className="sub">
+          This install keeps every household's recipes to itself, so there's nothing to share.
+        </p>
+      ) : (
+        <>
+          <p className="sub">
+            Who sees the recipes your household writes, and your own versions of dishes. Others can
+            read them and make their own version, but never change yours. Plans and lists are never
+            shared.
+          </p>
+          <div className="form row">
+            <label>
+              New recipes are seen by
+              <select
+                value={s.default_visibility}
+                onChange={(e) => setDefault(e.target.value as Visibility)}
+              >
+                {allowedLevels(s.max_visibility).map((l) => (
+                  <option key={l.value} value={l.value}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {s.households.length > 0 && (
+            <fieldset className="partners">
+              <legend>Partners: households that see what you share with partners</legend>
+              {s.households.map((h) => (
+                <label key={h.id} className="check">
+                  <input
+                    type="checkbox"
+                    checked={partner(h.id)}
+                    onChange={(e) => setPartner(h.id, e.target.checked)}
+                  />
+                  {h.name}
+                  {sharesWithUs(h.id) && <span className="tag">shares with you</span>}
+                </label>
+              ))}
+            </fieldset>
+          )}
+        </>
+      )}
       {error && <p className="form-error">{error}</p>}
     </section>
   );

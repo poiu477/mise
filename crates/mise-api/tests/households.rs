@@ -390,7 +390,7 @@ async fn the_plan_and_shopping_list_drop_a_version_the_household_can_no_longer_s
 }
 
 #[tokio::test]
-async fn only_private_visibility_is_accepted_for_now() {
+async fn a_version_is_private_by_default_and_takes_only_the_three_levels() {
     let street = test_app!(Street::new());
     let stew = street
         .own_recipe(street.home_id, "Coconut Lentil Stew")
@@ -401,16 +401,18 @@ async fn only_private_visibility_is_accepted_for_now() {
         .await
         .unwrap();
     assert_eq!(visibility, "private", "versions are private by default");
-    for wider in ["partners", "install"] {
-        let refused = sqlx::query("UPDATE variants SET visibility = $2 WHERE id = $1")
+    let set = |level: &'static str| {
+        sqlx::query("UPDATE variants SET visibility = $2 WHERE id = $1")
             .bind(stew)
-            .bind(wider)
+            .bind(level)
             .execute(&street.pool)
-            .await
-            .expect_err(wider);
-        assert!(
-            refused.to_string().contains("variants_visibility_check"),
-            "{refused}"
-        );
+    };
+    for level in ["partners", "install", "private"] {
+        set(level).await.unwrap_or_else(|e| panic!("{level}: {e}"));
     }
+    let refused = set("public").await.expect_err("public");
+    assert!(
+        refused.to_string().contains("variants_visibility_check"),
+        "{refused}"
+    );
 }
