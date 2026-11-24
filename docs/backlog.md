@@ -17,27 +17,12 @@ status.md if it changed either.
 
 ## Ready
 
-### T6 · Security headers and a written security stance
-
-- Add response headers from the server: a Content-Security-Policy that the app and its service worker work under,
-  `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, a referrer policy.
-- Write `SECURITY.md` (how to report a problem, what is in scope) and a short section in `docs/architecture.md` on
-  the CSRF stance as the code enforces it: SameSite=Lax session cookies, JSON bodies where a route takes one, and
-  what protects each state-changing route that takes no body (sign-out, the DELETE routes). Check each in the code;
-  if one turns out unprotected, fix it (for example by requiring a custom header) rather than describe a protection
-  that isn't there. Include login throttling.
-- **Touches:** the router setup in `crates/mise-api/src/lib.rs`, `SECURITY.md`, `docs/architecture.md`.
-- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T9 edits it too).
-- **Done when:** an API test checks each header on a page and an API response; an API test shows a cross-site
-  style request (no JSON content type, no custom header) to sign-out and to a DELETE route is refused or harmless,
-  as the written stance says; the browser journeys pass (they would catch a policy that breaks the app).
-
 ### T9 · Observability
 
 - An option for JSON logs, a request id on every log line (and in the response), a readiness check that the
   database answers (next to the existing health check), and basic metrics (request counts and durations by route).
 - **Touches:** `crates/mise-api/src/main.rs`, `lib.rs`, `docs/deploy.md`.
-- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs` (T6 edits it too).
+- **Needs:** nothing else in flight in `crates/mise-api/src/lib.rs`.
 - **Done when:** API tests cover the readiness check and the request id header; deploy.md says how to turn JSON logs
   on.
 

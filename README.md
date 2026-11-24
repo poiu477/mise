@@ -73,6 +73,7 @@ The Rust crates' documentation, built from `main`, is on GitLab Pages at
 | `fixtures/demo-bundle` | Demo recipes for tests and trying mise out |
 | `web/e2e/` | Browser journeys (Playwright) |
 | `AGENTS.md`, `CONTRIBUTING.md` | How to take a task and work on the code (`CLAUDE.md` imports `AGENTS.md`) |
+| `SECURITY.md` | How to report a vulnerability, and what is in scope |
 | `docs/status.md` | Where things stand, known issues, open questions, decisions |
 | `docs/backlog.md` | The work still to do, as self-contained tasks |
 | `docs/architecture.md` | How the parts fit together |
