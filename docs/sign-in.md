@@ -34,12 +34,22 @@ Then set `AUTH_MODES=local,oidc` (or just `oidc`) and the `OIDC_*` settings in `
 whose `/.well-known/openid-configuration` the provider serves (in Authentik: the application's
 *OpenID Configuration Issuer*).
 
-- A returning person is recognised by their provider identity. The first time, they are linked to an existing
-  account with the same email if the provider says the email is verified; otherwise a new account is created,
-  in a household of its own, or in `OIDC_HOUSEHOLD` when set.
+- **Who gets in.** By default, only people who already have an account here: an admin adds one (**Account → People**,
+  or `mise user add`) with the person's email, and their first sign-on links to it when the provider says that email
+  is verified. To let people make an account by signing on, set `OIDC_ALLOWED_GROUP`: its members (and
+  `OIDC_ADMIN_GROUP`'s) get one at their first sign-in, and nobody else signs in at all, so leaving the group at the
+  provider ends access. `OIDC_OPEN_SIGNUP=true` gives an account to anyone the provider signs in; use it only with a
+  provider whose every user is yours (a household's own Authentik), never a public one such as Google, where it
+  would let anyone with a Google account in.
+- A returning person is recognised by their provider identity. A new account goes in a household of its own, or in
+  `OIDC_HOUSEHOLD` when set.
+- A sign-on never links to an admin's account by email: whoever controls that address at the provider would get the
+  admin's rights. An admin signs in with their password, or gets admin rights through `OIDC_ADMIN_GROUP`.
 - With `OIDC_ADMIN_GROUP`, admin rights follow membership of that group (the `groups` claim; in Authentik and
   Keycloak add a groups mapper or scope) at every sign-in.
-- The flow uses PKCE and a nonce; sign-in attempts expire after 15 minutes and can be used once.
+- The flow uses PKCE and a nonce, and finishes only in the browser that started it (a cookie holds the sign-in's
+  state); sign-in attempts expire after 15 minutes and can be used once. After signing in, mise returns only to an
+  address on this site.
 
 ## API tokens
 
