@@ -6,8 +6,8 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
 };
 use axum_extra::extract::cookie::CookieJar;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -334,8 +334,10 @@ pub struct TokenInfo {
     pub name: String,
     /// read or read_write.
     pub scope: String,
-    pub created_at: DateTime<Utc>,
-    pub last_used_at: Option<DateTime<Utc>>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub last_used_at: Option<OffsetDateTime>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -353,7 +355,7 @@ pub struct NewToken {
 }
 
 /// id, name, scope, created, last used.
-type TokenRow = (Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>);
+type TokenRow = (Uuid, String, String, OffsetDateTime, Option<OffsetDateTime>);
 
 /// This account's API tokens.
 #[utoipa::path(get, path = "/api/v1/me/tokens", operation_id = "list_tokens", tag = "account",
@@ -410,7 +412,7 @@ pub async fn create_token(
         .ok_or_else(|| ApiError::BadRequest("give the token a name".into()))?;
     let secret = super::new_secret();
     let id = Uuid::now_v7();
-    let created_at: DateTime<Utc> =
+    let created_at: OffsetDateTime =
         sqlx::query_scalar("INSERT INTO api_tokens (id, user_id, name, token_hash, scope) VALUES ($1, $2, $3, $4, $5) RETURNING created_at")
             .bind(id)
             .bind(u.id)

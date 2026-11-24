@@ -9,7 +9,6 @@ license.workspace = true
 anyhow = "1.0.104"
 # Paprika keeps a recipe's photo inline, as base64.
 base64 = "0.22.1"
-chrono = { version = "0.4.45", features = ["serde"] }
 # Paprika gzips each recipe in its export.
 flate2 = { version = "1.1.11", default-features = false, features = ["rust_backend"] }
 hex = "0.4.3"
@@ -24,6 +23,7 @@ serde_json.workspace = true
 sha2 = "0.11.1"
 sqlx.workspace = true
 strsim = "0.11.1"
+time.workspace = true
 tokio = { version = "1.54.1", features = ["rt", "net", "time"] }
 tracing = "0.1.44"
 unicode-normalization = "0.1.26"

@@ -5,8 +5,8 @@
 //! household shows only its own share of the versions, counts and option choices.
 
 use axum::{Extension, Json, extract::State};
-use chrono::{DateTime, Datelike, Utc};
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -170,7 +170,8 @@ pub struct VariantSummary {
     pub id: Uuid,
     pub title: String,
     pub subtitle: Option<String>,
-    pub published_at: Option<DateTime<Utc>>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub published_at: Option<OffsetDateTime>,
     /// Serving counts with published amounts.
     pub yields: Vec<f64>,
     pub has_steps: bool,
@@ -220,7 +221,7 @@ type VariantRow = (
     Uuid,
     String,
     Option<String>,
-    Option<DateTime<Utc>>,
+    Option<OffsetDateTime>,
     bool,
     Option<Vec<f64>>,
     serde_json::Value,

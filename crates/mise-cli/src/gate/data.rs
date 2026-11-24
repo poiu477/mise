@@ -3,8 +3,8 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 #[derive(sqlx::FromRow, Clone)]
@@ -23,7 +23,7 @@ pub struct Variant {
     pub dish_id: Uuid,
     pub title: String,
     pub subtitle: Option<String>,
-    pub published: Option<DateTime<Utc>>,
+    pub published: Option<OffsetDateTime>,
     pub has_steps: bool,
     pub parent_variant_id: Option<Uuid>,
 }

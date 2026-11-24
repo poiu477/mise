@@ -350,7 +350,7 @@ async fn dish_page(state: &AppState, slug: &str) -> String {
                 .as_deref()
                 .map_or(String::new(), |s| format!(", {s}")),
             v.published_at
-                .map_or("unknown".to_string(), |d| d.date_naive().to_string()),
+                .map_or("unknown".to_string(), |d| d.date().to_string()),
             list(&v.yields),
             if v.has_steps { "steps" } else { "no steps" },
             v.attributes,

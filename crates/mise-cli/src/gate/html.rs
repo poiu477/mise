@@ -3,8 +3,10 @@
 
 use std::fmt::Write;
 
-use chrono::{DateTime, Utc};
 use serde_json::json;
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
+use time::macros::format_description;
 
 use super::{Card, Parent, Related, RelatedDish, Report, STRATA, Summary};
 
@@ -37,13 +39,13 @@ pub fn render(r: &Report) -> String {
         h,
         "<footer>Generated {} by <code>mise gate-report --sample {} --seed {}</code>. Decisions are kept in this browser's \
          localStorage until exported.</footer></main>",
-        esc(&r.generated_at.format("%Y-%m-%d %H:%M UTC").to_string()),
+        esc(&format!("{} UTC", minute(r.generated_at))),
         r.requested,
         r.seed
     );
 
     let data = json!({
-        "report": { "generated_at": r.generated_at.to_rfc3339(), "seed": r.seed, "sample": r.requested },
+        "report": { "generated_at": r.generated_at.format(&Rfc3339).unwrap_or_default(), "seed": r.seed, "sample": r.requested },
         "dishes": r.cards.iter().map(|c| json!({
             "id": c.dish.id, "slug": c.dish.slug, "title": c.dish.title, "content_type": c.dish.content_type,
             "stratum": STRATA[c.stratum].key,
@@ -74,7 +76,7 @@ fn toolbar(h: &mut String, r: &Report) {
          <option value=\"unsure\">Not sure</option></select>\
          <select id=\"f-stratum\" aria-label=\"Stratum filter\"><option value=\"all\">All strata</option>",
         seed = r.seed,
-        gen = esc(&r.generated_at.format("%Y-%m-%d %H:%M").to_string()),
+        gen = esc(&minute(r.generated_at)),
     );
     for s in STRATA {
         let _ = write!(h, "<option value=\"{}\">{}</option>", s.key, esc(s.label));
@@ -568,17 +570,29 @@ fn counted(values: &[(String, usize)]) -> String {
     }
 }
 
-fn date(d: Option<DateTime<Utc>>) -> String {
-    d.map(|d| d.format("%Y-%m-%d").to_string())
+fn date(d: Option<OffsetDateTime>) -> String {
+    d.map(|d| d.date().to_string())
         .unwrap_or_else(|| "undated".into())
 }
 
-fn date_range(a: Option<DateTime<Utc>>, b: Option<DateTime<Utc>>) -> String {
+fn date_range(a: Option<OffsetDateTime>, b: Option<OffsetDateTime>) -> String {
     match (a, b) {
-        (Some(a), Some(b)) if a.date_naive() == b.date_naive() => a.format("%Y-%m-%d").to_string(),
-        (Some(a), Some(b)) => format!("{} – {}", a.format("%Y-%m"), b.format("%Y-%m")),
+        (Some(a), Some(b)) if a.date() == b.date() => a.date().to_string(),
+        (Some(a), Some(b)) => format!("{} – {}", month(a), month(b)),
         _ => "undated".into(),
     }
+}
+
+/// "2026-11-24 09:30".
+fn minute(d: OffsetDateTime) -> String {
+    d.format(format_description!("[year]-[month]-[day] [hour]:[minute]"))
+        .unwrap_or_default()
+}
+
+/// "2026-11".
+fn month(d: OffsetDateTime) -> String {
+    d.format(format_description!("[year]-[month]"))
+        .unwrap_or_default()
 }
 
 fn fmt_n(n: usize) -> String {
