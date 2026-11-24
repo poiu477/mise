@@ -452,3 +452,71 @@ async fn allergens_and_pantry_marks_stay_with_their_ingredients_through_a_change
     assert_eq!(ingredient(&at_2, "fresh basil")["allergens"], json!([]));
     assert_eq!(ingredient(&at_2, "fresh basil")["shipped"], Value::Null);
 }
+
+#[tokio::test]
+async fn grouping_again_keeps_a_fork_on_its_dish() {
+    let street = test_app!(Street::new());
+    let tacos = street.dish(&street.home, "black-bean-tacos").await;
+    let copy = street.fork(&street.home, &tacos["default_variant"]).await;
+
+    // Importing groups every dish again; the copy stays on what its dish became, at the same address.
+    mise_ingest::dishes::group_dishes(&street.pool)
+        .await
+        .expect("group dishes");
+    mise_ingest::options::derive_options(&street.pool)
+        .await
+        .expect("derive options");
+    let again = street.dish(&street.home, "black-bean-tacos").await;
+    assert_eq!(again["id"], tacos["id"]);
+    assert_eq!(again["default_variant"], tacos["default_variant"]);
+    assert_eq!(
+        again["variants"].as_array().unwrap().len(),
+        tacos["variants"].as_array().unwrap().len() + 1
+    );
+    assert_eq!(entry(&again, &copy["id"])["editable"], true);
+    let next_door = street.dish(&street.next_door, "black-bean-tacos").await;
+    assert_eq!(
+        next_door["variants"], tacos["variants"],
+        "next door sees what it saw"
+    );
+}
+
+#[tokio::test]
+async fn a_fork_whose_dish_is_gone_gets_one_of_its_own() {
+    let street = test_app!(Street::new());
+    let pasta = street.dish(&street.home, "weeknight-tomato-pasta").await;
+    let original = &pasta["default_variant"];
+    let copy = street.fork(&street.home, original).await;
+
+    // The published version goes, as pruning a source removes one, and the dish is grouped again.
+    let id = original.as_str().unwrap().parse::<Uuid>().unwrap();
+    for sql in [
+        "UPDATE variants SET parent_variant_id = NULL WHERE parent_variant_id = $1",
+        "UPDATE dishes SET default_variant_id = NULL WHERE default_variant_id = $1",
+        "DELETE FROM variants WHERE id = $1",
+    ] {
+        sqlx::query(sql)
+            .bind(id)
+            .execute(&street.pool)
+            .await
+            .unwrap();
+    }
+    mise_ingest::dishes::group_dishes(&street.pool)
+        .await
+        .expect("group dishes");
+
+    // It keeps the address, free again, in a dish of its own that opens on it; next door has no such dish.
+    let dish = street.dish(&street.home, "weeknight-tomato-pasta").await;
+    assert_eq!(dish["default_variant"], copy["id"]);
+    assert_eq!(dish["variants"].as_array().unwrap().len(), 1);
+    assert_eq!(entry(&dish, &copy["id"])["editable"], true);
+    let theirs = street
+        .send(
+            "GET",
+            "/api/v1/dishes/weeknight-tomato-pasta",
+            As::Cookie(&street.next_door),
+            None,
+        )
+        .await;
+    assert_eq!(theirs.status, StatusCode::NOT_FOUND);
+}

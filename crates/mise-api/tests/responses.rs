@@ -245,6 +245,7 @@ const RECIPE_REMOVE: (&str, &str) = ("DELETE", "/api/v1/recipes/{id}");
 const RECIPE_PHOTO: (&str, &str) = ("PUT", "/api/v1/recipes/{id}/photo");
 const RECIPE_PHOTO_REMOVE: (&str, &str) = ("DELETE", "/api/v1/recipes/{id}/photo");
 const RECIPE_LINES: (&str, &str) = ("POST", "/api/v1/recipes/lines");
+const FORK: (&str, &str) = ("POST", "/api/v1/variants/{id}/fork");
 const IMPORT: (&str, &str) = ("POST", "/api/v1/imports");
 const FOODS: (&str, &str) = ("GET", "/api/v1/foods");
 const PLAN: (&str, &str) = ("GET", "/api/v1/plan");
@@ -860,6 +861,18 @@ async fn every_route_answers_only_with_the_statuses_it_documents() {
     let lines = json!({"lines": ["2 leeks, sliced"]});
     c.call(RECIPE_LINES, me, Some(lines), 200, "lines, read")
         .await;
+    let fork = format!("{version}/fork");
+    c.expect(FORK, &fork, me, None, 200, "the household's own version")
+        .await;
+    c.expect(
+        FORK,
+        &fill(FORK.1),
+        me,
+        None,
+        404,
+        "a version that isn't there",
+    )
+    .await;
     let link = json!({"url": site.url("/hummus")});
     c.call(IMPORT, me, Some(link), 200, "a page imported").await;
     let private = json!({"url": "http://10.0.0.1/recipe"});
