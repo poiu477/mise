@@ -65,19 +65,6 @@ status.md if it changed either.
 - **Done when:** clippy passes workspace-wide with the lint in `Cargo.toml`; a missing doc comment in any crate fails
   it.
 
-
-
-### T27 · Import from files
-
-- Export files from other apps through the same records and shared stages as T26: schema.org JSON, Nextcloud
-  Cookbook (a folder of `recipe.json` files), Mealie, Tandoor and Paprika (`.paprikarecipes`). `mise import file
-  <path>` and an upload form in the web app; each format's fixture is written for mise.
-- **Touches:** `crates/mise-ingest/src/` (a module per format), `crates/mise-cli/src/`, `crates/mise-api/src/`,
-  `web/src/`, `fixtures/`.
-- **Needs:** T22, T25.
-- **Done when:** a test per format imports its fixture to the expected records; a browser journey uploads one file
-  and opens the dish.
-
 ### T34 · Dates and times without chrono
 
 chrono is unmaintained (RUSTSEC-2026-0543, accepted in `deny.toml` until this and openidconnect allow otherwise).
@@ -134,9 +121,9 @@ Phase 3, still to build:
 - Nextcloud Tasks (the list as CalDAV to-dos) and Calendar (the plan as events or an iCal feed).
 - Days in the plan (meals belong to a week today).
 
-Phase 4, kitchen and imports, is broken into T22 to T33 under Ready: import from files is left (recipes owned by a
-household, T22, kitchen mode, T24, import from a link, T26, writing recipes and the editor, T28 and T29, forks, T30,
-sharing between households, T31, review queues in the web app, T32, and printable cards, T33, are done). Its gate, T24's
-kitchen journey and T25's 20 sample pages, passes.
+Phase 4, kitchen and imports, was broken into T22 to T33, all done: recipes owned by a household (T22), kitchen
+devices and mode (T23, T24), import from a link and from files (T26, T27), writing recipes and the editor (T28,
+T29), forks (T30), sharing between households (T31), review queues in the web app (T32) and printable cards (T33).
+Its gate, T24's kitchen journey and T25's 20 sample pages, passes.
 
 Break a phase item into Ready tasks, in the shape above, before starting it.

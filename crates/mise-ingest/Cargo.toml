@@ -7,7 +7,11 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1.0.104"
+# Paprika keeps a recipe's photo inline, as base64.
+base64 = "0.22.1"
 chrono = { version = "0.4.45", features = ["serde"] }
+# Paprika gzips each recipe in its export.
+flate2 = { version = "1.1.11", default-features = false, features = ["rust_backend"] }
 hex = "0.4.3"
 html5ever = "0.40.1"
 image = { version = "0.25.8", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
@@ -25,6 +29,9 @@ tracing = "0.1.44"
 unicode-normalization = "0.1.26"
 url = "2.5.9"
 uuid.workspace = true
+# Reading the zips other recipe apps export (Nextcloud Cookbook, Mealie, Tandoor, Paprika): deflate only, the
+# compression they use, so none of the crate's other codecs are built.
+zip = { version = "9.8.2", default-features = false, features = ["deflate-flate2"] }
 
 [dev-dependencies]
 # Test folders: private, and removed even when a test fails.

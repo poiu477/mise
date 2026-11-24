@@ -1,0 +1,79 @@
+[
+  {
+    "format": "Tandoor",
+    "path": "1/recipe.json",
+    "photo": "1/image.jpg",
+    "record": {
+      "description": "A tender cornbread with nutty brown butter, baked in a skillet.",
+      "external_id": "sha256:07e512c4c31e2e1924b97adeafe5c9db6db583cc665c8dafd8b5bd6d57ca4d24",
+      "hero_image": null,
+      "ingredients": [
+        {
+          "key": "1",
+          "name": "1 cup cornmeal"
+        },
+        {
+          "key": "2",
+          "name": "1 cup flour"
+        },
+        {
+          "key": "3",
+          "name": "2 tablespoons sugar"
+        },
+        {
+          "key": "4",
+          "name": "2 teaspoons baking powder"
+        },
+        {
+          "key": "5",
+          "name": "6 tablespoons butter"
+        },
+        {
+          "key": "6",
+          "name": "1.25 cups buttermilk"
+        },
+        {
+          "key": "7",
+          "name": "2 eggs, beaten"
+        },
+        {
+          "key": "8",
+          "name": "salt, a pinch"
+        }
+      ],
+      "meta": {
+        "prep_time": "PT15M",
+        "tags": [
+          "Baking",
+          "Side"
+        ],
+        "total_time": "PT35M"
+      },
+      "steps": [
+        {
+          "images": [],
+          "index": 1,
+          "section": "Batter",
+          "text": "Melt the butter and cook it until it smells nutty and browns."
+        },
+        {
+          "images": [],
+          "index": 2,
+          "section": "Batter",
+          "text": "Whisk the cornmeal, flour, sugar and baking powder, then stir in the buttermilk, eggs and most of the butter."
+        },
+        {
+          "images": [],
+          "index": 3,
+          "section": "Bake",
+          "text": "Pour the batter into the hot skillet with the last of the butter and bake at 400°F for 20 minutes, until golden."
+        }
+      ],
+      "title": "Brown Butter Cornbread",
+      "url": null,
+      "yields": [
+        8.0
+      ]
+    }
+  }
+]

@@ -1,0 +1,33 @@
+{
+  "@context": "https://schema.org",
+  "@type": "Recipe",
+  "name": "Miso-Glazed Squash",
+  "description": "Roasted squash wedges under a sticky miso and honey glaze.",
+  "url": "https://recipes.example/miso-glazed-squash",
+  "image": "https://recipes.example/photos/miso-glazed-squash.jpg",
+  "author": { "@type": "Person", "name": "Dana Whitfield" },
+  "recipeYield": "4 servings",
+  "prepTime": "PT10M",
+  "cookTime": "PT35M",
+  "totalTime": "PT45M",
+  "recipeCategory": "Side dish",
+  "recipeCuisine": "Japanese",
+  "keywords": "squash, miso, roasting",
+  "recipeIngredient": [
+    "1 butternut squash, cut into wedges",
+    "2 TBSP white miso",
+    "1 TBSP honey",
+    "1 TBSP rice vinegar",
+    "2 tsp olive oil",
+    "1 tsp sesame seeds"
+  ],
+  "recipeInstructions": [
+    { "@type": "HowToStep", "text": "Heat the oven to 425°F. Toss the squash with the olive oil on a sheet pan." },
+    { "@type": "HowToStep", "text": "Roast for 25 minutes, until browned at the edges." },
+    {
+      "@type": "HowToStep",
+      "text": "Whisk the miso, honey and vinegar, brush it over the squash and roast 10 minutes more."
+    },
+    { "@type": "HowToStep", "text": "Scatter with the sesame seeds to serve." }
+  ]
+}

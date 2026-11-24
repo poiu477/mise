@@ -1,0 +1,114 @@
+{
+  "id": "6f1c2a9e-3b7d-4e8a-9c21-0d5b8f4a7e10",
+  "user_id": "2b9d4c7e-1a3f-4b6d-8e2c-5f7a9b1d3c42",
+  "household_id": "9c8b7a6d-5e4f-4321-8abc-def012345678",
+  "group_id": "1a2b3c4d-5e6f-4789-9abc-def012345678",
+  "name": "Sheet-Pan Gnocchi with Peppers",
+  "slug": "sheet-pan-gnocchi",
+  "image": "Xk3a",
+  "recipe_servings": 3.0,
+  "recipe_yield_quantity": 0.0,
+  "recipe_yield": "",
+  "total_time": "35 minutes",
+  "prep_time": "10 minutes",
+  "perform_time": "25 minutes",
+  "total_time_seconds": null,
+  "prep_time_seconds": 600,
+  "perform_time_seconds": 1500,
+  "description": "Shelf gnocchi roast crisp on one pan with peppers and red onion.",
+  "recipe_category": [{ "id": "4d3c2b1a-0000-4000-8000-000000000001", "name": "Dinner", "slug": "dinner" }],
+  "tags": [
+    { "id": "4d3c2b1a-0000-4000-8000-000000000002", "name": "One pan", "slug": "one-pan" },
+    { "id": "4d3c2b1a-0000-4000-8000-000000000003", "name": "Vegetarian", "slug": "vegetarian" }
+  ],
+  "tools": [],
+  "rating": 4.0,
+  "org_url": "https://recipes.example/sheet-pan-gnocchi",
+  "date_added": "2026-02-14",
+  "recipe_ingredient": [
+    {
+      "quantity": 1.0,
+      "unit": { "id": "u1", "name": "pound", "plural_name": "pounds", "abbreviation": "lb" },
+      "food": { "id": "f1", "name": "potato gnocchi", "plural_name": null },
+      "note": "",
+      "display": "1 pound potato gnocchi",
+      "title": null,
+      "original_text": "1 lb shelf-stable potato gnocchi",
+      "reference_id": "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+    },
+    {
+      "quantity": 2.0,
+      "unit": null,
+      "food": { "id": "f2", "name": "bell pepper", "plural_name": "bell peppers" },
+      "note": "sliced",
+      "display": "2 bell peppers sliced",
+      "title": null,
+      "original_text": null,
+      "reference_id": "8b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e"
+    },
+    {
+      "quantity": 1.0,
+      "unit": null,
+      "food": { "id": "f3", "name": "red onion", "plural_name": "red onions" },
+      "note": "cut into wedges",
+      "display": "1 red onion cut into wedges",
+      "title": null,
+      "original_text": null,
+      "reference_id": "9c3d4e5f-6a7b-4c8d-8e9f-1a2b3c4d5e6f"
+    },
+    {
+      "quantity": 0.25,
+      "unit": { "id": "u2", "name": "cup", "plural_name": "cups", "abbreviation": "c" },
+      "food": { "id": "f4", "name": "olive oil", "plural_name": null },
+      "note": "",
+      "display": "¼ cup olive oil",
+      "title": "To finish",
+      "original_text": null,
+      "reference_id": "0d4e5f6a-7b8c-4d9e-9f0a-2b3c4d5e6f7a"
+    },
+    {
+      "quantity": 0.0,
+      "unit": null,
+      "food": null,
+      "note": "Grated parmesan, to serve",
+      "display": "Grated parmesan, to serve",
+      "title": null,
+      "original_text": null,
+      "reference_id": "1e5f6a7b-8c9d-4e0f-8a1b-3c4d5e6f7a8b"
+    }
+  ],
+  "recipe_instructions": [
+    {
+      "id": "c3d4e5f6-0a1b-4c2d-8e3f-4a5b6c7d8e9f",
+      "title": "",
+      "summary": "",
+      "text": "Heat the oven to 450°F. Toss the gnocchi, peppers and onion with the oil on a sheet pan.",
+      "ingredient_references": [],
+      "duration_seconds": null
+    },
+    {
+      "id": "d4e5f6a7-1b2c-4d3e-9f4a-5b6c7d8e9f0a",
+      "title": "",
+      "summary": "",
+      "text": "Roast for 25 minutes, turning once, until the gnocchi are golden.",
+      "ingredient_references": [],
+      "duration_seconds": 1500
+    },
+    {
+      "id": "e5f6a7b8-2c3d-4e4f-8a5b-6c7d8e9f0a1b",
+      "title": "To serve",
+      "summary": "",
+      "text": "Scatter with the parmesan and eat at once.",
+      "ingredient_references": [],
+      "duration_seconds": null
+    }
+  ],
+  "nutrition": {},
+  "settings": {},
+  "assets": [],
+  "notes": [{ "title": "Swap", "text": "Fresh gnocchi works too; roast it 5 minutes less." }],
+  "extras": {},
+  "comments": [],
+  "created_at": "2026-02-14T19:30:00+00:00",
+  "updated_at": "2026-02-20T08:15:00+00:00"
+}

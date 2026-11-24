@@ -1,0 +1,69 @@
+[
+  {
+    "format": "Mealie",
+    "path": "recipes/sheet-pan-gnocchi/sheet-pan-gnocchi.json",
+    "photo": "recipes/sheet-pan-gnocchi/images/original.webp",
+    "record": {
+      "description": "Shelf gnocchi roast crisp on one pan with peppers and red onion.",
+      "external_id": "6f1c2a9e-3b7d-4e8a-9c21-0d5b8f4a7e10",
+      "hero_image": null,
+      "ingredients": [
+        {
+          "key": "1",
+          "name": "1 lb shelf-stable potato gnocchi"
+        },
+        {
+          "key": "2",
+          "name": "2 bell peppers, sliced"
+        },
+        {
+          "key": "3",
+          "name": "1 red onion, cut into wedges"
+        },
+        {
+          "key": "4",
+          "name": "0.25 cup olive oil"
+        },
+        {
+          "key": "5",
+          "name": "Grated parmesan, to serve"
+        }
+      ],
+      "meta": {
+        "categories": [
+          "Dinner"
+        ],
+        "cook_time": "PT25M",
+        "prep_time": "PT10M",
+        "tags": [
+          "One pan",
+          "Vegetarian"
+        ],
+        "total_time": "PT35M"
+      },
+      "steps": [
+        {
+          "images": [],
+          "index": 1,
+          "text": "Heat the oven to 450°F. Toss the gnocchi, peppers and onion with the oil on a sheet pan."
+        },
+        {
+          "images": [],
+          "index": 2,
+          "text": "Roast for 25 minutes, turning once, until the gnocchi are golden."
+        },
+        {
+          "images": [],
+          "index": 3,
+          "section": "To serve",
+          "text": "Scatter with the parmesan and eat at once."
+        }
+      ],
+      "title": "Sheet-Pan Gnocchi with Peppers",
+      "url": "https://recipes.example/sheet-pan-gnocchi",
+      "yields": [
+        3.0
+      ]
+    }
+  }
+]

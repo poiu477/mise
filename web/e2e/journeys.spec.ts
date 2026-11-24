@@ -1,8 +1,8 @@
 // The household's journeys through mise in a real browser, on the demo recipes (fixtures/demo-bundle), from an
 // empty install: first-run setup, cooking at any serving count, an old dish address, writing a recipe, making the
 // household's own version of a dish, printing a recipe card, answering the review queue, planning a week, shopping
-// (offline too), importing a recipe from a link, a kitchen screen, phone layout, accessibility and signing out. They
-// run in order and share one browser session, as a person would.
+// (offline too), importing a recipe from a link and from a file, a kitchen screen, phone layout, accessibility and
+// signing out. They run in order and share one browser session, as a person would.
 //
 // The browser is in New York on a Sunday evening, when the date by UTC is already Monday. The app plans and shops
 // the week by the viewer's own calendar, while the server, asked for no week, answers for its own by UTC. So in
@@ -10,6 +10,7 @@
 // default week, in the app or in a journey, reads the wrong week on every run, not just for a few hours a week.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { fileURLToPath } from "node:url";
 
 test.describe.configure({ mode: "serial" });
 
@@ -773,16 +774,16 @@ const pages = [
 
 test("a recipe imported from a link opens as a dish of the household's own", async () => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Import from a link" }).click();
+  await page.getByRole("link", { name: "Import recipes" }).click();
   await expect(page).toHaveURL(/\/import$/);
   const link = page.getByLabel("Link to a recipe page");
   // A page with no recipe says so. (Refused addresses are API tests: this server allows private ones.)
   await link.fill("http://127.0.0.1:8096/web-pages/no-recipe.html");
-  await page.getByRole("button", { name: "Import" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("no recipe found");
 
   await link.fill("http://127.0.0.1:8096/web-pages/no-image.html");
-  await page.getByRole("button", { name: "Import" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page).toHaveURL(/\/dishes\/five-minute-hummus\?v=/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Five-Minute Hummus");
   await expect(amountOf("tahini")).toHaveText("3 TBSP");
@@ -792,10 +793,34 @@ test("a recipe imported from a link opens as a dish of the household's own", asy
   await page
     .getByLabel("Link to a recipe page")
     .fill("http://127.0.0.1:8096/web-pages/no-image.html");
-  await page.getByRole("button", { name: "Import" }).click();
+  await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page).toHaveURL(/\/dishes\/five-minute-hummus\?v=/);
   const found = await (await page.request.get("/api/v1/dishes?q=hummus")).json();
   expect(found.total).toBe(1);
+});
+
+test("a recipe imported from a file opens as a dish of the household's own", async () => {
+  await page.goto("/import");
+  // A file that isn't a recipe says so.
+  const file = page.getByLabel("Export file");
+  await file.setInputFiles({
+    name: "package.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"name": "left-pad"}'),
+  });
+  await page.getByRole("button", { name: "Import file" }).click();
+  await expect(page.getByRole("alert")).toContainText("holds no recipe mise reads");
+
+  // A recipe saved as schema.org JSON, from the fixtures written for mise.
+  await file.setInputFiles(
+    fileURLToPath(
+      new URL("../../fixtures/import-files/schema-org/miso-glazed-squash.json", import.meta.url),
+    ),
+  );
+  await page.getByRole("button", { name: "Import file" }).click();
+  await expect(page).toHaveURL(/\/dishes\/miso-glazed-squash\?v=/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Miso-Glazed Squash");
+  await expect(amountOf("white miso")).toHaveText("2 TBSP");
 });
 
 test("every page fits a phone without sideways scrolling", async () => {
