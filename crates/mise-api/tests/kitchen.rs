@@ -31,6 +31,7 @@ const ALLOWED: &[(&str, &str)] = &[
 /// Documented routes anyone may call, signed in or not; a kitchen device gets from them what a stranger gets.
 const PUBLIC: &[&str] = &[
     "/api/v1/health",
+    "/api/v1/ready",
     "/api/v1/openapi.json",
     "/api/v1/auth/config",
     "/api/v1/auth/setup",
