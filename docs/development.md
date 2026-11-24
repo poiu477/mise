@@ -1,6 +1,6 @@
 # Development
 
-Requirements: Rust 1.99.1 (pinned in `rust-toolchain.toml`; rustup installs it on first build), Node 26, Docker and
+Requirements: Rust 1.100.0 (pinned in `rust-toolchain.toml`; rustup installs it on first build), Node 26, Docker and
 bash (Git Bash on Windows) for `./check`. The same Rust builds everywhere: locally, in CI and in the Docker image.
 
 ## First setup
@@ -194,7 +194,7 @@ runner host runs this from cron, in `/etc/cron.d/docker-prune`:
 ```
 
 Images are pruned by whether a tag still points at them, not by age: an image's age is when it was built upstream,
-so a time limit would delete `rust:1.99.1-bookworm` while every job still uses it. Build cache is pruned by when it
+so a time limit would delete `rust:1.100.0-bookworm` while every job still uses it. Build cache is pruned by when it
 was last used. This is the runner hosts' setup rather than mise's, and belongs in the household's systems
 documentation once that exists; it is here until then.
 

@@ -7,6 +7,5 @@ license.workspace = true
 
 [dependencies]
 anyhow = "1.0.104"
-mise-core = { version = "0.1.0", path = "../mise-core" }
 sqlx = { workspace = true, features = ["migrate", "macros"] }
 tracing = "0.1.44"

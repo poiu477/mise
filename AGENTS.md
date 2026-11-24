@@ -124,6 +124,6 @@ When the release build is locked, regenerate the types from the debug build inst
 
 ## Environment
 
-- Rust 1.99.1 (pinned in `rust-toolchain.toml`), Node 26, Docker, and bash (Git Bash on Windows).
+- Rust 1.100.0 (pinned in `rust-toolchain.toml`), Node 26, Docker, and bash (Git Bash on Windows).
 - Postgres 16 runs in Docker (`compose.dev.yaml`) on port 5433, user and password `mise`. The databases are
   described in [docs/development.md](docs/development.md).

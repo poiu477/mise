@@ -34,10 +34,15 @@
       "groupName": "container images"
     },
     {
-      "description": "Rust is raised by hand, in rust-toolchain.toml, the Dockerfile, .gitlab-ci.yml, ci.yml and Cargo.toml together (ADR 0007).",
-      "matchDatasources": ["docker"],
+      "description": "Rust is raised by hand, in rust-toolchain.toml, the Dockerfile, .gitlab-ci.yml, ci.yml and Cargo.toml together (ADR 0007): neither the rust images nor the toolchain file move on their own.",
       "matchPackageNames": ["rust", "docker.io/library/rust"],
       "enabled": false
+    },
+    {
+      "description": "reqwest stays on the minor that openidconnect and oauth2 build against, so the importer and single sign-on share one build of it (mise-ingest's Cargo.toml). Raise the limit when they move.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["reqwest"],
+      "allowedVersions": "<0.13"
     },
     {
       "description": "A Postgres major can't read the previous major's data directory, so it needs pg_upgrade or a dump and restore: raised by hand, with a plan, in the Compose files and both CI configs together.",

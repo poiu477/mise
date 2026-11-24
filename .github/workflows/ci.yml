@@ -173,7 +173,7 @@ jobs:
       - name: Advisories, licenses, bans and sources (deny.toml)
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
-          rust-version: "1.99.1"
+          rust-version: "1.100.0"
 
   image:
     name: Docker image

@@ -112,7 +112,7 @@ override it.
 chrono is unmaintained (RUSTSEC-2026-0543, accepted in `deny.toml` until this and openidconnect allow otherwise).
 
 - Move mise's own code from chrono to `time` (already a dependency of `mise-api`) or `jiff`, whichever reads more
-  plainly in the week and plan code: `mise-core`, `mise-ingest`, `mise-api`, `mise-cli`, and sqlx's and utoipa's
+  plainly in the week and plan code: `mise-ingest`, `mise-api`, `mise-cli`, and sqlx's and utoipa's
   `chrono` features for their `time` ones. Weeks are named by their Monday and plans are dates, so most of it is
   `NaiveDate`.
 - chrono stays in `Cargo.lock` through `oauth2` and `openidconnect` until they drop it; say so in the merge request,

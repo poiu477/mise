@@ -22,7 +22,7 @@ See [docs/deploy.md](docs/deploy.md).
 
 ## Development
 
-Requirements: Rust 1.99.1 (pinned in `rust-toolchain.toml`; rustup installs it), Node 26, Docker. The full guide,
+Requirements: Rust 1.100.0 (pinned in `rust-toolchain.toml`; rustup installs it), Node 26, Docker. The full guide,
 including rebuilding a seed database and running the tests, is [docs/development.md](docs/development.md). The
 commands below work in bash, zsh and PowerShell. They load the demo recipes into a database of their own, `mise_demo`,
 so a development database you already have is left alone.
