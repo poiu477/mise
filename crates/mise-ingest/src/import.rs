@@ -96,13 +96,15 @@ impl Drop for Locked {
 /// Groups dishes and derives their options, one import at a time. The lock is held by one connection for the session
 /// and given back however the stages end, the import cancelled included.
 pub async fn shared_stages(pool: &PgPool) -> Result<()> {
-    let mut conn = pool.acquire().await?;
+    // Guarded before the lock is asked for, not after it is granted: cancelled while waiting for the answer, the
+    // server may already have granted it, and a plain connection would go back to the pool still holding it.
+    let mut held = Locked(Some(pool.acquire().await?));
+    let conn = held.0.as_mut().expect("just acquired");
     sqlx::query("SELECT pg_advisory_lock($1)")
         .bind(STAGES_LOCK)
-        .execute(&mut *conn)
+        .execute(&mut **conn)
         .await
         .context("waiting for another import")?;
-    let mut held = Locked(Some(conn));
     let ran = async {
         crate::dishes::group_dishes(pool).await?;
         crate::options::derive_options(pool).await?;
