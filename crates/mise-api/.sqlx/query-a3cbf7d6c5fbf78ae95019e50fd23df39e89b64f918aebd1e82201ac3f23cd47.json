@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id AS \"id!\",\n                  password_hash AS \"password_hash?\",\n                  disabled AS \"disabled!\"\n           FROM users WHERE lower(username) = $1",
+  "query": "SELECT id, password_hash, disabled FROM users WHERE lower(username) = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "password_hash?",
+        "name": "password_hash",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "disabled!",
+        "name": "disabled",
         "type_info": "Bool",
         "origin": {
           "Table": {
@@ -48,5 +48,5 @@
       false
     ]
   },
-  "hash": "314722d4227c5c006aae3f8d2faca8c35f264c858b7deef2b211ffe8740b0713"
+  "hash": "a3cbf7d6c5fbf78ae95019e50fd23df39e89b64f918aebd1e82201ac3f23cd47"
 }

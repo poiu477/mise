@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT u.id AS \"id!\",\n                  u.username AS \"username!\",\n                  u.is_admin AS \"is_admin!\",\n                  u.household_id AS \"household_id!\",\n                  t.scope AS \"scope!\"\n           FROM api_tokens t JOIN users u ON u.id = t.user_id\n           WHERE t.token_hash = $1 AND NOT u.disabled",
+  "query": "SELECT u.id, u.username, u.is_admin, u.household_id, t.scope\n         FROM api_tokens t JOIN users u ON u.id = t.user_id\n         WHERE t.token_hash = $1 AND NOT u.disabled",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "username!",
+        "name": "username",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "is_admin!",
+        "name": "is_admin",
         "type_info": "Bool",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "household_id!",
+        "name": "household_id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -49,7 +49,7 @@
       },
       {
         "ordinal": 4,
-        "name": "scope!",
+        "name": "scope",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -72,5 +72,5 @@
       false
     ]
   },
-  "hash": "942fe67bb64a255693c7858ec156e5169d398cb9ac9fc77f368f620a421c0b7a"
+  "hash": "511169386b7a9d6cce129da76fac128a731371df842f5f5638d77e676c19dbfd"
 }

@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT u.id AS \"id!\",\n                  u.username AS \"username!\",\n                  u.is_admin AS \"is_admin!\",\n                  u.household_id AS \"household_id!\",\n                  s.last_seen_at AS \"last_seen_at!\"\n           FROM sessions s JOIN users u ON u.id = s.user_id\n           WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.disabled",
+  "query": "SELECT u.id, u.username, u.is_admin, u.household_id, s.last_seen_at\n         FROM sessions s JOIN users u ON u.id = s.user_id\n         WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.disabled",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "username!",
+        "name": "username",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "is_admin!",
+        "name": "is_admin",
         "type_info": "Bool",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "household_id!",
+        "name": "household_id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -49,7 +49,7 @@
       },
       {
         "ordinal": 4,
-        "name": "last_seen_at!",
+        "name": "last_seen_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
@@ -72,5 +72,5 @@
       false
     ]
   },
-  "hash": "2ed2e5124a10d42d05bbe63d16de8f60dd4e696bd8be8b12bb74a1e641c7f523"
+  "hash": "64ba4bb9af950260291b7a593217ee449d300ceb766cdbedb5af88247c399944"
 }

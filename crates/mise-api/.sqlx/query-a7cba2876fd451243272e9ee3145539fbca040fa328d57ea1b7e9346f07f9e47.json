@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id AS \"id!\",\n                  name AS \"name!\",\n                  created_at AS \"created_at!\",\n                  linked_at AS \"linked_at?\",\n                  link_expires_at AS \"link_expires_at?\",\n                  last_used_at AS \"last_used_at?\"\n           FROM kitchen_tokens\n           WHERE household_id = $1 ORDER BY created_at, id",
+  "query": "INSERT INTO kitchen_tokens (id, household_id, created_by, name, link_hash, link_expires_at)\n         VALUES ($1, $2, $3, $4, $5, now() + make_interval(mins => $6))\n         RETURNING id, name, created_at, linked_at, link_expires_at, last_used_at",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "name!",
+        "name": "name",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "created_at!",
+        "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "linked_at?",
+        "name": "linked_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
@@ -49,7 +49,7 @@
       },
       {
         "ordinal": 4,
-        "name": "link_expires_at?",
+        "name": "link_expires_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
@@ -60,7 +60,7 @@
       },
       {
         "ordinal": 5,
-        "name": "last_used_at?",
+        "name": "last_used_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
@@ -72,7 +72,12 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4"
       ]
     },
     "nullable": [
@@ -84,5 +89,5 @@
       true
     ]
   },
-  "hash": "e310931e1d2bd5afc9a6600dd7e580652bf878340996ea127e6aef83bbc0ee24"
+  "hash": "a7cba2876fd451243272e9ee3145539fbca040fa328d57ea1b7e9346f07f9e47"
 }

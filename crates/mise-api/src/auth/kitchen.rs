@@ -20,7 +20,7 @@ use time::OffsetDateTime;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use super::{AuthConfig, CurrentUser, Via, new_secret, secret_hash};
+use super::{AuthConfig, CurrentUser, Via, new_secret, queries, secret_hash};
 use crate::{
     AppState,
     error::{ApiError, ApiResult},
@@ -66,26 +66,9 @@ pub(super) async fn from_cookie(
     secret: &str,
 ) -> Result<Option<(CurrentUser, bool)>, ApiError> {
     let hash = secret_hash(secret);
-    let row: Option<(Uuid, Uuid)> = sqlx::query!(
-        r#"SELECT id AS "id!",
-                  household_id AS "household_id!"
-           FROM kitchen_tokens WHERE token_hash = $1"#,
-        &hash
-    )
-    .fetch_optional(pool)
-    .await
-    .map(|row| row.map(|r| (r.id, r.household_id)))?;
-    let Some((id, household_id)) = row else {
+    let Some((id, household_id, renewed)) = queries::kitchen_session(pool, &hash).await? else {
         return Ok(None);
     };
-    let renewed = sqlx::query!(
-        "UPDATE kitchen_tokens SET last_used_at = now() WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')",
-        id
-    )
-        .execute(pool)
-        .await?
-        .rows_affected()
-        > 0;
     Ok(Some((
         CurrentUser {
             // The token's id: a kitchen session has no account. `may` keeps it to routes that read by household.
@@ -113,16 +96,9 @@ pub fn cookie(secret: String, config: &AuthConfig) -> Cookie<'static> {
 /// What `/me` answers a kitchen device: the device's own name, its household's id, and no username, email or
 /// household name.
 pub(super) async fn me(pool: &PgPool, id: Uuid) -> ApiResult<super::routes::Me> {
-    let (name, household_id): (String, Uuid) = sqlx::query!(
-        r#"SELECT name AS "name!",
-                  household_id AS "household_id!"
-           FROM kitchen_tokens WHERE id = $1"#,
-        id
-    )
-    .fetch_optional(pool)
-    .await
-    .map(|row| row.map(|r| (r.name, r.household_id)))?
-    .ok_or(ApiError::Unauthorized)?;
+    let (name, household_id) = queries::kitchen_device(pool, id)
+        .await?
+        .ok_or(ApiError::Unauthorized)?;
     Ok(super::routes::Me {
         id,
         username: String::new(),
@@ -176,27 +152,6 @@ pub struct NewKitchenToken {
     pub info: KitchenToken,
 }
 
-/// id, name, created, linked, link expires, last used.
-type Row = (
-    Uuid,
-    String,
-    OffsetDateTime,
-    Option<OffsetDateTime>,
-    Option<OffsetDateTime>,
-    Option<OffsetDateTime>,
-);
-
-fn info((id, name, created_at, linked_at, link_expires_at, last_used_at): Row) -> KitchenToken {
-    KitchenToken {
-        id,
-        name,
-        created_at,
-        linked_at,
-        link_expires_at,
-        last_used_at,
-    }
-}
-
 /// The household's kitchen tokens (admins only).
 #[utoipa::path(get, path = "/api/v1/kitchen-tokens", operation_id = "list_kitchen_tokens", tag = "kitchen",
     responses(
@@ -210,34 +165,9 @@ pub async fn list(
     Extension(u): Extension<CurrentUser>,
 ) -> ApiResult<Json<Vec<KitchenToken>>> {
     u.require_admin()?;
-    let rows: Vec<Row> = sqlx::query!(
-        r#"SELECT id AS "id!",
-                  name AS "name!",
-                  created_at AS "created_at!",
-                  linked_at AS "linked_at?",
-                  link_expires_at AS "link_expires_at?",
-                  last_used_at AS "last_used_at?"
-           FROM kitchen_tokens
-           WHERE household_id = $1 ORDER BY created_at, id"#,
-        u.household_id
-    )
-    .fetch_all(&s.pool)
-    .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| {
-                (
-                    r.id,
-                    r.name,
-                    r.created_at,
-                    r.linked_at,
-                    r.link_expires_at,
-                    r.last_used_at,
-                )
-            })
-            .collect::<Vec<_>>()
-    })?;
-    Ok(Json(rows.into_iter().map(info).collect()))
+    Ok(Json(
+        queries::kitchen_tokens(&s.pool, u.household_id).await?,
+    ))
 }
 
 /// Issue a kitchen token for the household (admins only, from a browser session). Answers with its one-time
@@ -268,25 +198,15 @@ pub async fn create(
         )));
     }
     let secret = new_secret();
-    let row: Row = sqlx::query!(
-        r#"INSERT INTO kitchen_tokens (id, household_id, created_by, name, link_hash, link_expires_at)
-           VALUES ($1, $2, $3, $4, $5, now() + make_interval(mins => $6))
-           RETURNING id AS "id!",
-                     name AS "name!",
-                     created_at AS "created_at!",
-                     linked_at AS "linked_at?",
-                     link_expires_at AS "link_expires_at?",
-                     last_used_at AS "last_used_at?""#,
-        Uuid::now_v7(),
+    let info = queries::add_kitchen_token(
+        &s.pool,
         u.household_id,
         u.id,
         &name,
-        secret_hash(&secret),
-        LINK_MINUTES
+        &secret_hash(&secret),
+        LINK_MINUTES,
     )
-    .fetch_one(&s.pool)
-    .await
-    .map(|r| (r.id, r.name, r.created_at, r.linked_at, r.link_expires_at, r.last_used_at))?;
+    .await?;
     let path = format!("{}/auth/kitchen?code={secret}", crate::API);
     let link = match &s.auth.config.public_base_url {
         Some(base) => base
@@ -295,10 +215,7 @@ pub async fn create(
             .to_string(),
         None => path,
     };
-    Ok(Json(NewKitchenToken {
-        link,
-        info: info(row),
-    }))
+    Ok(Json(NewKitchenToken { link, info }))
 }
 
 /// Revoke one of the household's kitchen tokens (admins only). The device is refused from its next request.
@@ -317,15 +234,7 @@ pub async fn delete(
     Path(id): Path<Uuid>,
 ) -> ApiResult<StatusCode> {
     u.require_admin()?;
-    let n = sqlx::query!(
-        "DELETE FROM kitchen_tokens WHERE id = $1 AND household_id = $2",
-        id,
-        u.household_id
-    )
-    .execute(&s.pool)
-    .await?
-    .rows_affected();
-    if n == 0 {
+    if !queries::delete_kitchen_token(&s.pool, id, u.household_id).await? {
         Err(ApiError::NotFound)
     } else {
         Ok(StatusCode::NO_CONTENT)
@@ -357,14 +266,7 @@ pub async fn open_link(
     let secret = new_secret();
     let opened: Result<Option<Uuid>, sqlx::Error> = match p.code.as_deref() {
         Some(code) if !code.is_empty() => {
-            sqlx::query_scalar!(
-                "UPDATE kitchen_tokens SET link_hash = NULL, link_expires_at = NULL, token_hash = $2, linked_at = now()
-                 WHERE link_hash = $1 AND link_expires_at > now() RETURNING id",
-                secret_hash(code),
-                secret_hash(&secret)
-            )
-            .fetch_optional(&s.pool)
-            .await
+            queries::open_kitchen_link(&s.pool, &secret_hash(code), &secret_hash(&secret)).await
         }
         _ => Ok(None),
     };

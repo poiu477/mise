@@ -5,6 +5,7 @@
 
 pub mod kitchen;
 pub mod oidc;
+mod queries;
 pub mod routes;
 
 use std::collections::HashMap;
@@ -253,17 +254,14 @@ pub async fn create_session(
     days: i64,
 ) -> Result<String, ApiError> {
     let token = new_secret();
-    sqlx::query!("DELETE FROM sessions WHERE expires_at < now()")
-        .execute(pool)
-        .await?;
-    sqlx::query!(
-        "INSERT INTO sessions (token_hash, user_id, expires_at, user_agent) VALUES ($1, $2, now() + make_interval(days => $3::int), $4)",
-        secret_hash(&token),
+    let agent: Option<String> = user_agent.map(|u| u.chars().take(200).collect());
+    queries::add_session(
+        pool,
+        &secret_hash(&token),
         user,
         days as i32,
-        user_agent.map(|u| u.chars().take(200).collect::<String>())
+        agent.as_deref(),
     )
-    .execute(pool)
     .await?;
     Ok(token)
 }
@@ -340,70 +338,32 @@ async fn from_session(
     days: i64,
 ) -> Result<Option<CurrentUser>, ApiError> {
     let hash = secret_hash(token);
-    let row: Option<(Uuid, String, bool, Uuid, OffsetDateTime)> = sqlx::query!(
-        r#"SELECT u.id AS "id!",
-                  u.username AS "username!",
-                  u.is_admin AS "is_admin!",
-                  u.household_id AS "household_id!",
-                  s.last_seen_at AS "last_seen_at!"
-           FROM sessions s JOIN users u ON u.id = s.user_id
-           WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.disabled"#,
-        &hash
-    )
-    .fetch_optional(pool)
-    .await
-    .map(|row| row.map(|r| (r.id, r.username, r.is_admin, r.household_id, r.last_seen_at)))?;
-    let Some((id, username, is_admin, household_id, seen)) = row else {
+    let Some((user, seen)) = queries::session(pool, &hash).await? else {
         return Ok(None);
     };
     // Sliding expiry, written at most hourly.
     if OffsetDateTime::now_utc() - seen > time::Duration::hours(1) {
-        sqlx::query!(
-            "UPDATE sessions SET last_seen_at = now(), expires_at = now() + make_interval(days => $2::int) WHERE token_hash = $1",
-            &hash,
-            days as i32
-        )
-            .execute(pool)
-            .await?;
+        queries::renew_session(pool, &hash, days as i32).await?;
     }
     Ok(Some(CurrentUser {
-        id,
-        username,
-        is_admin,
-        household_id,
+        id: user.id,
+        username: user.username,
+        is_admin: user.is_admin,
+        household_id: user.household_id,
         via: Via::Session,
     }))
 }
 
 async fn from_token(pool: &PgPool, token: &str) -> Result<Option<CurrentUser>, ApiError> {
     let hash = secret_hash(token);
-    let row: Option<(Uuid, String, bool, Uuid, String)> = sqlx::query!(
-        r#"SELECT u.id AS "id!",
-                  u.username AS "username!",
-                  u.is_admin AS "is_admin!",
-                  u.household_id AS "household_id!",
-                  t.scope AS "scope!"
-           FROM api_tokens t JOIN users u ON u.id = t.user_id
-           WHERE t.token_hash = $1 AND NOT u.disabled"#,
-        &hash
-    )
-    .fetch_optional(pool)
-    .await
-    .map(|row| row.map(|r| (r.id, r.username, r.is_admin, r.household_id, r.scope)))?;
-    let Some((id, username, is_admin, household_id, scope)) = row else {
+    let Some((user, scope)) = queries::api_token(pool, &hash).await? else {
         return Ok(None);
     };
-    sqlx::query!(
-        "UPDATE api_tokens SET last_used_at = now() WHERE token_hash = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')",
-        &hash
-    )
-        .execute(pool)
-        .await?;
     Ok(Some(CurrentUser {
-        id,
-        username,
-        is_admin,
-        household_id,
+        id: user.id,
+        username: user.username,
+        is_admin: user.is_admin,
+        household_id: user.household_id,
         via: Via::Token {
             read_only: scope == "read",
         },

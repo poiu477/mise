@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id AS \"id!\",\n                  name AS \"name!\",\n                  scope AS \"scope!\",\n                  created_at AS \"created_at!\",\n                  last_used_at AS \"last_used_at?\"\n           FROM api_tokens WHERE user_id = $1 ORDER BY created_at",
+  "query": "SELECT id, name, scope, created_at, last_used_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "name!",
+        "name": "name",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "scope!",
+        "name": "scope",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "created_at!",
+        "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
@@ -49,7 +49,7 @@
       },
       {
         "ordinal": 4,
-        "name": "last_used_at?",
+        "name": "last_used_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
@@ -72,5 +72,5 @@
       true
     ]
   },
-  "hash": "c96dc158b288b91e1dbae6f8a4e787a7e6e27dd4f27b82b578ce1e5046b75b5c"
+  "hash": "78f5c7722c7d5535e665e76a7626e88eb77d67512536f7262c2e8e6282a83414"
 }

@@ -24,7 +24,7 @@ use serde::Deserialize;
 use tokio::sync::OnceCell;
 use uuid::Uuid;
 
-use super::secret_hash;
+use super::{queries, secret_hash};
 use crate::{AppState, extract::Query};
 
 /// OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_NAME, OIDC_SCOPES, OIDC_ADMIN_GROUP, OIDC_HOUSEHOLD.
@@ -242,18 +242,14 @@ async fn start_inner(
         req = req.add_scope(Scope::new(scope.clone()));
     }
     let (url, state, nonce) = req.set_pkce_challenge(challenge).url();
-    sqlx::query!("DELETE FROM oidc_logins WHERE created_at < now() - interval '15 minutes'")
-        .execute(&s.pool)
-        .await?;
-    sqlx::query!(
-        "INSERT INTO oidc_logins (state_hash, nonce, pkce_verifier, return_to) VALUES ($1, $2, $3, $4)",
-        secret_hash(state.secret()),
+    queries::add_oidc_login(
+        &s.pool,
+        &secret_hash(state.secret()),
         nonce.secret(),
         verifier.secret(),
-        safe_return(p.return_to)
+        &safe_return(p.return_to),
     )
-        .execute(&s.pool)
-        .await?;
+    .await?;
     Ok((url.to_string(), state.secret().clone()))
 }
 
@@ -342,16 +338,9 @@ async fn callback_inner(
             "That sign-in didn't start in this browser. Try again.",
         ));
     }
-    let pending: Option<(String, String, String)> = sqlx::query!(
-        r#"DELETE FROM oidc_logins WHERE state_hash = $1 AND created_at > now() - interval '15 minutes'
-           RETURNING nonce AS "nonce!",
-                     pkce_verifier AS "pkce_verifier!",
-                     return_to AS "return_to!""#,
-        secret_hash(&state)
-    )
-    .fetch_optional(&s.pool)
-    .await
-    .map(|row| row.map(|r| (r.nonce, r.pkce_verifier, r.return_to)))?;
+    let pending = queries::take_oidc_login(&s.pool, &secret_hash(&state))
+        .await?
+        .map(|l| (l.nonce, l.pkce_verifier, l.return_to));
     let Some((nonce, verifier, return_to)) = pending else {
         return Ok(Outcome::Refused("That sign-in expired. Try again."));
     };
@@ -436,13 +425,7 @@ async fn callback_inner(
         }
     };
     if let Some(group) = &cfg.admin_group {
-        sqlx::query!(
-            "UPDATE users SET is_admin = $2 WHERE id = $1",
-            user,
-            groups.iter().any(|g| g == group)
-        )
-        .execute(&s.pool)
-        .await?;
+        queries::set_admin(&s.pool, user, groups.iter().any(|g| g == group)).await?;
     }
     Ok(Outcome::SignedIn { user, return_to })
 }
@@ -497,16 +480,7 @@ async fn find_or_create(
     may_create: bool,
 ) -> anyhow::Result<Account> {
     let mut tx = s.pool.begin().await?;
-    let known: Option<(Uuid, bool)> = sqlx::query!(
-        r#"SELECT u.id AS "id!",
-                  u.disabled AS "disabled!"
-           FROM user_identities i JOIN users u ON u.id = i.user_id WHERE i.issuer = $1 AND i.subject = $2"#,
-        issuer,
-        subject
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map(|row| row.map(|r| (r.id, r.disabled)))?;
+    let known = queries::identity(&mut *tx, issuer, subject).await?;
     if let Some((id, disabled)) = known {
         return Ok(if disabled {
             Account::Disabled
@@ -516,13 +490,9 @@ async fn find_or_create(
     }
     // Link to an existing account only on an email the provider vouches for, and never to an admin's.
     let by_email = match (email, email_verified) {
-        (Some(e), true) => sqlx::query!(
-            "SELECT id, disabled, is_admin FROM users WHERE lower(email) = $1",
-            e
-        )
-        .fetch_optional(&mut *tx)
-        .await?
-        .map(|u| (u.id, u.disabled, u.is_admin)),
+        (Some(e), true) => queries::by_email(&mut *tx, e)
+            .await?
+            .map(|u| (u.id, u.disabled, u.is_admin)),
         _ => None,
     };
     let (id, disabled) = match by_email {
@@ -542,24 +512,12 @@ async fn find_or_create(
                 .unwrap_or_else(|| "user".into());
             let mut username = base.clone();
             let mut n = 2;
-            while sqlx::query_scalar!(
-                r#"SELECT EXISTS (SELECT 1 FROM users WHERE lower(username) = lower($1)) AS "value!""#,
-                &username
-            )
-            .fetch_one(&mut *tx)
-            .await?
-            {
+            while queries::username_taken(&mut *tx, &username).await? {
                 username = format!("{base}{n}");
                 n += 1;
             }
             let household = match &cfg.household {
-                Some(h) => match sqlx::query_scalar!(
-                    "SELECT id FROM households WHERE name = $1 ORDER BY created_at LIMIT 1",
-                    h
-                )
-                .fetch_optional(&mut *tx)
-                .await?
-                {
+                Some(h) => match queries::household_named(&mut *tx, h).await? {
                     Some(id) => id,
                     None => new_household(&mut tx, h).await?,
                 },
@@ -572,28 +530,22 @@ async fn find_or_create(
                 }
             };
             let id = Uuid::now_v7();
-            sqlx::query!(
-                "INSERT INTO users (id, username, display_name, email, household_id) VALUES ($1, $2, $3, $4, $5)",
+            let display_name = name.unwrap_or_else(|| username.clone());
+            let account = queries::NewAccount {
                 id,
-                &username,
-                name.unwrap_or_else(|| username.clone()),
-                if email_verified { email } else { None },
-                household
-            )
-                .execute(&mut *tx)
-                .await?;
+                username: &username,
+                display_name: &display_name,
+                email: if email_verified { email } else { None },
+                password_hash: None,
+                is_admin: false,
+                household,
+            };
+            queries::add_account(&mut *tx, account).await?;
             tracing::info!(%username, "account created by single sign-on");
             (id, false)
         }
     };
-    sqlx::query!(
-        "INSERT INTO user_identities (issuer, subject, user_id) VALUES ($1, $2, $3)",
-        issuer,
-        subject,
-        id
-    )
-    .execute(&mut *tx)
-    .await?;
+    queries::add_identity(&mut *tx, issuer, subject, id).await?;
     tx.commit().await?;
     Ok(if disabled {
         Account::Disabled
@@ -607,13 +559,7 @@ async fn new_household(
     name: &str,
 ) -> anyhow::Result<Uuid> {
     let id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO households (id, name) VALUES ($1, $2)",
-        id,
-        name
-    )
-    .execute(&mut **tx)
-    .await?;
+    queries::add_household(&mut **tx, id, name).await?;
     Ok(id)
 }
 

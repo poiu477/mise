@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT count(*) AS \"value!\" FROM users",
+  "query": "SELECT count(*) AS \"count!\" FROM users",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "value!",
+        "name": "count!",
         "type_info": "Int8",
         "origin": "Expression"
       }
@@ -17,5 +17,5 @@
       null
     ]
   },
-  "hash": "09fb48558a62bb85d4b06c5232d9f85edb86530c63d95d9a2ebb8edb17e2d8d5"
+  "hash": "780556e46140dd1c1d9385ff28e8114dbb517fd075bba227d471d8a70a1186fc"
 }
