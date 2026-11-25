@@ -72,17 +72,29 @@ type EntryRow = (
 /// A week's plan, with only the versions the household can see: one it can no longer see drops out rather than
 /// showing another household's recipe.
 async fn load(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan> {
-    let rows: Vec<EntryRow> = sqlx::query_as(
-        "SELECT e.id, e.variant_id, d.slug, v.title, v.subtitle, e.servings::float8,
-                ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id ORDER BY y.servings),
-                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1)
-         FROM plan_entries e JOIN variants v ON v.id = e.variant_id LEFT JOIN dishes d ON d.id = v.dish_id
-         WHERE e.household_id = $1 AND e.week = $2 AND visible_to(v, $1) ORDER BY e.created_at, e.id",
+    let rows: Vec<EntryRow> = sqlx::query!(
+        r#"SELECT e.id AS "id!",
+                  e.variant_id AS "variant_id!",
+                  d.slug AS "slug?",
+                  v.title AS "title!",
+                  v.subtitle AS "subtitle?",
+                  e.servings::float8 AS "servings!",
+                  ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id
+                        ORDER BY y.servings) AS "yields!",
+                  (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero'
+                   LIMIT 1) AS "photo?"
+           FROM plan_entries e JOIN variants v ON v.id = e.variant_id LEFT JOIN dishes d ON d.id = v.dish_id
+           WHERE e.household_id = $1 AND e.week = $2 AND visible_to(v, $1) ORDER BY e.created_at, e.id"#,
+        household,
+        week
     )
-    .bind(household)
-    .bind(week)
     .fetch_all(&s.pool)
-    .await?;
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| (r.id, r.variant_id, r.slug, r.title, r.subtitle, r.servings, r.yields, r.photo))
+            .collect::<Vec<_>>()
+    })?;
     let entries = rows
         .into_iter()
         .map(
@@ -158,13 +170,16 @@ pub async fn add(
     Extension(me): Extension<CurrentUser>,
     JsonBody(b): JsonBody<NewEntry>,
 ) -> ApiResult<Json<Plan>> {
-    let yields: Option<(Vec<f64>,)> = sqlx::query_as(
-        "SELECT ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id ORDER BY y.servings) FROM variants v WHERE v.id = $1 AND visible_to(v, $2)",
+    let yields: Option<(Vec<f64>,)> = sqlx::query!(
+        r#"SELECT ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id
+                        ORDER BY y.servings) AS "yields!"
+           FROM variants v WHERE v.id = $1 AND visible_to(v, $2)"#,
+        b.variant_id,
+        me.household_id
     )
-    .bind(b.variant_id)
-    .bind(me.household_id)
     .fetch_optional(&s.pool)
-    .await?;
+    .await
+    .map(|row| row.map(|r| (r.yields,)))?;
     let (yields,) = yields.ok_or(ApiError::NotFound)?;
     let servings = b.servings.unwrap_or_else(|| {
         if yields.contains(&2.0) {

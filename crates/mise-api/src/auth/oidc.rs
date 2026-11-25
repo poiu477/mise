@@ -342,12 +342,16 @@ async fn callback_inner(
             "That sign-in didn't start in this browser. Try again.",
         ));
     }
-    let pending: Option<(String, String, String)> = sqlx::query_as(
-        "DELETE FROM oidc_logins WHERE state_hash = $1 AND created_at > now() - interval '15 minutes' RETURNING nonce, pkce_verifier, return_to",
+    let pending: Option<(String, String, String)> = sqlx::query!(
+        r#"DELETE FROM oidc_logins WHERE state_hash = $1 AND created_at > now() - interval '15 minutes'
+           RETURNING nonce AS "nonce!",
+                     pkce_verifier AS "pkce_verifier!",
+                     return_to AS "return_to!""#,
+        secret_hash(&state)
     )
-    .bind(secret_hash(&state))
     .fetch_optional(&s.pool)
-    .await?;
+    .await
+    .map(|row| row.map(|r| (r.nonce, r.pkce_verifier, r.return_to)))?;
     let Some((nonce, verifier, return_to)) = pending else {
         return Ok(Outcome::Refused("That sign-in expired. Try again."));
     };
@@ -493,13 +497,16 @@ async fn find_or_create(
     may_create: bool,
 ) -> anyhow::Result<Account> {
     let mut tx = s.pool.begin().await?;
-    let known: Option<(Uuid, bool)> = sqlx::query_as(
-        "SELECT u.id, u.disabled FROM user_identities i JOIN users u ON u.id = i.user_id WHERE i.issuer = $1 AND i.subject = $2",
+    let known: Option<(Uuid, bool)> = sqlx::query!(
+        r#"SELECT u.id AS "id!",
+                  u.disabled AS "disabled!"
+           FROM user_identities i JOIN users u ON u.id = i.user_id WHERE i.issuer = $1 AND i.subject = $2"#,
+        issuer,
+        subject
     )
-    .bind(issuer)
-    .bind(subject)
     .fetch_optional(&mut *tx)
-    .await?;
+    .await
+    .map(|row| row.map(|r| (r.id, r.disabled)))?;
     if let Some((id, disabled)) = known {
         return Ok(if disabled {
             Account::Disabled

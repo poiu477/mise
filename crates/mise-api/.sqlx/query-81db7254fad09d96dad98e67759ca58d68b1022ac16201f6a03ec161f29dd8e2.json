@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT food_id AS \"food_id!\",\n                  kind AS \"kind!\",\n                  item AS \"item!\",\n                  ml::float8 AS \"ml?\",\n                  grams::float8 AS \"grams?\"\n           FROM food_measures WHERE food_id = ANY($1) ORDER BY created_at, id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "food_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "food_measures",
+            "name": "food_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "food_measures",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "item!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "food_measures",
+            "name": "item"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "ml?",
+        "type_info": "Float8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "grams?",
+        "type_info": "Float8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "81db7254fad09d96dad98e67759ca58d68b1022ac16201f6a03ec161f29dd8e2"
+}

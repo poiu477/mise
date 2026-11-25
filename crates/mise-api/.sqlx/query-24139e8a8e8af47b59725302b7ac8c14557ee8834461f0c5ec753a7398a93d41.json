@@ -1,0 +1,93 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO kitchen_tokens (id, household_id, created_by, name, link_hash, link_expires_at)\n           VALUES ($1, $2, $3, $4, $5, now() + make_interval(mins => $6))\n           RETURNING id AS \"id!\",\n                     name AS \"name!\",\n                     created_at AS \"created_at!\",\n                     linked_at AS \"linked_at?\",\n                     link_expires_at AS \"link_expires_at?\",\n                     last_used_at AS \"last_used_at?\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "kitchen_tokens",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "kitchen_tokens",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "kitchen_tokens",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "linked_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "kitchen_tokens",
+            "name": "linked_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "link_expires_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "kitchen_tokens",
+            "name": "link_expires_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "last_used_at?",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "kitchen_tokens",
+            "name": "last_used_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "24139e8a8e8af47b59725302b7ac8c14557ee8834461f0c5ec753a7398a93d41"
+}

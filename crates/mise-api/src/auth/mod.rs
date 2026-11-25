@@ -340,13 +340,19 @@ async fn from_session(
     days: i64,
 ) -> Result<Option<CurrentUser>, ApiError> {
     let hash = secret_hash(token);
-    let row: Option<(Uuid, String, bool, Uuid, OffsetDateTime)> = sqlx::query_as(
-        "SELECT u.id, u.username, u.is_admin, u.household_id, s.last_seen_at FROM sessions s JOIN users u ON u.id = s.user_id
-         WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.disabled",
+    let row: Option<(Uuid, String, bool, Uuid, OffsetDateTime)> = sqlx::query!(
+        r#"SELECT u.id AS "id!",
+                  u.username AS "username!",
+                  u.is_admin AS "is_admin!",
+                  u.household_id AS "household_id!",
+                  s.last_seen_at AS "last_seen_at!"
+           FROM sessions s JOIN users u ON u.id = s.user_id
+           WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.disabled"#,
+        &hash
     )
-    .bind(&hash)
     .fetch_optional(pool)
-    .await?;
+    .await
+    .map(|row| row.map(|r| (r.id, r.username, r.is_admin, r.household_id, r.last_seen_at)))?;
     let Some((id, username, is_admin, household_id, seen)) = row else {
         return Ok(None);
     };
@@ -371,13 +377,19 @@ async fn from_session(
 
 async fn from_token(pool: &PgPool, token: &str) -> Result<Option<CurrentUser>, ApiError> {
     let hash = secret_hash(token);
-    let row: Option<(Uuid, String, bool, Uuid, String)> = sqlx::query_as(
-        "SELECT u.id, u.username, u.is_admin, u.household_id, t.scope FROM api_tokens t JOIN users u ON u.id = t.user_id
-         WHERE t.token_hash = $1 AND NOT u.disabled",
+    let row: Option<(Uuid, String, bool, Uuid, String)> = sqlx::query!(
+        r#"SELECT u.id AS "id!",
+                  u.username AS "username!",
+                  u.is_admin AS "is_admin!",
+                  u.household_id AS "household_id!",
+                  t.scope AS "scope!"
+           FROM api_tokens t JOIN users u ON u.id = t.user_id
+           WHERE t.token_hash = $1 AND NOT u.disabled"#,
+        &hash
     )
-    .bind(&hash)
     .fetch_optional(pool)
-    .await?;
+    .await
+    .map(|row| row.map(|r| (r.id, r.username, r.is_admin, r.household_id, r.scope)))?;
     let Some((id, username, is_admin, household_id, scope)) = row else {
         return Ok(None);
     };

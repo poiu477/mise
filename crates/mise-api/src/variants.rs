@@ -163,16 +163,27 @@ pub async fn get(
     Path(id): Path<Uuid>,
     Query(p): Query<RenderParams>,
 ) -> ApiResult<Json<Variant>> {
-    let (title, subtitle, description, meta, dish_slug): (String, Option<String>, Option<String>, serde_json::Value, Option<String>) =
-        sqlx::query_as(
-            "SELECT v.title, v.subtitle, v.description, v.meta, d.slug FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
-             WHERE v.id = $1 AND visible_to(v, $2)",
-        )
-        .bind(id)
-        .bind(me.household_id)
-        .fetch_optional(&s.pool)
-        .await?
-        .ok_or(ApiError::NotFound)?;
+    let (title, subtitle, description, meta, dish_slug): (
+        String,
+        Option<String>,
+        Option<String>,
+        serde_json::Value,
+        Option<String>,
+    ) = sqlx::query!(
+        r#"SELECT v.title AS "title!",
+                      v.subtitle AS "subtitle?",
+                      v.description AS "description?",
+                      v.meta AS "meta!",
+                      d.slug AS "slug?"
+               FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
+               WHERE v.id = $1 AND visible_to(v, $2)"#,
+        id,
+        me.household_id
+    )
+    .fetch_optional(&s.pool)
+    .await
+    .map(|row| row.map(|r| (r.title, r.subtitle, r.description, r.meta, r.slug)))?
+    .ok_or(ApiError::NotFound)?;
     let yields: Vec<f64> = sqlx::query_scalar!(
         r#"SELECT servings::float8 AS "servings!" FROM variant_yields WHERE variant_id = $1 ORDER BY servings"#,
         id
@@ -199,29 +210,46 @@ pub async fn get(
     .fetch_all(&s.pool)
     .await?;
     let mut amounts: HashMap<Uuid, Vec<(f64, f64, Option<String>)>> = HashMap::new();
-    for (line, sv, a, u) in sqlx::query_as::<_, (Uuid, f64, f64, Option<String>)>(
-        "SELECT la.line_id, la.servings::float8, la.amount::float8, la.unit FROM line_amounts la
-         JOIN ingredient_lines il ON il.id = la.line_id WHERE il.variant_id = $1 AND la.amount > 0",
+    for (line, sv, a, u) in sqlx::query!(
+        r#"SELECT la.line_id AS "line_id!",
+                  la.servings::float8 AS "servings!",
+                  la.amount::float8 AS "amount!",
+                  la.unit AS "unit?"
+           FROM line_amounts la
+           JOIN ingredient_lines il ON il.id = la.line_id WHERE il.variant_id = $1 AND la.amount > 0"#,
+        id
     )
-    .bind(id)
     .fetch_all(&s.pool)
-    .await?
+    .await
+    .map(|rows| rows.into_iter().map(|r| (r.line_id, r.servings, r.amount, r.unit)).collect::<Vec<_>>())?
     {
         amounts.entry(line).or_default().push((sv, a, u));
     }
-    let step_rows: Vec<(Uuid, i32, String, Option<serde_json::Value>)> = sqlx::query_as(
-        "SELECT id, position, text, template FROM steps WHERE variant_id = $1 ORDER BY position",
+    let step_rows: Vec<(Uuid, i32, String, Option<serde_json::Value>)> = sqlx::query!(
+        r#"SELECT id AS "id!",
+                  position AS "position!",
+                  text AS "text!",
+                  template AS "template?"
+           FROM steps WHERE variant_id = $1 ORDER BY position"#,
+        id
     )
-    .bind(id)
     .fetch_all(&s.pool)
-    .await?;
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| (r.id, r.position, r.text, r.template))
+            .collect::<Vec<_>>()
+    })?;
     let mut step_images: HashMap<Uuid, Vec<Image>> = HashMap::new();
-    for (step, media) in sqlx::query_as::<_, (Uuid, Uuid)>(
-        "SELECT step_id, media_id FROM variant_media WHERE variant_id = $1 AND role = 'step' AND step_id IS NOT NULL ORDER BY position",
+    for (step, media) in sqlx::query!(
+        r#"SELECT step_id AS "step_id!",
+                  media_id AS "media_id!"
+           FROM variant_media WHERE variant_id = $1 AND role = 'step' AND step_id IS NOT NULL ORDER BY position"#,
+        id
     )
-    .bind(id)
     .fetch_all(&s.pool)
-    .await?
+    .await
+    .map(|rows| rows.into_iter().map(|r| (r.step_id, r.media_id)).collect::<Vec<_>>())?
     {
         step_images.entry(step).or_default().push(Image::new(media));
     }

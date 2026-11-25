@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT item_key AS \"item_key!\",\n                      checked AS \"checked!\",\n                      hidden AS \"hidden!\"\n               FROM shopping_marks WHERE household_id = $1 AND week = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_key!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "shopping_marks",
+            "name": "item_key"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "checked!",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "shopping_marks",
+            "name": "checked"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "hidden!",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "shopping_marks",
+            "name": "hidden"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fc60796176601a63ecb70e4a978e4352beb0394d09f7761582d34e83b386b9b9"
+}

@@ -158,40 +158,68 @@ fn id(v: &Value, key: &str) -> Option<Uuid> {
 /// The open items of `kinds`, as the page shows them. Food and dish names are read as they are now, so an item
 /// follows a renamed food or a regrouped dish.
 async fn load(s: &AppState, kinds: &[ReviewKind]) -> ApiResult<ReviewQueue> {
-    let names: Vec<&str> = kinds.iter().map(|k| k.as_str()).collect();
-    let rows: Vec<ItemRow> = sqlx::query_as(
-        "SELECT id, kind, subject, proposal, confidence, created_at FROM review_items
-         WHERE status = 'open' AND kind = ANY($1)
-         ORDER BY array_position($1, kind), confidence DESC NULLS LAST, created_at, id",
+    let names: Vec<String> = kinds.iter().map(|k| k.as_str().to_owned()).collect();
+    let rows: Vec<ItemRow> = sqlx::query!(
+        r#"SELECT id AS "id!",
+                  kind AS "kind!",
+                  subject AS "subject!",
+                  proposal AS "proposal!",
+                  confidence AS "confidence?",
+                  created_at AS "created_at!"
+           FROM review_items
+           WHERE status = 'open' AND kind = ANY($1)
+           ORDER BY array_position($1, kind), confidence DESC NULLS LAST, created_at, id"#,
+        &names
     )
-    .bind(&names)
     .fetch_all(&s.pool)
-    .await?;
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| {
+                (
+                    r.id,
+                    r.kind,
+                    r.subject,
+                    r.proposal,
+                    r.confidence,
+                    r.created_at,
+                )
+            })
+            .collect::<Vec<_>>()
+    })?;
 
     let food_ids: Vec<Uuid> = rows
         .iter()
         .flat_map(|r| [id(&r.2, "food_id"), id(&r.3, "parent_id")])
         .flatten()
         .collect();
-    let foods: HashMap<Uuid, String> =
-        sqlx::query_as::<_, (Uuid, String)>("SELECT id, name FROM foods WHERE id = ANY($1)")
-            .bind(&food_ids)
-            .fetch_all(&s.pool)
-            .await?
-            .into_iter()
-            .collect();
+    let foods: HashMap<Uuid, String> = sqlx::query!(
+        r#"SELECT id AS "id!",
+                      name AS "name!"
+               FROM foods WHERE id = ANY($1)"#,
+        &food_ids
+    )
+    .fetch_all(&s.pool)
+    .await
+    .map(|rows| rows.into_iter().map(|r| (r.id, r.name)).collect::<Vec<_>>())?
+    .into_iter()
+    .collect();
     let dish_ids: Vec<Uuid> = rows
         .iter()
         .flat_map(|r| [id(&r.2, "dish_id"), id(&r.3, "merge_into_dish")])
         .flatten()
         .collect();
-    let dishes: HashMap<Uuid, String> =
-        sqlx::query_as::<_, (Uuid, String)>("SELECT id, slug FROM dishes WHERE id = ANY($1)")
-            .bind(&dish_ids)
-            .fetch_all(&s.pool)
-            .await?
-            .into_iter()
-            .collect();
+    let dishes: HashMap<Uuid, String> = sqlx::query!(
+        r#"SELECT id AS "id!",
+                      slug AS "slug!"
+               FROM dishes WHERE id = ANY($1)"#,
+        &dish_ids
+    )
+    .fetch_all(&s.pool)
+    .await
+    .map(|rows| rows.into_iter().map(|r| (r.id, r.slug)).collect::<Vec<_>>())?
+    .into_iter()
+    .collect();
     let food_name = |v: &Value, id_key: &str, name_key: &str| {
         id(v, id_key)
             .and_then(|f| foods.get(&f).cloned())
@@ -312,13 +340,16 @@ fn checked(text: Option<&str>, what: &str) -> ApiResult<Option<String>> {
 
 /// The record a version came from, as dish decisions name it; None for a version written in the app.
 async fn record_of(tx: &mut Transaction<'_, Postgres>, variant: Uuid) -> ApiResult<Option<Record>> {
-    Ok(sqlx::query_as::<_, (String, String)>(
-        "SELECT s.key, sr.external_id FROM variants v JOIN source_records sr ON sr.id = v.source_record_id
-         JOIN sources s ON s.id = sr.source_id WHERE v.id = $1",
+    Ok(sqlx::query!(
+        r#"SELECT s.key AS "key!",
+                  sr.external_id AS "external_id!"
+           FROM variants v JOIN source_records sr ON sr.id = v.source_record_id
+           JOIN sources s ON s.id = sr.source_id WHERE v.id = $1"#,
+        variant
     )
-    .bind(variant)
     .fetch_optional(&mut **tx)
-    .await?
+    .await
+    .map(|row| row.map(|r| (r.key, r.external_id)))?
     .map(|(source, external)| Record(source, external)))
 }
 
@@ -371,12 +402,17 @@ pub async fn decide(
     let note = checked(d.note.as_deref(), "a note")?;
 
     let mut tx = s.pool.begin().await?;
-    let row: Option<(String, String, Value, Value)> = sqlx::query_as(
-        "SELECT kind, status, subject, proposal FROM review_items WHERE id = $1 FOR UPDATE",
+    let row: Option<(String, String, Value, Value)> = sqlx::query!(
+        r#"SELECT kind AS "kind!",
+                  status AS "status!",
+                  subject AS "subject!",
+                  proposal AS "proposal!"
+           FROM review_items WHERE id = $1 FOR UPDATE"#,
+        item
     )
-    .bind(item)
     .fetch_optional(&mut *tx)
-    .await?;
+    .await
+    .map(|row| row.map(|r| (r.kind, r.status, r.subject, r.proposal)))?;
     let (kind, status, subject, proposal) = row.ok_or(ApiError::NotFound)?;
     let kind = ReviewKind::from_str(&kind).ok_or(ApiError::NotFound)?;
     if status != "open" {

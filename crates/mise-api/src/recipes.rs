@@ -415,23 +415,30 @@ async fn line_facts(
     tx: &mut Transaction<'_, Postgres>,
     variant: Uuid,
 ) -> ApiResult<Vec<LineFacts>> {
-    Ok(
-        sqlx::query_as::<_, (Option<Uuid>, String, Option<bool>, Vec<String>)>(
-            "SELECT food_id, raw_name, shipped, allergens FROM ingredient_lines
-         WHERE variant_id = $1 AND (shipped IS NOT NULL OR allergens <> '{}') ORDER BY position",
-        )
-        .bind(variant)
-        .fetch_all(&mut **tx)
-        .await?
-        .into_iter()
-        .map(|(food_id, name, shipped, allergens)| LineFacts {
-            food_id,
-            name: singular_key(&name),
-            shipped,
-            allergens,
-        })
-        .collect(),
+    Ok(sqlx::query!(
+        r#"SELECT food_id AS "food_id?",
+                      raw_name AS "raw_name!",
+                      shipped AS "shipped?",
+                      allergens AS "allergens!"
+               FROM ingredient_lines
+           WHERE variant_id = $1 AND (shipped IS NOT NULL OR allergens <> '{}') ORDER BY position"#,
+        variant
     )
+    .fetch_all(&mut **tx)
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| (r.food_id, r.raw_name, r.shipped, r.allergens))
+            .collect::<Vec<_>>()
+    })?
+    .into_iter()
+    .map(|(food_id, name, shipped, allergens)| LineFacts {
+        food_id,
+        name: singular_key(&name),
+        shipped,
+        allergens,
+    })
+    .collect())
 }
 
 /// Gives each of a version's lines the facts of the line it replaces: the one for the same food, or with the same
@@ -445,11 +452,20 @@ async fn carry_facts(
     if facts.is_empty() {
         return Ok(());
     }
-    let lines: Vec<(Uuid, Option<Uuid>, String)> =
-        sqlx::query_as("SELECT id, food_id, raw_name FROM ingredient_lines WHERE variant_id = $1")
-            .bind(variant)
-            .fetch_all(&mut **tx)
-            .await?;
+    let lines: Vec<(Uuid, Option<Uuid>, String)> = sqlx::query!(
+        r#"SELECT id AS "id!",
+                      food_id AS "food_id?",
+                      raw_name AS "raw_name!"
+               FROM ingredient_lines WHERE variant_id = $1"#,
+        variant
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| (r.id, r.food_id, r.raw_name))
+            .collect::<Vec<_>>()
+    })?;
     for (id, food_id, name) in lines {
         let name = singular_key(&name);
         let same = |f: &&LineFacts| match (food_id, f.food_id) {
@@ -473,58 +489,48 @@ async fn carry_facts(
 /// The recipe `id` as it was written, for the household that wrote it; not found for anyone else, and for a
 /// version that wasn't written in the app.
 async fn load(tx: &mut Transaction<'_, Postgres>, id: Uuid, household: Uuid) -> ApiResult<Recipe> {
-    type Row = (
-        String,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<f64>,
-        Option<Uuid>,
-        String,
-    );
-    let (title, subtitle, description, dish_slug, servings, hero, visibility): Row = sqlx::query_as(
-        "SELECT v.title, v.subtitle, v.description, d.slug,
-                (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id),
-                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1),
-                v.visibility
-         FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
-         WHERE v.id = $1 AND v.origin = 'user' AND v.household_id = $2",
+    let v = sqlx::query!(
+        r#"SELECT v.title,
+                  v.subtitle,
+                  v.description,
+                  d.slug AS "dish_slug?",
+                  (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id) AS servings,
+                  (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero'
+                   LIMIT 1) AS hero,
+                  v.visibility
+           FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
+           WHERE v.id = $1 AND v.origin = 'user' AND v.household_id = $2"#,
+        id,
+        household
     )
-    .bind(id)
-    .bind(household)
     .fetch_optional(&mut **tx)
     .await?
     .ok_or(ApiError::NotFound)?;
-    type LineRow = (
-        Option<String>,
-        String,
-        Option<String>,
-        Option<f64>,
-        Option<String>,
-        Option<Uuid>,
-        Option<String>,
-    );
-    let ingredients = sqlx::query_as::<_, LineRow>(
-        "SELECT il.text, il.raw_name, il.note, la.amount::float8, la.unit, f.id, f.name
-         FROM ingredient_lines il
-         LEFT JOIN line_amounts la ON la.line_id = il.id
-         LEFT JOIN foods f ON f.id = il.food_id
-         WHERE il.variant_id = $1 ORDER BY il.position",
+    let ingredients = sqlx::query!(
+        r#"SELECT il.text,
+                  il.raw_name,
+                  il.note,
+                  la.amount::float8 AS "amount?",
+                  la.unit AS "unit?",
+                  f.id AS "food_id?",
+                  f.name AS "food?"
+           FROM ingredient_lines il
+           LEFT JOIN line_amounts la ON la.line_id = il.id
+           LEFT JOIN foods f ON f.id = il.food_id
+           WHERE il.variant_id = $1 ORDER BY il.position"#,
+        id
     )
-    .bind(id)
     .fetch_all(&mut **tx)
     .await?
     .into_iter()
-    .map(
-        |(text, name, note, amount, unit, food_id, food)| RecipeLine {
-            text: text.unwrap_or_else(|| name.clone()),
-            amount,
-            unit,
-            name,
-            note,
-            food: food_id.zip(food).map(|(id, name)| FoodRef { id, name }),
-        },
-    )
+    .map(|l| RecipeLine {
+        text: l.text.unwrap_or_else(|| l.raw_name.clone()),
+        amount: l.amount,
+        unit: l.unit,
+        name: l.raw_name,
+        note: l.note,
+        food: l.food_id.zip(l.food).map(|(id, name)| FoodRef { id, name }),
+    })
     .collect();
     let steps = sqlx::query_scalar!(
         "SELECT text FROM steps WHERE variant_id = $1 ORDER BY position",
@@ -534,15 +540,15 @@ async fn load(tx: &mut Transaction<'_, Postgres>, id: Uuid, household: Uuid) -> 
     .await?;
     Ok(Recipe {
         id,
-        dish_slug: dish_slug.unwrap_or_default(),
-        title,
-        subtitle,
-        description,
-        servings: servings.unwrap_or(1.0),
+        dish_slug: v.dish_slug.unwrap_or_default(),
+        title: v.title,
+        subtitle: v.subtitle,
+        description: v.description,
+        servings: v.servings.unwrap_or(1.0),
         ingredients,
         steps,
-        image: hero.map(Image::new),
-        visibility: Visibility::parse(&visibility).unwrap_or(Visibility::Private),
+        image: v.hero.map(Image::new),
+        visibility: Visibility::parse(&v.visibility).unwrap_or(Visibility::Private),
     })
 }
 
@@ -658,15 +664,18 @@ pub async fn update(
     }
     take_turn(&mut tx).await?;
     // The dish follows the recipe only when it is the recipe's own: one a person made that opens on this version.
-    let own_dish: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT d.id, d.slug FROM variants v
-         LEFT JOIN dishes d ON d.id = v.dish_id AND d.origin = 'user' AND d.default_variant_id = v.id
-         WHERE v.id = $1 AND v.origin = 'user' AND v.household_id = $2 FOR UPDATE OF v",
+    let own_dish: Option<(Uuid, String)> = sqlx::query!(
+        r#"SELECT d.id AS "id?",
+                  d.slug AS "slug?"
+           FROM variants v
+           LEFT JOIN dishes d ON d.id = v.dish_id AND d.origin = 'user' AND d.default_variant_id = v.id
+           WHERE v.id = $1 AND v.origin = 'user' AND v.household_id = $2 FOR UPDATE OF v"#,
+        id,
+        me.household_id
     )
-    .bind(id)
-    .bind(me.household_id)
     .fetch_optional(&mut *tx)
-    .await?
+    .await
+    .map(|row| row.map(|r| (r.id, r.slug)))?
     .map(|(dish, slug): (Option<Uuid>, Option<String>)| dish.zip(slug))
     .ok_or(ApiError::NotFound)?;
     check_foods(&mut tx, me.household_id, &recipe.lines).await?;
@@ -760,16 +769,21 @@ pub async fn fork(
         Option<f64>,
         Option<Uuid>,
     );
-    let (dish, title, subtitle, description, meta, servings, owner): Source = sqlx::query_as(
-        "SELECT v.dish_id, v.title, v.subtitle, v.description, v.meta - 'nutrition',
-                (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id),
-                v.household_id
-         FROM variants v WHERE v.id = $1 AND v.dish_id IS NOT NULL AND visible_to(v, $2)",
+    let (dish, title, subtitle, description, meta, servings, owner): Source = sqlx::query!(
+        r#"SELECT v.dish_id AS "dish_id!",
+                  v.title AS "title!",
+                  v.subtitle AS "subtitle?",
+                  v.description AS "description?",
+                  v.meta - 'nutrition' AS "meta!",
+                  (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id) AS "servings?",
+                  v.household_id AS "household_id?"
+           FROM variants v WHERE v.id = $1 AND v.dish_id IS NOT NULL AND visible_to(v, $2)"#,
+        id,
+        me.household_id
     )
-    .bind(id)
-    .bind(me.household_id)
     .fetch_optional(&mut *tx)
-    .await?
+    .await
+    .map(|row| row.map(|r| (r.dish_id, r.title, r.subtitle, r.description, r.meta, r.servings, r.household_id)))?
     .ok_or(ApiError::NotFound)?;
     // A version without amounts has no yield; its copy is written for two, the size a dish page opens at.
     let servings = servings.unwrap_or(2.0);

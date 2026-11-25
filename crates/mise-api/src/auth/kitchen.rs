@@ -66,11 +66,15 @@ pub(super) async fn from_cookie(
     secret: &str,
 ) -> Result<Option<(CurrentUser, bool)>, ApiError> {
     let hash = secret_hash(secret);
-    let row: Option<(Uuid, Uuid)> =
-        sqlx::query_as("SELECT id, household_id FROM kitchen_tokens WHERE token_hash = $1")
-            .bind(&hash)
-            .fetch_optional(pool)
-            .await?;
+    let row: Option<(Uuid, Uuid)> = sqlx::query!(
+        r#"SELECT id AS "id!",
+                  household_id AS "household_id!"
+           FROM kitchen_tokens WHERE token_hash = $1"#,
+        &hash
+    )
+    .fetch_optional(pool)
+    .await
+    .map(|row| row.map(|r| (r.id, r.household_id)))?;
     let Some((id, household_id)) = row else {
         return Ok(None);
     };
@@ -109,12 +113,16 @@ pub fn cookie(secret: String, config: &AuthConfig) -> Cookie<'static> {
 /// What `/me` answers a kitchen device: the device's own name, its household's id, and no username, email or
 /// household name.
 pub(super) async fn me(pool: &PgPool, id: Uuid) -> ApiResult<super::routes::Me> {
-    let (name, household_id): (String, Uuid) =
-        sqlx::query_as("SELECT name, household_id FROM kitchen_tokens WHERE id = $1")
-            .bind(id)
-            .fetch_optional(pool)
-            .await?
-            .ok_or(ApiError::Unauthorized)?;
+    let (name, household_id): (String, Uuid) = sqlx::query!(
+        r#"SELECT name AS "name!",
+                  household_id AS "household_id!"
+           FROM kitchen_tokens WHERE id = $1"#,
+        id
+    )
+    .fetch_optional(pool)
+    .await
+    .map(|row| row.map(|r| (r.name, r.household_id)))?
+    .ok_or(ApiError::Unauthorized)?;
     Ok(super::routes::Me {
         id,
         username: String::new(),
@@ -202,13 +210,33 @@ pub async fn list(
     Extension(u): Extension<CurrentUser>,
 ) -> ApiResult<Json<Vec<KitchenToken>>> {
     u.require_admin()?;
-    let rows: Vec<Row> = sqlx::query_as(
-        "SELECT id, name, created_at, linked_at, link_expires_at, last_used_at FROM kitchen_tokens
-         WHERE household_id = $1 ORDER BY created_at, id",
+    let rows: Vec<Row> = sqlx::query!(
+        r#"SELECT id AS "id!",
+                  name AS "name!",
+                  created_at AS "created_at!",
+                  linked_at AS "linked_at?",
+                  link_expires_at AS "link_expires_at?",
+                  last_used_at AS "last_used_at?"
+           FROM kitchen_tokens
+           WHERE household_id = $1 ORDER BY created_at, id"#,
+        u.household_id
     )
-    .bind(u.household_id)
     .fetch_all(&s.pool)
-    .await?;
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| {
+                (
+                    r.id,
+                    r.name,
+                    r.created_at,
+                    r.linked_at,
+                    r.link_expires_at,
+                    r.last_used_at,
+                )
+            })
+            .collect::<Vec<_>>()
+    })?;
     Ok(Json(rows.into_iter().map(info).collect()))
 }
 
@@ -240,19 +268,25 @@ pub async fn create(
         )));
     }
     let secret = new_secret();
-    let row: Row = sqlx::query_as(
-        "INSERT INTO kitchen_tokens (id, household_id, created_by, name, link_hash, link_expires_at)
-         VALUES ($1, $2, $3, $4, $5, now() + make_interval(mins => $6))
-         RETURNING id, name, created_at, linked_at, link_expires_at, last_used_at",
+    let row: Row = sqlx::query!(
+        r#"INSERT INTO kitchen_tokens (id, household_id, created_by, name, link_hash, link_expires_at)
+           VALUES ($1, $2, $3, $4, $5, now() + make_interval(mins => $6))
+           RETURNING id AS "id!",
+                     name AS "name!",
+                     created_at AS "created_at!",
+                     linked_at AS "linked_at?",
+                     link_expires_at AS "link_expires_at?",
+                     last_used_at AS "last_used_at?""#,
+        Uuid::now_v7(),
+        u.household_id,
+        u.id,
+        &name,
+        secret_hash(&secret),
+        LINK_MINUTES
     )
-    .bind(Uuid::now_v7())
-    .bind(u.household_id)
-    .bind(u.id)
-    .bind(&name)
-    .bind(secret_hash(&secret))
-    .bind(LINK_MINUTES)
     .fetch_one(&s.pool)
-    .await?;
+    .await
+    .map(|r| (r.id, r.name, r.created_at, r.linked_at, r.link_expires_at, r.last_used_at))?;
     let path = format!("{}/auth/kitchen?code={secret}", crate::API);
     let link = match &s.auth.config.public_base_url {
         Some(base) => base

@@ -79,15 +79,41 @@ pub struct Me {
 }
 
 pub(crate) async fn load_me(pool: &sqlx::PgPool, id: Uuid) -> ApiResult<Me> {
-    let (username, display_name, email, is_admin, has_password, hid, hname): (String, String, Option<String>, bool, bool, Uuid, String) =
-        sqlx::query_as(
-            "SELECT u.username, u.display_name, u.email, u.is_admin, u.password_hash IS NOT NULL, h.id, h.name
-             FROM users u JOIN households h ON h.id = u.household_id WHERE u.id = $1",
-        )
-        .bind(id)
-        .fetch_optional(pool)
-        .await?
-        .ok_or(ApiError::Unauthorized)?;
+    let (username, display_name, email, is_admin, has_password, hid, hname): (
+        String,
+        String,
+        Option<String>,
+        bool,
+        bool,
+        Uuid,
+        String,
+    ) = sqlx::query!(
+        r#"SELECT u.username AS "username!",
+                      u.display_name AS "display_name!",
+                      u.email AS "email?",
+                      u.is_admin AS "is_admin!",
+                      u.password_hash IS NOT NULL AS "has_password!",
+                      h.id AS "id!",
+                      h.name AS "name!"
+               FROM users u JOIN households h ON h.id = u.household_id WHERE u.id = $1"#,
+        id
+    )
+    .fetch_optional(pool)
+    .await
+    .map(|row| {
+        row.map(|r| {
+            (
+                r.username,
+                r.display_name,
+                r.email,
+                r.is_admin,
+                r.has_password,
+                r.id,
+                r.name,
+            )
+        })
+    })?
+    .ok_or(ApiError::Unauthorized)?;
     Ok(Me {
         id,
         username,
@@ -218,11 +244,16 @@ pub async fn login(
     if let Some(wait) = s.auth.limiter.locked_for(&key) {
         return Err(ApiError::TooManyRequests(wait));
     }
-    let row: Option<(Uuid, Option<String>, bool)> =
-        sqlx::query_as("SELECT id, password_hash, disabled FROM users WHERE lower(username) = $1")
-            .bind(&key)
-            .fetch_optional(&s.pool)
-            .await?;
+    let row: Option<(Uuid, Option<String>, bool)> = sqlx::query!(
+        r#"SELECT id AS "id!",
+                      password_hash AS "password_hash?",
+                      disabled AS "disabled!"
+               FROM users WHERE lower(username) = $1"#,
+        &key
+    )
+    .fetch_optional(&s.pool)
+    .await
+    .map(|row| row.map(|r| (r.id, r.password_hash, r.disabled)))?;
     let password = r.password;
     let hash = row.as_ref().and_then(|r| r.1.clone());
     let ok = tokio::task::spawn_blocking(move || super::check_password(&password, hash.as_deref()))
@@ -407,11 +438,22 @@ pub async fn list_tokens(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
 ) -> ApiResult<Json<Vec<TokenInfo>>> {
-    let rows: Vec<TokenRow> =
-        sqlx::query_as("SELECT id, name, scope, created_at, last_used_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at")
-            .bind(u.id)
-            .fetch_all(&s.pool)
-            .await?;
+    let rows: Vec<TokenRow> = sqlx::query!(
+        r#"SELECT id AS "id!",
+                      name AS "name!",
+                      scope AS "scope!",
+                      created_at AS "created_at!",
+                      last_used_at AS "last_used_at?"
+               FROM api_tokens WHERE user_id = $1 ORDER BY created_at"#,
+        u.id
+    )
+    .fetch_all(&s.pool)
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| (r.id, r.name, r.scope, r.created_at, r.last_used_at))
+            .collect::<Vec<_>>()
+    })?;
     Ok(Json(
         rows.into_iter()
             .map(|(id, name, scope, created_at, last_used_at)| TokenInfo {
@@ -551,13 +593,39 @@ pub async fn list_users(
         bool,
         i64,
     );
-    let rows: Vec<Row> = sqlx::query_as(
-        "SELECT u.id, u.username, u.display_name, u.email, u.is_admin, u.disabled, h.id, h.name, u.password_hash IS NOT NULL,
-                (SELECT count(*) FROM user_identities i WHERE i.user_id = u.id)
-         FROM users u JOIN households h ON h.id = u.household_id ORDER BY lower(u.username)",
+    let rows: Vec<Row> = sqlx::query!(
+        r#"SELECT u.id AS "id!",
+                  u.username AS "username!",
+                  u.display_name AS "display_name!",
+                  u.email AS "email?",
+                  u.is_admin AS "is_admin!",
+                  u.disabled AS "disabled!",
+                  h.id AS "household_id!",
+                  h.name AS "household!",
+                  u.password_hash IS NOT NULL AS "has_password!",
+                  (SELECT count(*) FROM user_identities i WHERE i.user_id = u.id) AS "identities!"
+           FROM users u JOIN households h ON h.id = u.household_id ORDER BY lower(u.username)"#
     )
     .fetch_all(&s.pool)
-    .await?;
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| {
+                (
+                    r.id,
+                    r.username,
+                    r.display_name,
+                    r.email,
+                    r.is_admin,
+                    r.disabled,
+                    r.household_id,
+                    r.household,
+                    r.has_password,
+                    r.identities,
+                )
+            })
+            .collect::<Vec<_>>()
+    })?;
     Ok(Json(
         rows.into_iter()
             .map(
@@ -732,12 +800,16 @@ pub async fn update_user(
     sqlx::query!("SELECT pg_advisory_xact_lock(724164)")
         .execute(&mut *tx)
         .await?;
-    let (is_admin, disabled): (bool, bool) =
-        sqlx::query_as("SELECT is_admin, disabled FROM users WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or(ApiError::NotFound)?;
+    let (is_admin, disabled): (bool, bool) = sqlx::query!(
+        r#"SELECT is_admin AS "is_admin!",
+                      disabled AS "disabled!"
+               FROM users WHERE id = $1"#,
+        id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map(|row| row.map(|r| (r.is_admin, r.disabled)))?
+    .ok_or(ApiError::NotFound)?;
     let (new_admin, new_disabled) = (
         r.is_admin.unwrap_or(is_admin),
         r.disabled.unwrap_or(disabled),
@@ -808,9 +880,14 @@ pub async fn list_households(
     Extension(u): Extension<CurrentUser>,
 ) -> ApiResult<Json<Vec<Household>>> {
     u.require_admin()?;
-    let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, name FROM households ORDER BY name")
-        .fetch_all(&s.pool)
-        .await?;
+    let rows: Vec<(Uuid, String)> = sqlx::query!(
+        r#"SELECT id AS "id!",
+                  name AS "name!"
+           FROM households ORDER BY name"#
+    )
+    .fetch_all(&s.pool)
+    .await
+    .map(|rows| rows.into_iter().map(|r| (r.id, r.name)).collect::<Vec<_>>())?;
     Ok(Json(
         rows.into_iter()
             .map(|(id, name)| Household { id, name })

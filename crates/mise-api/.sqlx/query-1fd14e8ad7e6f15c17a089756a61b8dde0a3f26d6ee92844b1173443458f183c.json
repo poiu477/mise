@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name AS \"name!\",\n                  household_id AS \"household_id!\"\n           FROM kitchen_tokens WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "kitchen_tokens",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "household_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "kitchen_tokens",
+            "name": "household_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1fd14e8ad7e6f15c17a089756a61b8dde0a3f26d6ee92844b1173443458f183c"
+}

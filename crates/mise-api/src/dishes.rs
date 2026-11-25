@@ -311,16 +311,30 @@ pub async fn get(
     .fetch_optional(&s.pool)
     .await?
     .ok_or(ApiError::NotFound)?;
-    let mut options = sqlx::query_as::<_, (String, String, serde_json::Value, Option<String>)>(
-        "SELECT key, label, choices, default_value FROM dish_options WHERE dish_id = $1 ORDER BY position",
+    let mut options = sqlx::query!(
+        r#"SELECT key AS "key!",
+                  label AS "label!",
+                  choices AS "choices!",
+                  default_value AS "default_value?"
+           FROM dish_options WHERE dish_id = $1 ORDER BY position"#,
+        id
     )
-    .bind(id)
     .fetch_all(&s.pool)
-    .await?
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| (r.key, r.label, r.choices, r.default_value))
+            .collect::<Vec<_>>()
+    })?
     .into_iter()
     .map(|(key, label, choices, default)| {
         let choices = serde_json::from_value(choices).map_err(|e| ApiError::Internal(e.into()))?;
-        Ok(DishOption { key, label, choices, default })
+        Ok(DishOption {
+            key,
+            label,
+            choices,
+            default,
+        })
     })
     .collect::<ApiResult<Vec<_>>>()?;
     // A version written in the app names its parent as its original; an imported one's parent is the issue before

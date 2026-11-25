@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id\n                        ORDER BY y.servings) AS \"yields!\"\n           FROM variants v WHERE v.id = $1 AND visible_to(v, $2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "yields!",
+        "type_info": "Float8Array",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2ac5bcef236d26f576754cec47870d9513b317d2d462b565fa90a09351680a86"
+}

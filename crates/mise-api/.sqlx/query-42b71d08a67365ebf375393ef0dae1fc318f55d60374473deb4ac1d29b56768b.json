@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM oidc_logins WHERE state_hash = $1 AND created_at > now() - interval '15 minutes'\n           RETURNING nonce AS \"nonce!\",\n                     pkce_verifier AS \"pkce_verifier!\",\n                     return_to AS \"return_to!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "nonce!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oidc_logins",
+            "name": "nonce"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "pkce_verifier!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oidc_logins",
+            "name": "pkce_verifier"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "return_to!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oidc_logins",
+            "name": "return_to"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "42b71d08a67365ebf375393ef0dae1fc318f55d60374473deb4ac1d29b56768b"
+}
