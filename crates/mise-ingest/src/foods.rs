@@ -4,6 +4,10 @@
 //! [`relate`]: narrowing words make a kind-of link (applied, still `proposed` until reviewed), transforming
 //! words make a `related` link, and anything else becomes a review item. Brands come from the `brands` table, which
 //! curation edits ([`crate::curate`]), read once a run.
+//!
+//! Matching can't tell that two names it doesn't know are one food ("Kale" and "Chopped Kale" both arrive as
+//! names of their own), so afterwards [`duplicate_key`] pairs the foods it made whose names look like one food
+//! written differently, and each pair becomes a `food_duplicate` review item for a person.
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -11,7 +15,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use mise_core::food_names::{Brands, Relation, relate, singular_key, strip_brand};
+use mise_core::food_names::{Brands, Relation, duplicate_key, relate, singular_key, strip_brand};
 use mise_core::text::slugify;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -165,6 +169,11 @@ pub struct MatchStats {
     pub related_links: usize,
     /// Links and names left for a person to decide, such as "pepper", which could be black or bell.
     pub review_items: usize,
+    /// Pairs of foods that look like one food written two ways, raised for a person: "Kale", "Chopped Kale".
+    pub duplicate_items: usize,
+    /// Foods for every 100 ingredient lines, to one decimal. Matching makes a food for each name it doesn't know,
+    /// so a jump means the sources are spelling things differently and the duplicates are worth a look.
+    pub foods_per_100_lines: f64,
 }
 
 struct Food {
@@ -184,7 +193,7 @@ pub async fn reset_matching(pool: &PgPool) -> Result<()> {
     .execute(&mut *tx)
     .await?;
     sqlx::query(
-        "DELETE FROM review_items WHERE kind IN ('food_parent', 'food_match') AND status = 'open'",
+        "DELETE FROM review_items WHERE kind IN ('food_parent', 'food_match', 'food_duplicate') AND status = 'open'",
     )
     .execute(&mut *tx)
     .await?;
@@ -354,7 +363,136 @@ pub async fn match_foods_in(tx: &mut Transaction<'_, Postgres>) -> Result<MatchS
     .collect();
 
     propose_tree(tx, &by_key, &usage, &brands, &mut stats).await?;
+    propose_duplicates(tx, &by_key, &usage, &mut stats).await?;
+
+    // Foods per 100 ingredient lines: matching makes a food for every name it doesn't know, so a jump here means
+    // the sources started spelling things differently, and the duplicates above are worth a look.
+    let (foods, lines): (i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM foods WHERE kind <> 'category'),
+                (SELECT count(*) FROM ingredient_lines)",
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+    stats.foods_per_100_lines = if lines == 0 {
+        0.0
+    } else {
+        // One decimal: enough to show a drift, not so much that a line or two rewrites the snapshot.
+        ((foods as f64) * 1000.0 / (lines as f64)).round() / 10.0
+    };
     Ok(stats)
+}
+
+/// Pair up the foods this run made whose names look like the same food written differently, and raise each pair
+/// for a person ([`duplicate_key`] says which names are near). Only foods matching made are paired: one a person
+/// added or curated is their answer already, and the `category` foods a bundle's knowledge brings are not foods
+/// recipes name.
+///
+/// A pair matching has already answered itself is left alone: one is a kind of the other, the two are `related`,
+/// or a person said they are different foods (`food_distinctions`, the `distinct` curation op).
+async fn propose_duplicates(
+    tx: &mut Transaction<'_, Postgres>,
+    by_key: &HashMap<String, Food>,
+    usage: &HashMap<Uuid, (i64, i64)>,
+    stats: &mut MatchStats,
+) -> Result<()> {
+    // Every food recipes name, not only this run's: a name that arrives today may duplicate one matched last week.
+    // Only the foods matching made are paired; a person's own name is their answer already.
+    let matched: Vec<(Uuid, String)> = sqlx::query_as(
+        "SELECT id, name FROM foods WHERE kind <> 'category' AND origin = 'matched'",
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .context("reading foods to pair")?;
+    let made_now: std::collections::HashSet<Uuid> = by_key
+        .values()
+        .filter(|f| f.created)
+        .map(|f| f.id)
+        .collect();
+
+    // Group by the key the names of one food share; a group of one has nothing to ask about. The key is also what
+    // a distinction is stored under, so a pair told apart is skipped by its group's key.
+    let told_apart: std::collections::HashSet<(String, String)> =
+        sqlx::query_as::<_, (String, String)>("SELECT a_name, b_name FROM food_distinctions")
+            .fetch_all(&mut **tx)
+            .await
+            .context("reading food distinctions")?
+            .into_iter()
+            .collect();
+    let mut groups: HashMap<String, Vec<(Uuid, String)>> = HashMap::new();
+    for (id, name) in matched {
+        groups
+            .entry(duplicate_key(&name))
+            .or_default()
+            .push((id, name));
+    }
+
+    let mut pairs: Vec<(Uuid, String, Uuid, String)> = Vec::new();
+    for (_, mut group) in groups {
+        if group.len() < 2 {
+            continue;
+        }
+        // Most used first, and the shortest name to break a tie, so the pair reads as "fold the longer, rarer
+        // spelling into the plain one everything else uses".
+        group.sort_by_key(|(id, name)| {
+            (
+                std::cmp::Reverse(usage.get(id).map_or(0, |u| u.1)),
+                name.chars().count(),
+                name.clone(),
+            )
+        });
+        for (i, (a, a_name)) in group.iter().enumerate() {
+            for (b, b_name) in &group[i + 1..] {
+                // At least one side must be new, or this pair was offered on an earlier run already.
+                if !made_now.contains(a) && !made_now.contains(b) {
+                    continue;
+                }
+                // A person who told this pair apart stored it by each side's own name key.
+                let (x, y) = (singular_key(a_name), singular_key(b_name));
+                let pair = if x < y { (x, y) } else { (y, x) };
+                if told_apart.contains(&pair) {
+                    continue;
+                }
+                pairs.push((*a, a_name.clone(), *b, b_name.clone()));
+            }
+        }
+    }
+
+    if pairs.is_empty() {
+        return Ok(());
+    }
+    // Drop the pairs matching has already answered itself: one is a kind of the other, or the two are related.
+    let linked: std::collections::HashSet<(Uuid, Uuid)> = sqlx::query_as::<_, (Uuid, Uuid)>(
+        "SELECT c.id, p.id FROM foods c JOIN foods p ON p.id = c.parent_id
+         UNION SELECT from_food, to_food FROM food_relations",
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .context("reading links")?
+    .into_iter()
+    .collect();
+    pairs.retain(|(a, _, b, _)| !linked.contains(&(*a, *b)) && !linked.contains(&(*b, *a)));
+
+    stats.duplicate_items = pairs.len();
+    for (a, a_name, b, b_name) in pairs {
+        let lines = |id: &Uuid| usage.get(id).map_or(0, |u| u.1);
+        // How alike the two read, as pg_trgm scores it: the pairing goes by words, but this sorts the surest first.
+        let confidence: f32 = sqlx::query_scalar("SELECT similarity($1, $2)")
+            .bind(&a_name)
+            .bind(&b_name)
+            .fetch_one(&mut **tx)
+            .await?;
+        sqlx::query(
+            "INSERT INTO review_items (id, kind, subject, proposal, confidence)
+             VALUES ($1, 'food_duplicate', $2, $3, $4)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(json!({ "food_id": a, "name": a_name, "recipe_uses": usage.get(&a).map_or(0, |u| u.0), "all_uses": lines(&a) }))
+        .bind(json!({ "other_id": b, "other_name": b_name, "other_uses": lines(&b) }))
+        .bind(confidence)
+        .execute(&mut **tx)
+        .await?;
+    }
+    Ok(())
 }
 
 /// For each food created in this run, find the longest other food name it contains as whole words at its

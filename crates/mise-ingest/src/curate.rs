@@ -1,6 +1,6 @@
 //! Hand edits to the food model: add foods and brands, set parents, add aliases, merge duplicates, set
-//! properties, record what a food's amounts convert by (its density, the size of one item), and say which words are
-//! brands for matching to strip from names. Every food an edit
+//! properties, record what a food's amounts convert by (its density, the size of one item), say which words are
+//! brands for matching to strip from names, and say which look-alike names are different foods. Every food an edit
 //! touches becomes `origin = 'user'`, so re-running matching keeps it.
 //!
 //! The same operations run one at a time from the CLI or as a list from a JSON file, so curation can be
@@ -138,6 +138,14 @@ pub enum Op {
     Unbrand {
         /// The brand: "Old Bay".
         name: String,
+    },
+    /// Two foods whose names look alike are different foods, so the review queue stops offering them as
+    /// near-duplicates. Kept by name, so it holds on a rebuilt database, where the foods have new ids.
+    Distinct {
+        /// One food's name, as recipes write it: "Diced Steak". Which is `a` and which `b` doesn't matter.
+        a: String,
+        /// The other food's name: "Steak Tips".
+        b: String,
     },
 }
 
@@ -427,7 +435,50 @@ pub async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<Str
                 format!("{brand} is no longer a brand")
             })
         }
+        Op::Distinct { a, b } => {
+            let (a_key, b_key) = (distinct_name(a)?, distinct_name(b)?);
+            if a_key == b_key {
+                return refuse(format!(
+                    "'{a}' and '{b}' are one name, so there is no pair to tell apart"
+                ));
+            }
+            // One row per pair, whichever way round it was answered.
+            let (lo, hi) = if a_key < b_key {
+                (a_key, b_key)
+            } else {
+                (b_key, a_key)
+            };
+            let added = sqlx::query(
+                "INSERT INTO food_distinctions (a_name, b_name) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            )
+            .bind(&lo)
+            .bind(&hi)
+            .execute(&mut **tx)
+            .await?
+            .rows_affected();
+            Ok(if added == 0 {
+                format!("{a} and {b}: already different foods")
+            } else {
+                format!("{a} and {b} are different foods")
+            })
+        }
     }
+}
+
+/// A food name as `food_distinctions` keeps it, or a refusal when nothing is left of it.
+///
+/// [`singular_key`], not `duplicate_key`: the two sides of a near-duplicate pair share a `duplicate_key` by
+/// definition (that is what put them in front of a person), so keying by it would store one name twice. This way
+/// a side keeps its own key while still folding its spellings together, so the answer holds when "Red Onions"
+/// comes back as "Red Onion".
+fn distinct_name(name: &str) -> Result<String> {
+    let key = singular_key(name);
+    if key.is_empty() || key.chars().count() > 200 {
+        return refuse(format!(
+            "'{name}' isn't a food name: give its words, such as \"Diced Steak\""
+        ));
+    }
+    Ok(key)
 }
 
 /// A brand as the `brands` table keeps it ("Frank's RedHot®" is "frank's redhot"), or a refusal when nothing is left.
@@ -483,7 +534,8 @@ struct Exported {
 /// same sources and matched, they bring the food model back to where it is now. Applying them here changes nothing.
 ///
 /// The database keeps what an edit left, not the edit, so the list is worked out from it, in an order that
-/// applies cleanly: the brands (`brand` for each added by hand, `unbrand` for each shipped one taken away), every
+/// applies cleanly: the brands (`brand` for each added by hand, `unbrand` for each shipped one taken away), the
+/// pairs told apart (`distinct`), every
 /// food that is someone's own (`add`, which only adopts a food matching makes anyway), the
 /// names given by hand (`merge` where recipes use the name, since a rebuilt database has a food for it again;
 /// `alias` otherwise), where each of those foods sits (`set_parent` or `unparent`, parents before their kinds),
@@ -514,6 +566,15 @@ pub async fn export(pool: &PgPool) -> Result<Vec<Op>> {
         } else {
             Op::Brand { name }
         });
+    }
+
+    let distinctions: Vec<(String, String)> =
+        sqlx::query_as("SELECT a_name, b_name FROM food_distinctions ORDER BY a_name, b_name")
+            .fetch_all(pool)
+            .await
+            .context("reading food distinctions")?;
+    for (a, b) in distinctions {
+        ops.push(Op::Distinct { a, b });
     }
 
     for f in foods.iter().filter(|f| f.origin == "user") {

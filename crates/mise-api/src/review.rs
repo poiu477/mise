@@ -1,6 +1,7 @@
 //! Review queues: what the import pipeline left for a person to decide (`review_items`), answered from the web
-//! app by an admin. Three kinds are asked here: a food matched to a name that could mean more than one food, a
-//! food that may be a kind of another, and a copied version too unlike its original to join its dish.
+//! app by an admin. Four kinds are asked here: a food matched to a name that could mean more than one food, a
+//! food that may be a kind of another, two foods that may be one food written two ways, and a copied version too
+//! unlike its original to join its dish.
 //!
 //! A decision is stored exactly as the `mise` commands store it, so re-running a stage keeps it: a food decision is
 //! a curation operation (`mise_ingest::curate`), which makes the food a person's own (`origin = 'user'`), and a dish
@@ -34,6 +35,8 @@ pub enum ReviewKind {
     FoodMatch,
     /// A new food may be a kind of another: "Garden Tomato" under "Tomato".
     FoodParent,
+    /// Two foods may be one food written two ways: "Kale" and "Chopped Kale".
+    FoodDuplicate,
     /// A copied version is too unlike its original to join its dish without asking.
     DishMerge,
 }
@@ -44,18 +47,13 @@ impl ReviewKind {
         match self {
             ReviewKind::FoodMatch => "food_match",
             ReviewKind::FoodParent => "food_parent",
+            ReviewKind::FoodDuplicate => "food_duplicate",
             ReviewKind::DishMerge => "dish_merge",
         }
     }
 
     fn from_str(kind: &str) -> Option<ReviewKind> {
-        [
-            ReviewKind::FoodMatch,
-            ReviewKind::FoodParent,
-            ReviewKind::DishMerge,
-        ]
-        .into_iter()
-        .find(|k| k.as_str() == kind)
+        EVERY_KIND.into_iter().find(|k| k.as_str() == kind)
     }
 
     /// The answers an item of this kind takes.
@@ -63,6 +61,8 @@ impl ReviewKind {
         match self {
             ReviewKind::FoodMatch => vec![Verdict::Accept, Verdict::Edit],
             ReviewKind::FoodParent => vec![Verdict::Accept, Verdict::Reject, Verdict::Edit],
+            // Accept folds the two into one food, reject says they are different, edit files one under the other.
+            ReviewKind::FoodDuplicate => vec![Verdict::Accept, Verdict::Reject, Verdict::Edit],
             ReviewKind::DishMerge => vec![Verdict::Accept, Verdict::Reject],
         }
     }
@@ -168,7 +168,13 @@ async fn load(s: &AppState, kinds: &[ReviewKind]) -> ApiResult<ReviewQueue> {
 
     let food_ids: Vec<Uuid> = rows
         .iter()
-        .flat_map(|r| [id(&r.subject, "food_id"), id(&r.proposal, "parent_id")])
+        .flat_map(|r| {
+            [
+                id(&r.subject, "food_id"),
+                id(&r.proposal, "parent_id"),
+                id(&r.proposal, "other_id"),
+            ]
+        })
         .flatten()
         .collect();
     let foods: HashMap<Uuid, String> =
@@ -209,6 +215,23 @@ async fn load(s: &AppState, kinds: &[ReviewKind]) -> ApiResult<ReviewQueue> {
             continue;
         };
         let (name, sentence, note, recipe_uses, pair) = match kind {
+            ReviewKind::FoodDuplicate => {
+                let name = food_name(subject, "food_id", "name");
+                let other = food_name(proposal, "other_id", "other_name");
+                let uses = subject.get("recipe_uses").and_then(Value::as_i64);
+                let other_uses = proposal.get("other_uses").and_then(Value::as_i64);
+                (
+                    name.clone(),
+                    format!("{name} and {other} are one food"),
+                    Some(match other_uses {
+                        Some(1) => format!("{other} is on 1 line"),
+                        Some(n) => format!("{other} is on {n} lines"),
+                        None => other,
+                    }),
+                    uses,
+                    None,
+                )
+            }
             ReviewKind::FoodMatch | ReviewKind::FoodParent => {
                 let name = food_name(subject, "food_id", "name");
                 let sentence = if kind == ReviewKind::FoodParent {
@@ -257,9 +280,10 @@ async fn load(s: &AppState, kinds: &[ReviewKind]) -> ApiResult<ReviewQueue> {
     Ok(ReviewQueue { items })
 }
 
-const EVERY_KIND: [ReviewKind; 3] = [
+const EVERY_KIND: [ReviewKind; 4] = [
     ReviewKind::FoodMatch,
     ReviewKind::FoodParent,
+    ReviewKind::FoodDuplicate,
     ReviewKind::DishMerge,
 ];
 
@@ -397,6 +421,31 @@ pub async fn decide(
     }
 
     let done = match kind {
+        ReviewKind::FoodDuplicate => {
+            let food = food_slug(&mut tx, &subject, "food_id").await?;
+            let other = food_slug(&mut tx, &proposal, "other_id").await?;
+            let op = match (d.decision, parent) {
+                // The item names the more used spelling first, so the rarer one folds into it.
+                (Verdict::Accept, _) => Op::Merge {
+                    from: other,
+                    into: food,
+                },
+                // Different foods: kept by name, so a rebuilt database doesn't ask again.
+                (Verdict::Reject, _) => Op::Distinct {
+                    a: text(&subject, "name").unwrap_or(food),
+                    b: text(&proposal, "other_name").unwrap_or(other),
+                },
+                // One is a kind of the other: under the food named, or, said plainly, the other food becomes a
+                // kind of this one, which is the plainer name of the two and the one more lines use.
+                (Verdict::Edit, Some(parent)) => Op::SetParent { food, parent },
+                (Verdict::Edit, None) => Op::SetParent {
+                    food: other,
+                    parent: food,
+                },
+            };
+            curate_in(&mut tx, &op).await?;
+            json!({ "operation": op })
+        }
         ReviewKind::FoodMatch | ReviewKind::FoodParent => {
             let food = food_slug(&mut tx, &subject, "food_id").await?;
             let op = match (d.decision, parent, same_as) {
