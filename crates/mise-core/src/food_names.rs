@@ -332,9 +332,9 @@ const PREPARED: &[&str] = &[
 ];
 
 /// The key two names share when they look like the same food written differently: every word folded to its
-/// singular, the words that only say how it was prepared dropped ([`PREPARED`]), then sorted. So "Red Onions",
-/// "Red Onion, Diced" and "Diced Red Onion" share one key, while "Honey" and "Hot Honey" do not, nor "Bell
-/// Pepper" and "Green Bell Pepper": those extra words say which food it is.
+/// singular, the words that only say how it was cut up or handled dropped ("diced", "shredded", "peeled"), then
+/// sorted. So "Red Onions", "Red Onion, Diced" and "Diced Red Onion" share one key, while "Honey" and "Hot
+/// Honey" do not, nor "Bell Pepper" and "Green Bell Pepper": those extra words say which food it is.
 ///
 /// Unlike [`singular_key`], which keys a name to one food, this is deliberately looser, and it folds every word
 /// rather than only the last. It is used only to put a pair in front of a person (a `food_duplicate` review
