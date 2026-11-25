@@ -63,11 +63,12 @@ A density alone never turns "2 cloves" into spoons: only an item size does. Both
 
 ## Writing curation back out
 
-`mise food export <file>` writes the hand edits a database holds as a curation file: the brands added (`brand`)
-and shipped ones taken away (`unbrand`), every food that is yours (`add`), names given by hand (`merge` when recipes use the name, `alias` otherwise), where each of your foods sits
-(`set_parent` or `unparent`, parents first), properties and measures. Applied to a database rebuilt from the same
-recipes, it brings the food model back; applied to the one it came from, it changes nothing. Two edits leave nothing
-to read back, so keep them in a hand-written file: `unrelate`, and `unparent` on a food from a bundle's knowledge.
+`mise food export <file>` writes the hand edits a database holds as a curation file: the brands added (`brand`) and
+shipped ones taken away (`unbrand`), every food that is yours (`add`), names given by hand (`merge` when recipes use
+the name, `alias` otherwise), where each of your foods sits (`set_parent` or `unparent`, parents first), properties
+and measures. Applied to a database rebuilt from the same recipes, it brings the food model back; applied to the one
+it came from, it changes nothing. Two edits leave nothing to read back, so keep them in a hand-written file:
+`unrelate`, and `unparent` on a food from a bundle's knowledge.
 
 `mise dish export <file>` writes the recorded dish decisions as a decisions file for `mise dish apply`.
 
