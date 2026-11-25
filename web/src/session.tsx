@@ -34,11 +34,24 @@ const SessionContext = createContext<Ctx | null>(null);
 const SESSION = ["session"];
 const LOADING: Session = { status: "loading" };
 
+/** Drops everything the app holds in memory but the session itself: what one account read is never shown to the
+ * next. */
+const forgetQueries = () =>
+  queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== SESSION[0] });
+
 /** Knows who is signed in, for everything inside it. Checks once when the app opens, and again after signing in or
  * out, when another tab signs someone else in, and when the server is back in reach after being offline. */
 export function SessionProvider({ children }: { children: ReactNode }) {
   // Only the latest check counts: an older one finishing late must not put back an account that has changed since.
   const latest = useRef(0);
+  // The account what the app holds in memory was read as: when a check finds another (someone else signed in, in
+  // another tab or after this session ended, or nobody now), it is dropped, not only on signing out here.
+  const cachedFor = useRef<string | null>(rememberedMe()?.id ?? null);
+  const follow = useCallback((account: string | null) => {
+    if (account !== cachedFor.current) forgetQueries();
+    cachedFor.current = account;
+    actAs(account);
+  }, []);
   /** Asks the server who is signed in, and sets the account the API client works as (`X-Mise-Account`). With no
    * answer, the app opens offline as whoever last signed in on this device. */
   const check = useCallback(async (): Promise<Session> => {
@@ -51,12 +64,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (mine !== latest.current) return LOADING;
     if (!cfg?.data) {
       const me = rememberedMe();
-      actAs(me?.id ?? null);
+      follow(me?.id ?? null);
       return { status: "offline", me };
     }
     const info = cfg.data;
     if (info.setup_required) {
-      actAs(null);
+      follow(null);
       return { status: "setup", info };
     }
     const me = await api.GET("/api/v1/me").catch(() => null);
@@ -66,9 +79,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (anotherHousehold(me.data)) forgetKeptRecipes();
       rememberMe(me.data);
     }
-    actAs(me?.data?.id ?? null);
+    follow(me?.data?.id ?? null);
     return me?.data ? { status: "in", info, me: me.data } : { status: "out", info };
-  }, []);
+  }, [follow]);
 
   // Checked once when the app opens, and again only when asked (signing in or out, another account, back online).
   const { data: session = LOADING } = useQuery({
@@ -88,11 +101,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await api.POST("/api/v1/auth/logout").catch(() => null);
     forgetDevice();
     forgetKeptRecipes();
-    actAs(null);
+    follow(null);
     await refresh();
     // Nothing of the household stays in memory either.
-    queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== SESSION[0] });
-  }, [refresh]);
+    forgetQueries();
+  }, [refresh, follow]);
 
   useEffect(() => {
     whenUnauthorized(() =>

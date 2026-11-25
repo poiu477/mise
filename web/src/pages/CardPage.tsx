@@ -6,16 +6,18 @@ import { answer, Refused, refusedRequest } from "../api/query";
 import { startingServings, versionFor } from "../choose";
 import { StepText } from "../components/StepText";
 import { allergens, difficulty, minutes, servingsText } from "../recipe";
+import { useAccount } from "../session";
 
 /** A recipe card to print: one version at one serving count, with its photo, ingredients and steps on a page.
  * The address takes the dish page's parameters (?v=, ?s= and the options), so the dish page links straight here;
  * the browser's print dialog makes the PDF. */
 export function CardPage() {
+  const account = useAccount();
   const { slug = "" } = useParams();
   const [params] = useSearchParams();
 
   const dishQuery = useQuery({
-    queryKey: ["dish", slug],
+    queryKey: ["dish", account, slug],
     queryFn: ({ signal }) =>
       answer(api.GET("/api/v1/dishes/{slug}", { params: { path: { slug } }, signal })),
   });
@@ -25,7 +27,7 @@ export function CardPage() {
   const servings = Number(params.get("s")) || (chosen ? startingServings(chosen) : 2);
 
   const variantQuery = useQuery({
-    queryKey: ["variant", chosen?.id, servings],
+    queryKey: ["variant", account, chosen?.id, servings],
     queryFn: ({ signal }) =>
       answer(
         api.GET("/api/v1/variants/{id}", {

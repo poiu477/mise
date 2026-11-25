@@ -159,7 +159,7 @@ export function KitchenCook() {
   const navigate = useNavigate();
   const servings = Number(params.get("s")) || undefined;
   const variantQuery = useQuery({
-    queryKey: ["variant", id, servings],
+    queryKey: ["variant", useAccount(), id, servings],
     queryFn: ({ signal }) =>
       answer(
         api.GET("/api/v1/variants/{id}", {

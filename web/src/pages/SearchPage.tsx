@@ -2,7 +2,7 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
 import { api } from "../api/client";
 import { answer } from "../api/query";
-import { useSession } from "../session";
+import { useAccount, useSession } from "../session";
 
 const PAGE = 24;
 const TYPES = [
@@ -14,6 +14,7 @@ const TYPES = [
 /** The home page: dishes matching the top bar's search (?q=), an ingredient (?ingredient=) and a kind (?type=,
  * recipes by default), 24 at a time with "Show more". */
 export function SearchPage() {
+  const account = useAccount();
   const [params, setParams] = useSearchParams();
   const { session } = useSession();
   // Adding a recipe, written or imported, needs the server and an account: not offline, and not on a kitchen
@@ -25,7 +26,7 @@ export function SearchPage() {
   const asked = { q: q || undefined, ingredient: ingredient || undefined, type: type || undefined };
 
   const found = useInfiniteQuery({
-    queryKey: ["dishes", asked],
+    queryKey: ["dishes", account, asked],
     queryFn: ({ pageParam, signal }) =>
       answer(
         api.GET("/api/v1/dishes", {
