@@ -12,7 +12,7 @@ use crate::{
     error::{ApiError, ApiResult},
     extract::{JsonBody, Path, Query},
     media::Image,
-    variants::MAX_SERVINGS,
+    variants::max_servings,
 };
 
 /// Which week to answer for.
@@ -101,12 +101,15 @@ async fn load(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan> {
     Ok(Plan { week, entries })
 }
 
-fn check_servings(n: f64) -> ApiResult<()> {
-    if n > 0.0 && n <= MAX_SERVINGS {
+/// Refuses a serving count the version can't be shown at: at most 24, or its largest published yield when that is
+/// more (a 40-serving roast is planned at 40).
+fn check_servings(n: f64, yields: &[f64]) -> ApiResult<()> {
+    let max = max_servings(yields);
+    if n > 0.0 && n <= max {
         Ok(())
     } else {
         Err(ApiError::BadRequest(format!(
-            "servings must be more than 0 and at most {MAX_SERVINGS}"
+            "servings must be more than 0 and at most {max}"
         )))
     }
 }
@@ -170,7 +173,7 @@ pub async fn add(
             yields.first().copied().unwrap_or(2.0)
         }
     });
-    check_servings(servings)?;
+    check_servings(servings, &yields)?;
     let week = monday(b.week);
     sqlx::query("INSERT INTO plan_entries (id, household_id, week, variant_id, servings, added_by) VALUES ($1, $2, $3, $4, $5::float8::numeric, $6)")
         .bind(Uuid::now_v7())
@@ -187,7 +190,8 @@ pub async fn add(
 /// A new serving count for a planned dish.
 #[derive(Deserialize, ToSchema)]
 pub struct EntryChange {
-    /// How many to plan it for: more than 0, at most 24.
+    /// How many to plan it for: more than 0, and at most 24, or the version's largest published yield when that is
+    /// more.
     pub servings: f64,
 }
 
@@ -209,7 +213,16 @@ pub async fn update(
     Path(id): Path<Uuid>,
     JsonBody(b): JsonBody<EntryChange>,
 ) -> ApiResult<Json<Plan>> {
-    check_servings(b.servings)?;
+    let yields: Vec<f64> = sqlx::query_scalar(
+        "SELECT ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = e.variant_id)
+         FROM plan_entries e WHERE e.id = $1 AND e.household_id = $2",
+    )
+    .bind(id)
+    .bind(me.household_id)
+    .fetch_optional(&s.pool)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+    check_servings(b.servings, &yields)?;
     let week: Date = sqlx::query_scalar("UPDATE plan_entries SET servings = $3::float8::numeric WHERE id = $1 AND household_id = $2 RETURNING week")
         .bind(id)
         .bind(me.household_id)

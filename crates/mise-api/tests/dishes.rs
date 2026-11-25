@@ -537,3 +537,30 @@ async fn a_signed_out_session_can_no_longer_read_recipes() {
     let reply = demo.get_reply("/api/v1/dishes").await;
     assert_eq!(reply.status, StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn a_type_that_isnt_a_kind_of_dish_is_refused_not_answered_with_nothing() {
+    let app = test_app!(TestApp::with_demo());
+    let cookie = app.setup_owner().await;
+    let refused = app
+        .send("GET", "/api/v1/dishes?type=all", As::Cookie(&cookie), None)
+        .await;
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST);
+    assert!(
+        refused.body["error"]
+            .as_str()
+            .unwrap()
+            .contains("recipe, ready_meal, add_on, product"),
+        "{}",
+        refused.body
+    );
+    let recipes = app
+        .json("GET", "/api/v1/dishes?type=recipe", &cookie, None)
+        .await;
+    let everything = app.json("GET", "/api/v1/dishes", &cookie, None).await;
+    assert!(recipes["total"].as_i64().unwrap() > 0);
+    assert_eq!(
+        recipes["total"], everything["total"],
+        "the demo dishes are all recipes"
+    );
+}

@@ -20,6 +20,12 @@ export function allergens(v: Variant): string[] {
   return [...new Set(v.ingredients.flatMap((i) => i.allergens))].sort();
 }
 
+/** The most servings a version can be shown or planned at: 24, or its largest published yield when that is more,
+ * as the server allows. */
+export function maxServings(published: number[]): number {
+  return Math.max(24, ...published);
+}
+
 /** "1 serving", "2 servings", "2.5 servings". */
 export function servingsText(n: number): string {
   return `${n} ${n === 1 ? "serving" : "servings"}`;
