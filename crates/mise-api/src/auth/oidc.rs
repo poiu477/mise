@@ -1,6 +1,9 @@
 //! Single sign-on with any OpenID Connect provider (Authentik, Keycloak, Nextcloud…): authorization code flow
-//! with PKCE and a nonce. A returning person is found by their provider identity, else linked to an account
-//! with the same verified email, else given a new account. Membership of OIDC_ADMIN_GROUP makes them admin.
+//! with PKCE and a nonce, finished only in the browser that started it (a cookie holds the sign-in's state). A
+//! returning person is found by their provider identity, else linked to an account with the same verified email
+//! (never an admin's), else given a new account when the install lets anyone in (OIDC_OPEN_SIGNUP) or they are in
+//! OIDC_ALLOWED_GROUP. With OIDC_ALLOWED_GROUP set, only its members (and OIDC_ADMIN_GROUP's) sign in at all.
+//! Membership of OIDC_ADMIN_GROUP makes them admin.
 
 use anyhow::{Context, anyhow};
 use axum::{
@@ -8,7 +11,7 @@ use axum::{
     http::HeaderMap,
     response::{IntoResponse, Redirect, Response},
 };
-use axum_extra::extract::cookie::CookieJar;
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::Engine;
 use openidconnect::core::{
     CoreAuthenticationFlow, CoreClient, CoreJwsSigningAlgorithm, CoreProviderMetadata,
@@ -40,6 +43,12 @@ pub struct OidcConfig {
     pub admin_group: Option<String>,
     /// New accounts join the household with this name; unset, each gets a household of their own.
     pub household: Option<String>,
+    /// Only members of this group (from the `groups` claim), and of `admin_group`, may sign in; a member without an
+    /// account gets one. Unset, only people with an account here already sign in, unless `open_signup` is on.
+    pub allowed_group: Option<String>,
+    /// Anyone the provider signs in gets an account at their first sign-in. Only for a provider whose every user
+    /// belongs here (a household's own Authentik), never a public one such as Google.
+    pub open_signup: bool,
 }
 
 impl OidcConfig {
@@ -67,6 +76,12 @@ impl OidcConfig {
                 .collect(),
             admin_group: var("OIDC_ADMIN_GROUP"),
             household: var("OIDC_HOUSEHOLD"),
+            allowed_group: var("OIDC_ALLOWED_GROUP"),
+            open_signup: match var("OIDC_OPEN_SIGNUP").as_deref() {
+                None | Some("false" | "0") => false,
+                Some("true" | "1") => true,
+                Some(other) => anyhow::bail!("OIDC_OPEN_SIGNUP is {other:?}: use true or false"),
+            },
         })
     }
 }
@@ -127,10 +142,40 @@ pub struct StartParams {
     pub return_to: Option<String>,
 }
 
-/// Only paths on this site, so the callback can't be used to send people elsewhere.
+/// Only paths on this site, so the callback can't be used to send people elsewhere. A browser drops tabs and line
+/// breaks from an address and reads `\` as `/`, so `/\t/evil.example` would leave the site: anything with those, or
+/// that a browser would resolve to another host, goes home instead.
 fn safe_return(p: Option<String>) -> String {
-    p.filter(|p| p.starts_with('/') && !p.starts_with("//") && !p.contains('\\'))
-        .unwrap_or_else(|| "/".into())
+    const HERE: &str = "http://mise.invalid/";
+    p.filter(|p| {
+        p.starts_with('/')
+            && !p.starts_with("//")
+            && !p.contains('\\')
+            && !p.chars().any(|c| c.is_control() || c.is_whitespace())
+            && url::Url::parse(HERE)
+                .and_then(|here| here.join(p))
+                .is_ok_and(|to| to.origin() == url::Url::parse(HERE).expect("a URL").origin())
+    })
+    .unwrap_or_else(|| "/".into())
+}
+
+/// The cookie that ties a sign-in to the browser that started it: the state sent to the provider, which the
+/// callback must be given back by the same browser, so nobody can finish their own sign-in in someone else's.
+const STATE_COOKIE: &str = "mise_oidc_state";
+
+fn state_cookie(state: &str, config: &super::AuthConfig) -> Cookie<'static> {
+    Cookie::build((STATE_COOKIE, state.to_owned()))
+        .path("/api/auth/oidc")
+        .http_only(true)
+        // The provider sends the browser back with a top-level GET, which Lax lets the cookie go with.
+        .same_site(SameSite::Lax)
+        .secure(config.secure_cookies())
+        .max_age(time::Duration::minutes(15))
+        .build()
+}
+
+fn clear_state_cookie(jar: CookieJar) -> CookieJar {
+    jar.remove(Cookie::build(STATE_COOKIE).path("/api/auth/oidc"))
 }
 
 pub(super) fn to_login(error: &str) -> Response {
@@ -151,11 +196,16 @@ pub(super) fn to_login(error: &str) -> Response {
 )]
 pub async fn start(
     State(s): State<AppState>,
+    jar: CookieJar,
     headers: HeaderMap,
     Query(p): Query<StartParams>,
 ) -> Response {
     match start_inner(&s, &headers, p).await {
-        Ok(url) => Redirect::to(&url).into_response(),
+        Ok((url, state)) => (
+            jar.add(state_cookie(&state, &s.auth.config)),
+            Redirect::to(&url),
+        )
+            .into_response(),
         Err(e) => {
             tracing::warn!(error = ?e, "single sign-on could not start");
             to_login("Single sign-on isn't available right now.")
@@ -163,7 +213,12 @@ pub async fn start(
     }
 }
 
-async fn start_inner(s: &AppState, headers: &HeaderMap, p: StartParams) -> anyhow::Result<String> {
+/// The provider's sign-in address, and the state it carries.
+async fn start_inner(
+    s: &AppState,
+    headers: &HeaderMap,
+    p: StartParams,
+) -> anyhow::Result<(String, String)> {
     let cfg = s
         .auth
         .config
@@ -197,7 +252,7 @@ async fn start_inner(s: &AppState, headers: &HeaderMap, p: StartParams) -> anyho
         .bind(safe_return(p.return_to))
         .execute(&s.pool)
         .await?;
-    Ok(url.to_string())
+    Ok((url.to_string(), state.secret().clone()))
 }
 
 /// What the provider sends back to the callback.
@@ -227,11 +282,13 @@ pub async fn callback(
     headers: HeaderMap,
     Query(p): Query<CallbackParams>,
 ) -> Response {
+    let started_here = jar.get(STATE_COOKIE).map(|c| c.value().to_owned());
+    let jar = clear_state_cookie(jar);
     if let Some(e) = &p.error {
         tracing::info!(error = %e, description = ?p.error_description, "provider refused sign-in");
-        return to_login("The sign-in provider refused the sign-in.");
+        return (jar, to_login("The sign-in provider refused the sign-in.")).into_response();
     }
-    match callback_inner(&s, &headers, p).await {
+    match callback_inner(&s, &headers, p, started_here.as_deref()).await {
         Ok(Outcome::SignedIn { user, return_to }) => {
             match super::create_session(
                 &s.pool,
@@ -249,10 +306,10 @@ pub async fn callback(
                 Err(e) => e.into_response(),
             }
         }
-        Ok(Outcome::Refused(why)) => to_login(why),
+        Ok(Outcome::Refused(why)) => (jar, to_login(why)).into_response(),
         Err(e) => {
             tracing::warn!(error = ?e, "single sign-on failed");
-            to_login("Single sign-on didn't work. Try again.")
+            (jar, to_login("Single sign-on didn't work. Try again.")).into_response()
         }
     }
 }
@@ -266,6 +323,7 @@ async fn callback_inner(
     s: &AppState,
     headers: &HeaderMap,
     p: CallbackParams,
+    started_here: Option<&str>,
 ) -> anyhow::Result<Outcome> {
     let cfg = s
         .auth
@@ -276,6 +334,12 @@ async fn callback_inner(
     let (Some(code), Some(state)) = (p.code, p.state) else {
         return Ok(Outcome::Refused("The sign-in reply was incomplete."));
     };
+    // Compared as hashes, which take the same time however much of the two agrees.
+    if started_here.map(secret_hash) != Some(secret_hash(&state)) {
+        return Ok(Outcome::Refused(
+            "That sign-in didn't start in this browser. Try again.",
+        ));
+    }
     let pending: Option<(String, String, String)> = sqlx::query_as(
         "DELETE FROM oidc_logins WHERE state_hash = $1 AND created_at > now() - interval '15 minutes' RETURNING nonce, pkce_verifier, return_to",
     )
@@ -332,7 +396,14 @@ async fn callback_inner(
     // The signature is verified above; other claims (groups) come from the same payload.
     let groups = groups_claim(&id_token.to_string());
 
-    let user = find_or_create(
+    let member = |group: &Option<String>| group.as_ref().is_some_and(|g| groups.contains(g));
+    if cfg.allowed_group.is_some() && !member(&cfg.allowed_group) && !member(&cfg.admin_group) {
+        return Ok(Outcome::Refused(
+            "Your account at the sign-in provider isn't one this install lets in.",
+        ));
+    }
+    let may_create = cfg.open_signup || cfg.allowed_group.is_some();
+    let user = match find_or_create(
         s,
         cfg,
         &issuer,
@@ -341,10 +412,22 @@ async fn callback_inner(
         email_verified,
         name,
         preferred,
+        may_create,
     )
-    .await?;
-    let Some(user) = user else {
-        return Ok(Outcome::Refused("This account is turned off."));
+    .await?
+    {
+        Account::Active(user) => user,
+        Account::Disabled => return Ok(Outcome::Refused("This account is turned off.")),
+        Account::None => {
+            return Ok(Outcome::Refused(
+                "There's no account here for you yet: ask an admin to add one with your email address.",
+            ));
+        }
+        Account::AdminEmail => {
+            return Ok(Outcome::Refused(
+                "That email address belongs to an admin account, which single sign-on doesn't take over: sign in with its password.",
+            ));
+        }
     };
     if let Some(group) = &cfg.admin_group {
         sqlx::query("UPDATE users SET is_admin = $2 WHERE id = $1")
@@ -378,7 +461,21 @@ fn groups_claim(jwt: &str) -> Vec<String> {
     }
 }
 
-/// The account for this identity, or None when it is turned off.
+/// What signing on found for an identity.
+enum Account {
+    /// An account that may sign in.
+    Active(Uuid),
+    /// The account is turned off.
+    Disabled,
+    /// No account, and the install doesn't make one at sign-in.
+    None,
+    /// The verified email is an admin account's, which signing on never links to: an admin's rights would go to
+    /// whoever controls that address at the provider.
+    AdminEmail,
+}
+
+/// The account for this identity: the one it signed in to before, else an account with its verified email, else a
+/// new one when `may_create`.
 #[allow(clippy::too_many_arguments)]
 async fn find_or_create(
     s: &AppState,
@@ -389,7 +486,8 @@ async fn find_or_create(
     email_verified: bool,
     name: Option<String>,
     preferred: Option<String>,
-) -> anyhow::Result<Option<Uuid>> {
+    may_create: bool,
+) -> anyhow::Result<Account> {
     let mut tx = s.pool.begin().await?;
     let known: Option<(Uuid, bool)> = sqlx::query_as(
         "SELECT u.id, u.disabled FROM user_identities i JOIN users u ON u.id = i.user_id WHERE i.issuer = $1 AND i.subject = $2",
@@ -399,12 +497,16 @@ async fn find_or_create(
     .fetch_optional(&mut *tx)
     .await?;
     if let Some((id, disabled)) = known {
-        return Ok((!disabled).then_some(id));
+        return Ok(if disabled {
+            Account::Disabled
+        } else {
+            Account::Active(id)
+        });
     }
-    // Link to an existing account only on an email the provider vouches for.
-    let by_email: Option<(Uuid, bool)> = match (email, email_verified) {
+    // Link to an existing account only on an email the provider vouches for, and never to an admin's.
+    let by_email: Option<(Uuid, bool, bool)> = match (email, email_verified) {
         (Some(e), true) => {
-            sqlx::query_as("SELECT id, disabled FROM users WHERE lower(email) = $1")
+            sqlx::query_as("SELECT id, disabled, is_admin FROM users WHERE lower(email) = $1")
                 .bind(e)
                 .fetch_optional(&mut *tx)
                 .await?
@@ -412,7 +514,9 @@ async fn find_or_create(
         _ => None,
     };
     let (id, disabled) = match by_email {
-        Some(found) => found,
+        Some((_, _, true)) => return Ok(Account::AdminEmail),
+        Some((id, disabled, false)) => (id, disabled),
+        None if !may_create => return Ok(Account::None),
         None => {
             let base = preferred
                 .or_else(|| email.and_then(|e| e.split('@').next()).map(str::to_string))
@@ -475,7 +579,11 @@ async fn find_or_create(
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    Ok((!disabled).then_some(id))
+    Ok(if disabled {
+        Account::Disabled
+    } else {
+        Account::Active(id)
+    })
 }
 
 async fn new_household(
@@ -502,6 +610,17 @@ mod tests {
         assert_eq!(safe_return(Some("https://evil.example".into())), "/");
         assert_eq!(safe_return(Some("/\\evil".into())), "/");
         assert_eq!(safe_return(None), "/");
+        // Browsers drop tabs and line breaks, which would turn these into //evil.example.
+        for sneaky in [
+            "/\t/evil.example",
+            "/\n/evil.example",
+            "/\r/evil.example",
+            "/ /evil.example",
+        ] {
+            assert_eq!(safe_return(Some(sneaky.into())), "/", "{sneaky:?}");
+        }
+        // Encoded, they are only a path here.
+        assert_eq!(safe_return(Some("/%09/x".into())), "/%09/x");
     }
 
     #[test]

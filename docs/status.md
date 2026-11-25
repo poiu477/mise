@@ -78,6 +78,15 @@ What a reviewer can rely on today:
 
 ## Known issues and limits
 
+- **English only.** Reading recipes assumes English: unit names, abbreviations and plurals (`mise-core/src/quantity.rs`,
+  `ingredient_line.rs`), plural folding, brand stripping and the narrowing words that make one food a kind of another
+  (`food_names.rs`), step text rewritten for a new yield and the times found in it (`step_amounts.rs`,
+  `step_times.rs`), and the words that say a yield counts servings and the worded times in imported pages
+  (`mise-ingest/src/schema_org.rs`). A recipe in another language imports, but its amounts, foods and yields read
+  poorly. The web app's own text is English too.
+- A household's fork stays on the original's dish, and the dish's title follows the original's, so after a share is
+  withdrawn the forking household still sees the dish renamed when the owner renames their recipe (from a code
+  review; not yet reproduced in a test).
 - 36 versions (269 lines) publish 3-serving amounts equal to their 4-serving ones; left as published.
 - Two review items stay open: green beans swapped for broccoli or carrots between versions; nothing records swaps yet,
   so the review page doesn't list food swaps.
@@ -196,4 +205,5 @@ What a reviewer can rely on today:
 | 2026-11-24 | mise's own dates and times use `time` rather than chrono (T34): `time::Date` for weeks and plans, `OffsetDateTime` for timestamps, through sqlx's and utoipa's `time` features. `time` was already in the tree (cookies, sessions) and reads plainly for date arithmetic; jiff would have been a third date library. Dates still go out as `2026-11-23` and timestamps as RFC 3339 in UTC (`time::serde::rfc3339`), so the API document is unchanged; fractional seconds are written with as many digits as they need rather than in threes. chrono stays in `Cargo.lock` only through oauth2 and openidconnect, and RUSTSEC-2026-0543 stays accepted until they drop it |
 | 2026-11-24 | Observability (T9) adds nothing to run beside mise: a request id on every answer and log line (a proxy's own when it is plain), JSON logs as an option, `/api/v1/ready` for whether the database answers, and request counts and durations by route in Prometheus's text format, written by mise itself (no metrics crate) and served only on a port of their own (`MISE_METRICS_BIND`), so nothing about traffic is ever public. Routes are labelled as the router writes them, so the series stay few whatever is asked for |
 | 2026-11-24 | Releases (T10) are `v` tags on `main`. The tag's pipeline runs every check, then pushes the image to the project's container registry (`registry.gitlab.pauldrakehughes.com/personal/mise`) as the version and, for a full release, `latest`, and makes a GitLab release from the version's section of `CHANGELOG.md` (Keep a Changelog). The tag must match the crates' version. `compose.yaml` still builds by default; `MISE_IMAGE` runs a released image instead. Pre-releases (`-rc.1`) try the release path without moving `latest` |
+| 2026-11-24 | From a code review: single sign-on now finishes only in the browser that started it (a 15-minute `mise_oidc_state` cookie the callback must match, so nobody can sign someone into their account), returns only to addresses that stay on the site (no control characters or whitespace, resolved against the site), lets in only people with an account unless `OIDC_ALLOWED_GROUP` or `OIDC_OPEN_SIGNUP` says otherwise, and never links to an admin's account by email. A fork of another household's recipe starts private whatever the forking household's default, and reading lines in the editor offers only foods the household could find by searching |
 | 2026-11-24 | Nothing an admin or an import does can stop later imports (T39). Merging a food into one below it moves that food to the merged one's place first, so no merge makes a loop, and a loop put in the tree by hand makes option derivation fail naming its foods rather than run forever. The import stages' lock is held on a connection that is closed, not returned to the pool, if the import ends any way but cleanly, so the server drops the lock with the session. Imported titles keep at most 200 characters, as the editor allows, and every slug at most 80, cut at a word |
