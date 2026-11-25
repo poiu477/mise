@@ -17,25 +17,6 @@ status.md if it changed either.
 
 ## Ready
 
-### T37 · Near-duplicate foods in the review queue
-
-Matching makes a new food for any name it doesn't recognise, and the review queue sees only the matches it was
-unsure of. Two foods that are one ("red onion", "red onions, diced") or a confident wrong match pass unseen.
-
-- After matching, pair the foods matching created (not ones a person made or curated) whose names are near: the
-  same after plural folding and note stripping, or above a similarity threshold (trigram, as `pg_trgm` scores it).
-  Raise each pair as a `food_duplicate` review item with the lines each covers, best first; its answers are `merge`
-  (into the one with more lines, or the other), `keep` (two foods), or `set_parent`, stored as the curation commands
-  store them, so a rebuild keeps the answer. A pair answered `keep` isn't raised again.
-- Report foods per 100 ingredient lines in the import stats and the pipeline snapshot, so a jump shows in review.
-- **Touches:** `crates/mise-ingest/src/foods.rs`, `crates/mise-api/src/review.rs`, `web/src/pages/ReviewPage.tsx`,
-  `fixtures/demo-bundle/snapshots/`, `docs/curation.md`.
-- **Needs:** T38 not in flight (both change the review queue).
-- **Done when:** a test with lines "2 red onions" and "1 red onion, diced" in different versions raises one
-  `food_duplicate` item, answering `merge` leaves one food covering both and survives `match-foods --reset`, and
-  `keep` stops it coming back; the web queue lists and answers it (a browser journey); the pipeline snapshot shows
-  foods per 100 lines.
-
 ### T38 · Food swaps in the review queue
 
 Grouping raises `food_swap` items (one food replaced by another between a dish's versions: green beans for broccoli),
@@ -46,7 +27,7 @@ but nothing records an answer, so the review page doesn't list them (status.md, 
   (unrelated), stored so a rebuild keeps them and a kept pair isn't raised again.
 - **Touches:** `crates/mise-api/src/review.rs`, `crates/mise-ingest/src/options.rs`, `web/src/pages/ReviewPage.tsx`,
   `docs/curation.md`.
-- **Needs:** T37 not in flight.
+- **Needs:** nothing.
 - **Done when:** API tests answer a swap each way and see the relation (or the merge) and that a kept pair isn't
   raised again; a browser journey answers one from the review page; status.md's known issue about unlisted swaps is
   gone.
@@ -71,7 +52,7 @@ per-food weight units, and leave shopping ticks naming a food that is gone.
 - Move pantry staples, weight-unit choices and shopping marks to the food merged into (keeping the household's choice
   when both had one), and keep them through a reset by moving them to the food the same name matches again.
 - **Touches:** `crates/mise-ingest/src/curate.rs`, `foods.rs`.
-- **Needs:** T37 not in flight (it adds merges from the review queue).
+- **Needs:** nothing.
 - **Done when:** tests merge a food a household has as a staple, with a weight unit and a tick, and find all three on
   the food merged into; the same after `match-foods --reset`.
 

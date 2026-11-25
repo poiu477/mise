@@ -19,6 +19,8 @@ MatchStats {
     kind_of_links: 1,
     related_links: 0,
     review_items: 0,
+    duplicate_items: 0,
+    foods_per_100_lines: 66.7,
 }
 
 ## Apply curation

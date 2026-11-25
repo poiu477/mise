@@ -17,8 +17,33 @@ rebuilt database can be brought back to the same state.
 | `set` | `food`, `key`, `value` | A property, e.g. `default_flexibility`: `strict` |
 | `brand` | `name` | A brand matching strips from ingredient names: `{"op": "brand", "name": "Old Bay"}` |
 | `unbrand` | `name` | No longer a brand; matching leaves the word in names |
+| `distinct` | `a`, `b` | Two look-alike names are different foods; review stops offering the pair |
 
 Foods are found by name, any alias, or slug; plurals and brand marks don't matter.
+
+### Near-duplicate foods
+
+Matching gives every ingredient name it doesn't know a food of its own, so one food written two ways becomes two
+foods: "Red Onions" and "Red Onion, Diced". After matching, the foods it made whose names are the same once
+plurals are folded and the words that only say how a food was cut up or handled are dropped ("diced", "shredded",
+"peeled", "cooked") are paired up, and each pair becomes a `food_duplicate` question in the review queue, the
+surest first.
+
+The pairing goes by those words, not by how alike the names read: scoring names by similarity alone offers
+"Honey" and "Hot Honey", or "Sourdough Bread" and "Sourdough Bread Bowl", which are different foods. Words that
+say *which* food it is are kept, so a colour, a variety or a form ("Green Bell Pepper", "Fresh Mozzarella") is
+left to the `food_parent` question, which already files it as a kind of its base.
+
+A pair is answered three ways, from the review page or by hand:
+
+- **One food** (`merge`): the rarer spelling folds into the one more lines use.
+- **Two foods** (`distinct`): they are different foods. Kept by name in `food_distinctions` (migration
+  `0023_food_distinctions.sql`), not by food id, because `mise match-foods --reset` deletes the foods matching made
+  and a rebuilt database makes them afresh. `mise food export` writes each pair back out, so the answer survives a
+  rebuild. Also `mise food distinct "Red Onions" "Red Onion, Diced"`.
+- **A kind of** (`set_parent`): one goes under the other.
+
+Matching reports foods per 100 ingredient lines, so a jump in how many names the sources use shows up here.
 
 ### Brands
 
@@ -64,7 +89,8 @@ A density alone never turns "2 cloves" into spoons: only an item size does. Both
 ## Writing curation back out
 
 `mise food export <file>` writes the hand edits a database holds as a curation file: the brands added (`brand`) and
-shipped ones taken away (`unbrand`), every food that is yours (`add`), names given by hand (`merge` when recipes use
+shipped ones taken away (`unbrand`), the look-alike pairs told apart (`distinct`), every food that is yours
+(`add`), names given by hand (`merge` when recipes use
 the name, `alias` otherwise), where each of your foods sits (`set_parent` or `unparent`, parents first), properties
 and measures. Applied to a database rebuilt from the same recipes, it brings the food model back; applied to the one
 it came from, it changes nothing. Two edits leave nothing to read back, so keep them in a hand-written file:

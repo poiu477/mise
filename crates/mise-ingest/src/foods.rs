@@ -409,8 +409,8 @@ async fn propose_duplicates(
         .map(|f| f.id)
         .collect();
 
-    // Group by the key the names of one food share; a group of one has nothing to ask about. The key is also what
-    // a distinction is stored under, so a pair told apart is skipped by its group's key.
+    // The pairs a person has already told apart, each side under its own name key (`singular_key`): the two sides
+    // of a pair share a `duplicate_key` by definition, so that could not tell them apart.
     let told_apart: std::collections::HashSet<(String, String)> =
         sqlx::query_as::<_, (String, String)>("SELECT a_name, b_name FROM food_distinctions")
             .fetch_all(&mut **tx)
@@ -418,6 +418,7 @@ async fn propose_duplicates(
             .context("reading food distinctions")?
             .into_iter()
             .collect();
+    // Group by the key the names of one food share; a group of one has nothing to ask about.
     let mut groups: HashMap<String, Vec<(Uuid, String)>> = HashMap::new();
     for (id, name) in matched {
         groups
