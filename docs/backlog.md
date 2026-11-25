@@ -17,19 +17,6 @@ status.md if it changed either.
 
 ## Ready
 
-### T40 · Search's "Everything" filter, and planning above 24 servings
-
-From the code review (items 9 and 10).
-
-- The search page's "Everything" filter sends `type=all`, which isn't a content type, so it finds nothing. Send no
-  `type` for it.
-- `PATCH`/`POST` on plan entries refuse more than 24 servings (`variants::MAX_SERVINGS`), though a recipe can publish
-  up to 1,000, so a 40-serving recipe can't be planned at its own yield. Allow up to the version's largest published
-  yield, or 24 when that is smaller.
-- **Touches:** `web/src/pages/SearchPage.tsx`, `crates/mise-api/src/plan.rs`.
-- **Needs:** nothing.
-- **Done when:** a browser journey picks "Everything" and sees every demo dish; an API test plans a version published
-  for 40 at 40 and is refused 41, and one published for 4 at 24 and is refused 25.
 
 ### T35 · Compile-time checked SQL in `mise-api`
 

@@ -8,7 +8,8 @@ const PAGE = 24;
 const TYPES = [
   { value: "recipe", label: "Recipes" },
   { value: "product", label: "Store items" },
-  { value: "", label: "Everything" },
+  // No type at all means recipes (the default), so "Everything" needs a name of its own in the address.
+  { value: "all", label: "Everything" },
 ];
 
 /** The home page: dishes matching the top bar's search (?q=), an ingredient (?ingredient=) and a kind (?type=,
@@ -23,7 +24,11 @@ export function SearchPage() {
   const q = params.get("q") ?? "";
   const ingredient = params.get("ingredient") ?? "";
   const type = params.get("type") ?? "recipe";
-  const asked = { q: q || undefined, ingredient: ingredient || undefined, type: type || undefined };
+  const asked = {
+    q: q || undefined,
+    ingredient: ingredient || undefined,
+    type: type === "all" ? undefined : type || undefined,
+  };
 
   const found = useInfiniteQuery({
     queryKey: ["dishes", account, asked],
@@ -64,7 +69,7 @@ export function SearchPage() {
               type="button"
               role="radio"
               aria-checked={type === t.value}
-              onClick={() => setParam("type", t.value || "all")}
+              onClick={() => setParam("type", t.value)}
             >
               {t.label}
             </button>
@@ -127,7 +132,9 @@ export function SearchPage() {
         <p className="empty">
           {q || ingredient
             ? "No dishes match. Try fewer words."
-            : "No dishes yet. Import a seed bundle or write a recipe to get started."}
+            : type !== "recipe"
+              ? "No dishes of this kind yet."
+              : "No dishes yet. Import a seed bundle or write a recipe to get started."}
         </p>
       )}
       {found.hasNextPage && (

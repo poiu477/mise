@@ -1,7 +1,7 @@
+import { maxServings } from "../recipe";
+
 /** Fewest servings the stepper goes down to. */
 const MIN = 1;
-/** The API derives up to 24 servings; a dish published for more (a 40-serving roast) goes up to that. */
-const MAX = 24;
 
 /** A new count, or how to get one from the current count (a tap on − or +). */
 type Change = number | ((current: number) => number);
@@ -16,7 +16,7 @@ export function Servings({
   published: number[];
   onChange: (n: Change) => void;
 }) {
-  const max = Math.max(MAX, ...published);
+  const max = maxServings(published);
   return (
     <section className="servings" aria-label="Servings">
       <span className="option-label">Servings</span>

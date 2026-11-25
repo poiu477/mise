@@ -32,6 +32,9 @@ macro_rules! visible_default {
     };
 }
 
+/// The kinds of dish, as `content_type` holds them.
+const KINDS: [&str; 4] = ["recipe", "ready_meal", "add_on", "product"];
+
 /// A search of the dishes: by words, by ingredient, by kind, a page at a time.
 #[derive(Deserialize, IntoParams)]
 pub struct ListParams {
@@ -96,7 +99,7 @@ type SummaryRow = (
 #[utoipa::path(get, path = "/api/v1/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams),
     responses(
         (status = 200, description = "Matching dishes, a page at a time", body = DishPage),
-        (status = 400, description = "A query value can't be read: `limit` or `offset` isn't a number, say", body = crate::error::ErrorBody),
+        (status = 400, description = "A query value can't be read (`limit` or `offset` isn't a number, say), or `type` isn't a kind of dish", body = crate::error::ErrorBody),
         crate::error::SignedIn
     )
 )]
@@ -107,6 +110,15 @@ pub async fn list(
 ) -> ApiResult<Json<DishPage>> {
     let limit = p.limit.unwrap_or(24).clamp(1, MAX_LIMIT);
     let offset = p.offset.unwrap_or(0).max(0);
+    // A type that isn't one would match nothing and say nothing; say so instead.
+    if let Some(kind) = p.content_type.as_deref()
+        && !KINDS.contains(&kind)
+    {
+        return Err(ApiError::BadRequest(format!(
+            "type must be one of {}",
+            KINDS.join(", ")
+        )));
+    }
     let q = p.q.as_deref().map(str::trim).filter(|q| !q.is_empty());
     let ingredient = p
         .ingredient

@@ -132,6 +132,20 @@ test("a dish reads as published, and scales to any serving count", async () => {
   await expect(page.getByRole("button", { name: "Added" })).toBeDisabled();
 });
 
+test("the search's kinds each list what they say", async () => {
+  await page.goto("/");
+  const listed = await (await page.request.get("/api/v1/dishes")).json();
+  const kinds = page.getByRole("radiogroup", { name: "What to show" });
+  // The demo dishes are all recipes: "Everything" lists them all, as "Recipes" does.
+  await kinds.getByRole("radio", { name: "Everything" }).click();
+  await expect(kinds.getByRole("radio", { name: "Everything" })).toBeChecked();
+  await expect(page.getByText(`${listed.total} dishes`)).toBeVisible();
+  await kinds.getByRole("radio", { name: "Store items" }).click();
+  await expect(page.getByText("0 dishes")).toBeVisible();
+  await kinds.getByRole("radio", { name: "Recipes" }).click();
+  await expect(page.getByText(`${listed.total} dishes`)).toBeVisible();
+});
+
 test("an old address for a renamed dish lands on its current one", async () => {
   // serve.mjs retires "tomato-pasta" for this dish, as grouping does when a dish is renamed.
   await page.goto("/dishes/tomato-pasta?s=4");

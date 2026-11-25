@@ -21,6 +21,12 @@ use crate::{
 /// The largest derived yield; any published yield is allowed, however large (a 40-serving roast turkey).
 pub const MAX_SERVINGS: f64 = 24.0;
 
+/// The most servings a version with these published yields can be shown or planned at: 24, or its largest yield when
+/// that is more.
+pub fn max_servings(yields: &[f64]) -> f64 {
+    yields.iter().copied().fold(MAX_SERVINGS, f64::max)
+}
+
 /// How many servings to show a version at.
 #[derive(Deserialize, IntoParams)]
 pub struct RenderParams {
@@ -177,7 +183,7 @@ pub async fn get(
         .servings
         .or_else(|| yields.first().copied())
         .unwrap_or(2.0);
-    let max = yields.iter().copied().fold(MAX_SERVINGS, f64::max);
+    let max = max_servings(&yields);
     if !(target > 0.0 && target <= max) {
         return Err(ApiError::BadRequest(format!(
             "servings must be more than 0 and at most {max}"

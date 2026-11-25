@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api, errorText, type DishSummary, type Plan, type PlanEntry } from "../api/client";
 import { answer, queryClient, Refused } from "../api/query";
+import { maxServings } from "../recipe";
 import { useAccount } from "../session";
 import { addWeeks, mondayOf, weekLabel } from "../week";
 
@@ -121,7 +122,7 @@ export function PlanPage() {
                   <button
                     type="button"
                     onClick={() => setServings(e, e.servings + 1)}
-                    disabled={e.servings >= 24}
+                    disabled={e.servings >= maxServings(e.yields)}
                     aria-label={`More servings of ${e.title}`}
                   >
                     +
