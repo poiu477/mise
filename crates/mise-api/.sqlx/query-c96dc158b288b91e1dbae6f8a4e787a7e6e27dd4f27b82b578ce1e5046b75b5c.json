@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id AS \"id!\",\n                      name AS \"name!\",\n                      scope AS \"scope!\",\n                      created_at AS \"created_at!\",\n                      last_used_at AS \"last_used_at?\"\n               FROM api_tokens WHERE user_id = $1 ORDER BY created_at",
+  "query": "SELECT id AS \"id!\",\n                  name AS \"name!\",\n                  scope AS \"scope!\",\n                  created_at AS \"created_at!\",\n                  last_used_at AS \"last_used_at?\"\n           FROM api_tokens WHERE user_id = $1 ORDER BY created_at",
   "describe": {
     "columns": [
       {
@@ -72,5 +72,5 @@
       true
     ]
   },
-  "hash": "166eb38d94f37a177d4924729cc4781daf6d9876390843d4efaca4a7c2a30e82"
+  "hash": "c96dc158b288b91e1dbae6f8a4e787a7e6e27dd4f27b82b578ce1e5046b75b5c"
 }

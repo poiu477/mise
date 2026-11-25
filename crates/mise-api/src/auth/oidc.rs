@@ -515,13 +515,14 @@ async fn find_or_create(
         });
     }
     // Link to an existing account only on an email the provider vouches for, and never to an admin's.
-    let by_email: Option<(Uuid, bool, bool)> = match (email, email_verified) {
-        (Some(e), true) => {
-            sqlx::query_as("SELECT id, disabled, is_admin FROM users WHERE lower(email) = $1")
-                .bind(e)
-                .fetch_optional(&mut *tx)
-                .await?
-        }
+    let by_email = match (email, email_verified) {
+        (Some(e), true) => sqlx::query!(
+            "SELECT id, disabled, is_admin FROM users WHERE lower(email) = $1",
+            e
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .map(|u| (u.id, u.disabled, u.is_admin)),
         _ => None,
     };
     let (id, disabled) = match by_email {

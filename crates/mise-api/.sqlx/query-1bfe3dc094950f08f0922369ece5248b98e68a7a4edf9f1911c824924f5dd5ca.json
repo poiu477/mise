@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT u.username AS \"username!\",\n                      u.display_name AS \"display_name!\",\n                      u.email AS \"email?\",\n                      u.is_admin AS \"is_admin!\",\n                      u.password_hash IS NOT NULL AS \"has_password!\",\n                      h.id AS \"id!\",\n                      h.name AS \"name!\"\n               FROM users u JOIN households h ON h.id = u.household_id WHERE u.id = $1",
+  "query": "SELECT u.username AS \"username!\",\n                  u.display_name AS \"display_name!\",\n                  u.email AS \"email?\",\n                  u.is_admin AS \"is_admin!\",\n                  u.password_hash IS NOT NULL AS \"has_password!\",\n                  h.id AS \"id!\",\n                  h.name AS \"name!\"\n           FROM users u JOIN households h ON h.id = u.household_id WHERE u.id = $1",
   "describe": {
     "columns": [
       {
@@ -91,5 +91,5 @@
       false
     ]
   },
-  "hash": "c77ee921c98db7c45f07ca1e774720439e59e05a9503f564a2dee613ac1fe151"
+  "hash": "1bfe3dc094950f08f0922369ece5248b98e68a7a4edf9f1911c824924f5dd5ca"
 }

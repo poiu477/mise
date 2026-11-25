@@ -89,13 +89,13 @@ pub(crate) async fn load_me(pool: &sqlx::PgPool, id: Uuid) -> ApiResult<Me> {
         String,
     ) = sqlx::query!(
         r#"SELECT u.username AS "username!",
-                      u.display_name AS "display_name!",
-                      u.email AS "email?",
-                      u.is_admin AS "is_admin!",
-                      u.password_hash IS NOT NULL AS "has_password!",
-                      h.id AS "id!",
-                      h.name AS "name!"
-               FROM users u JOIN households h ON h.id = u.household_id WHERE u.id = $1"#,
+                  u.display_name AS "display_name!",
+                  u.email AS "email?",
+                  u.is_admin AS "is_admin!",
+                  u.password_hash IS NOT NULL AS "has_password!",
+                  h.id AS "id!",
+                  h.name AS "name!"
+           FROM users u JOIN households h ON h.id = u.household_id WHERE u.id = $1"#,
         id
     )
     .fetch_optional(pool)
@@ -246,9 +246,9 @@ pub async fn login(
     }
     let row: Option<(Uuid, Option<String>, bool)> = sqlx::query!(
         r#"SELECT id AS "id!",
-                      password_hash AS "password_hash?",
-                      disabled AS "disabled!"
-               FROM users WHERE lower(username) = $1"#,
+                  password_hash AS "password_hash?",
+                  disabled AS "disabled!"
+           FROM users WHERE lower(username) = $1"#,
         &key
     )
     .fetch_optional(&s.pool)
@@ -440,11 +440,11 @@ pub async fn list_tokens(
 ) -> ApiResult<Json<Vec<TokenInfo>>> {
     let rows: Vec<TokenRow> = sqlx::query!(
         r#"SELECT id AS "id!",
-                      name AS "name!",
-                      scope AS "scope!",
-                      created_at AS "created_at!",
-                      last_used_at AS "last_used_at?"
-               FROM api_tokens WHERE user_id = $1 ORDER BY created_at"#,
+                  name AS "name!",
+                  scope AS "scope!",
+                  created_at AS "created_at!",
+                  last_used_at AS "last_used_at?"
+           FROM api_tokens WHERE user_id = $1 ORDER BY created_at"#,
         u.id
     )
     .fetch_all(&s.pool)
@@ -802,8 +802,8 @@ pub async fn update_user(
         .await?;
     let (is_admin, disabled): (bool, bool) = sqlx::query!(
         r#"SELECT is_admin AS "is_admin!",
-                      disabled AS "disabled!"
-               FROM users WHERE id = $1"#,
+                  disabled AS "disabled!"
+           FROM users WHERE id = $1"#,
         id
     )
     .fetch_optional(&mut *tx)

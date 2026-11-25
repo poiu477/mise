@@ -1,0 +1,143 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT v.id, v.title, v.subtitle, v.published_at, v.has_steps,\n                  (SELECT array_agg(y.servings::float8 ORDER BY y.servings) FROM variant_yields y\n                   WHERE y.variant_id = v.id) AS yields,\n                  coalesce((SELECT jsonb_object_agg(a.key, a.value) FROM variant_attributes a\n                            WHERE a.variant_id = v.id), '{}') AS \"attributes!\",\n                  (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero'\n                   LIMIT 1) AS hero,\n                  v.origin = 'user' AND v.household_id IS NOT DISTINCT FROM $2 AS \"editable!\",\n                  p.id AS \"parent?\", p.title AS \"parent_title?\", coalesce(src.name, h.name) AS by,\n                  (SELECT o.name FROM households o WHERE o.id = v.household_id AND o.id <> $2) AS shared_by\n           FROM variants v\n           LEFT JOIN variants p ON p.id = v.parent_variant_id AND v.origin = 'user' AND visible_to(p, $2)\n           LEFT JOIN source_records sr ON sr.id = p.source_record_id\n           LEFT JOIN sources src ON src.id = sr.source_id\n           LEFT JOIN households h ON h.id = p.household_id AND p.origin = 'user'\n           WHERE v.dish_id = $1 AND visible_to(v, $2) ORDER BY v.published_at DESC NULLS LAST",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "variants",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "variants",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "subtitle",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "variants",
+            "name": "subtitle"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "published_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "variants",
+            "name": "published_at"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "has_steps",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "variants",
+            "name": "has_steps"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "yields",
+        "type_info": "Float8Array",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "attributes!",
+        "type_info": "Jsonb",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "hero",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "editable!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "parent?",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "variants",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "parent_title?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "variants",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "by",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 12,
+        "name": "shared_by",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      null,
+      null,
+      null,
+      null,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "157c22392d5c365a573878df5dda59efe5ecb81b3df480d5efef9c12e4879158"
+}

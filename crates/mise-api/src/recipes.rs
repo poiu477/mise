@@ -264,7 +264,7 @@ impl Checked {
 }
 
 /// Refuses a recipe that names a food that doesn't exist, saying which line. A food the household couldn't have
-/// found by searching (`foods::KNOWN_FOOD`) doesn't exist for it.
+/// found by searching (`known_food`, a database function) doesn't exist for it.
 async fn check_foods(
     tx: &mut Transaction<'_, Postgres>,
     household: Uuid,
@@ -274,12 +274,11 @@ async fn check_foods(
     if chosen.is_empty() {
         return Ok(());
     }
-    let known: Vec<Uuid> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-        "SELECT f.id FROM foods f WHERE f.id = ANY($2) AND {}",
-        crate::foods::KNOWN_FOOD
-    )))
-    .bind(household)
-    .bind(&chosen)
+    let known: Vec<Uuid> = sqlx::query_scalar!(
+        "SELECT f.id FROM foods f WHERE f.id = ANY($2) AND known_food(f, $1)",
+        household,
+        &chosen
+    )
     .fetch_all(&mut **tx)
     .await?;
     match lines
@@ -417,11 +416,11 @@ async fn line_facts(
 ) -> ApiResult<Vec<LineFacts>> {
     Ok(sqlx::query!(
         r#"SELECT food_id AS "food_id?",
-                      raw_name AS "raw_name!",
-                      shipped AS "shipped?",
-                      allergens AS "allergens!"
-               FROM ingredient_lines
-           WHERE variant_id = $1 AND (shipped IS NOT NULL OR allergens <> '{}') ORDER BY position"#,
+                  raw_name AS "raw_name!",
+                  shipped AS "shipped?",
+                  allergens AS "allergens!"
+           FROM ingredient_lines
+       WHERE variant_id = $1 AND (shipped IS NOT NULL OR allergens <> '{}') ORDER BY position"#,
         variant
     )
     .fetch_all(&mut **tx)
@@ -454,9 +453,9 @@ async fn carry_facts(
     }
     let lines: Vec<(Uuid, Option<Uuid>, String)> = sqlx::query!(
         r#"SELECT id AS "id!",
-                      food_id AS "food_id?",
-                      raw_name AS "raw_name!"
-               FROM ingredient_lines WHERE variant_id = $1"#,
+                  food_id AS "food_id?",
+                  raw_name AS "raw_name!"
+           FROM ingredient_lines WHERE variant_id = $1"#,
         variant
     )
     .fetch_all(&mut **tx)
@@ -696,13 +695,15 @@ pub async fn update(
     .await?;
     let facts = line_facts(&mut tx, id).await?;
     // Amounts go with their lines, and a step's photos with the step.
-    for delete in [
-        "DELETE FROM variant_yields WHERE variant_id = $1",
-        "DELETE FROM ingredient_lines WHERE variant_id = $1",
-        "DELETE FROM steps WHERE variant_id = $1",
-    ] {
-        sqlx::query(delete).bind(id).execute(&mut *tx).await?;
-    }
+    sqlx::query!("DELETE FROM variant_yields WHERE variant_id = $1", id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM ingredient_lines WHERE variant_id = $1", id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("DELETE FROM steps WHERE variant_id = $1", id)
+        .execute(&mut *tx)
+        .await?;
     if let Some((dish, old_slug)) = own_dish {
         let slug = free_slug(&mut tx, &recipe.title, Some(dish)).await?;
         sqlx::query!(
@@ -787,24 +788,26 @@ pub async fn fork(
     .ok_or(ApiError::NotFound)?;
     // A version without amounts has no yield; its copy is written for two, the size a dish page opens at.
     let servings = servings.unwrap_or(2.0);
-    type LineRow = (
-        String,
-        Option<String>,
-        Option<Uuid>,
-        Option<String>,
-        Option<f64>,
-        Option<String>,
-    );
-    let lines = sqlx::query_as::<_, LineRow>(
-        "SELECT il.raw_name, il.note, il.food_id, il.text, la.amount::float8, la.unit
-         FROM ingredient_lines il
-         LEFT JOIN line_amounts la ON la.line_id = il.id AND la.servings = $2::float8::numeric
-         WHERE il.variant_id = $1 ORDER BY il.position",
+    let lines = sqlx::query!(
+        r#"SELECT il.raw_name AS "raw_name!",
+                  il.note AS "note?",
+                  il.food_id AS "food_id?",
+                  il.text AS "text?",
+                  la.amount::float8 AS "amount?",
+                  la.unit AS "unit?"
+           FROM ingredient_lines il
+           LEFT JOIN line_amounts la ON la.line_id = il.id AND la.servings = $2::float8::numeric
+           WHERE il.variant_id = $1 ORDER BY il.position"#,
+        id,
+        servings
     )
-    .bind(id)
-    .bind(servings)
     .fetch_all(&mut *tx)
-    .await?
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| (r.raw_name, r.note, r.food_id, r.text, r.amount, r.unit))
+            .collect::<Vec<_>>()
+    })?
     .into_iter()
     .map(|(name, note, food_id, text, amount, unit)| {
         let read = Line {
@@ -866,18 +869,22 @@ pub async fn fork(
     .await?;
     write_parts(&mut tx, copy, &recipe).await?;
     carry_facts(&mut tx, copy, &facts).await?;
-    for copy_rows in [
+    sqlx::query!(
         "INSERT INTO variant_attributes (variant_id, key, value)
          SELECT $2, key, value FROM variant_attributes WHERE variant_id = $1",
+        id,
+        copy
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
         "INSERT INTO variant_media (variant_id, media_id, role, position)
          SELECT $2, media_id, 'hero', 0 FROM variant_media WHERE variant_id = $1 AND role = 'hero' LIMIT 1",
-    ] {
-        sqlx::query(copy_rows)
-            .bind(id)
-            .bind(copy)
-            .execute(&mut *tx)
-            .await?;
-    }
+        id,
+        copy
+    )
+    .execute(&mut *tx)
+    .await?;
     let stored = load(&mut tx, copy, me.household_id).await?;
     tx.commit().await?;
     Ok(Json(stored))
@@ -1124,22 +1131,28 @@ pub async fn read_lines(
             .collect(),
     )?;
     // Foods are found by the same key the matcher uses, so what shows here is what saving will choose; only those
-    // the household could find by searching (`foods::KNOWN_FOOD`), so a food named only in another household's
+    // the household could find by searching (`known_food`), so a food named only in another household's
     // private recipe doesn't show its name here.
     let keys: Vec<String> = lines.iter().map(|l| singular_key(l.name())).collect();
-    let foods: HashMap<String, FoodRef> =
-        sqlx::query_as::<_, (String, Uuid, String)>(sqlx::AssertSqlSafe(format!(
-            "SELECT a.alias, f.id, f.name FROM food_aliases a JOIN foods f ON f.id = a.food_id
-             WHERE a.alias = ANY($2) AND {}",
-            crate::foods::KNOWN_FOOD
-        )))
-        .bind(me.household_id)
-        .bind(&keys)
-        .fetch_all(&s.pool)
-        .await?
-        .into_iter()
-        .map(|(alias, id, name)| (alias, FoodRef { id, name }))
-        .collect();
+    let foods: HashMap<String, FoodRef> = sqlx::query!(
+        "SELECT a.alias, f.id, f.name FROM food_aliases a JOIN foods f ON f.id = a.food_id
+         WHERE a.alias = ANY($2) AND known_food(f, $1)",
+        me.household_id,
+        &keys
+    )
+    .fetch_all(&s.pool)
+    .await?
+    .into_iter()
+    .map(|f| {
+        (
+            f.alias,
+            FoodRef {
+                id: f.id,
+                name: f.name,
+            },
+        )
+    })
+    .collect();
     let lines = lines
         .into_iter()
         .zip(keys)

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name AS \"name!\",\n                  default_visibility AS \"default_visibility!\"\n           FROM households WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "households",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "default_visibility!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "households",
+            "name": "default_visibility"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "7497f0884f9b196953650b4ac7467f6ed61a930b78fdafe2c2536a4d29556661"
+}

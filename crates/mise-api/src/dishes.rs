@@ -24,14 +24,6 @@ const MAX_LIMIT: i64 = 100;
 /// otherwise its most complete, newest version the household can see. Grouping names a shared dish after versions
 /// everyone sees and opens it on one of them, so the second choice only matters for a dish a person made. No row when
 /// the household can see none of the dish's versions: joined laterally, it leaves such dishes out.
-macro_rules! visible_default {
-    () => {
-        "SELECT v.id FROM variants v WHERE v.dish_id = d.id AND visible_to(v, $1)
-         ORDER BY v.id IS NOT DISTINCT FROM d.default_variant_id DESC, v.has_steps DESC, v.published_at DESC NULLS LAST, v.id
-         LIMIT 1"
-    };
-}
-
 /// The kinds of dish, as `content_type` holds them.
 const KINDS: [&str; 4] = ["recipe", "ready_meal", "add_on", "product"];
 
@@ -83,18 +75,6 @@ pub struct DishPage {
 }
 
 /// id, slug, title, subtitle, content type, versions, default version, image, total matching.
-type SummaryRow = (
-    Uuid,
-    String,
-    String,
-    Option<String>,
-    String,
-    i64,
-    Option<Uuid>,
-    Option<Uuid>,
-    i64,
-);
-
 /// Search and browse the dishes this household can see.
 #[utoipa::path(get, path = "/api/v1/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams),
     responses(
@@ -125,47 +105,46 @@ pub async fn list(
         .as_deref()
         .map(str::trim)
         .filter(|q| !q.is_empty());
-    let rows: Vec<SummaryRow> = sqlx::query_as(concat!(
-        "SELECT d.id, d.slug, d.title, d.subtitle, d.content_type::text,
-                (SELECT count(*) FROM variants v WHERE v.dish_id = d.id AND visible_to(v, $1)) AS versions, dv.id,
-                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = dv.id AND vm.role = 'hero' LIMIT 1) AS hero,
-                count(*) OVER () AS total
-         FROM dishes d CROSS JOIN LATERAL (",
-        visible_default!(),
-        ") dv
-         WHERE ($2::text IS NULL OR d.title ILIKE '%' || $2 || '%' OR d.title % $2 OR d.subtitle ILIKE '%' || $2 || '%')
-           AND ($3::text IS NULL OR EXISTS (
-                 SELECT 1 FROM ingredient_lines il JOIN foods f ON f.id = il.food_id
-                 WHERE il.variant_id = dv.id AND f.name ILIKE '%' || $3 || '%'))
-           AND ($4::text IS NULL OR d.content_type::text = $4)
-         ORDER BY CASE WHEN $2::text IS NULL THEN 0 ELSE similarity(d.title, $2) END DESC, versions DESC, d.title
-         LIMIT $5 OFFSET $6",
-    ))
-    .bind(me.household_id)
-    .bind(q)
-    .bind(ingredient)
-    .bind(p.content_type.as_deref())
-    .bind(limit)
-    .bind(offset)
+    // A dish shows when the household can see one of its versions, and opens on the one `default_version` picks.
+    let rows = sqlx::query!(
+        r#"SELECT d.id, d.slug, d.title, d.subtitle, d.content_type::text AS "content_type!",
+                  (SELECT count(*) FROM variants v WHERE v.dish_id = d.id AND visible_to(v, $1)) AS "versions!",
+                  dv.id AS default_variant,
+                  (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = dv.id AND vm.role = 'hero'
+                   LIMIT 1) AS hero,
+                  count(*) OVER () AS "total!"
+           FROM dishes d CROSS JOIN LATERAL (SELECT default_version(d, $1) AS id) dv
+           WHERE dv.id IS NOT NULL
+             AND ($2::text IS NULL OR d.title ILIKE '%' || $2 || '%' OR d.title % $2
+                  OR d.subtitle ILIKE '%' || $2 || '%')
+             AND ($3::text IS NULL OR EXISTS (
+                   SELECT 1 FROM ingredient_lines il JOIN foods f ON f.id = il.food_id
+                   WHERE il.variant_id = dv.id AND f.name ILIKE '%' || $3 || '%'))
+             AND ($4::text IS NULL OR d.content_type::text = $4)
+           ORDER BY CASE WHEN $2::text IS NULL THEN 0 ELSE similarity(d.title, $2) END DESC, "versions!" DESC, d.title
+           LIMIT $5 OFFSET $6"#,
+        me.household_id,
+        q,
+        ingredient,
+        p.content_type.as_deref(),
+        limit,
+        offset
+    )
     .fetch_all(&s.pool)
     .await?;
-    let total = rows.first().map_or(0, |r| r.8);
+    let total = rows.first().map_or(0, |r| r.total);
     let items = rows
         .into_iter()
-        .map(
-            |(id, slug, title, subtitle, content_type, versions, default_variant, hero, _)| {
-                DishSummary {
-                    id,
-                    slug,
-                    title,
-                    subtitle,
-                    content_type,
-                    versions,
-                    default_variant,
-                    image: hero.map(Image::new),
-                }
-            },
-        )
+        .map(|d| DishSummary {
+            id: d.id,
+            slug: d.slug,
+            title: d.title,
+            subtitle: d.subtitle,
+            content_type: d.content_type,
+            versions: d.versions,
+            default_variant: d.default_variant,
+            image: d.hero.map(Image::new),
+        })
         .collect();
     Ok(Json(DishPage { total, items }))
 }
@@ -261,26 +240,6 @@ pub struct Dish {
 }
 
 /// id, slug, title, subtitle, content type, default version.
-type DishRow = (Uuid, String, String, Option<String>, String, Option<Uuid>);
-
-/// A version on a dish page: id, title, subtitle, published, has steps, yields, attributes, photo, editable, its
-/// original's id, title and author, and the household sharing it.
-type VariantRow = (
-    Uuid,
-    String,
-    Option<String>,
-    Option<OffsetDateTime>,
-    bool,
-    Option<Vec<f64>>,
-    serde_json::Value,
-    Option<Uuid>,
-    bool,
-    Option<Uuid>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
-
 /// A dish with its options and versions, by its slug or one it used to have (its `slug` is always the current one).
 /// A dish the household can see no version of is not found, as if it didn't exist.
 #[utoipa::path(
@@ -299,18 +258,27 @@ pub async fn get(
     Path(slug): Path<String>,
 ) -> ApiResult<Json<Dish>> {
     // A live slug wins over a retired one; grouping keeps the two apart, so this only guards a stray row.
-    let (id, slug, title, subtitle, content_type, default_variant): DishRow = sqlx::query_as(concat!(
-        "SELECT d.id, d.slug, d.title, d.subtitle, d.content_type::text, dv.id FROM dishes d CROSS JOIN LATERAL (",
-        visible_default!(),
-        ") dv
-         WHERE d.slug = $2 OR d.id = (SELECT r.dish_id FROM retired_slugs r WHERE r.slug = $2)
-         ORDER BY d.slug = $2 DESC LIMIT 1",
-    ))
-    .bind(me.household_id)
-    .bind(&slug)
+    let d = sqlx::query!(
+        r#"SELECT d.id, d.slug, d.title, d.subtitle, d.content_type::text AS "content_type!",
+                  dv.id AS default_variant
+           FROM dishes d CROSS JOIN LATERAL (SELECT default_version(d, $1) AS id) dv
+           WHERE dv.id IS NOT NULL
+             AND (d.slug = $2 OR d.id = (SELECT r.dish_id FROM retired_slugs r WHERE r.slug = $2))
+           ORDER BY d.slug = $2 DESC LIMIT 1"#,
+        me.household_id,
+        &slug
+    )
     .fetch_optional(&s.pool)
     .await?
     .ok_or(ApiError::NotFound)?;
+    let (id, slug, title, subtitle, content_type, default_variant) = (
+        d.id,
+        d.slug,
+        d.title,
+        d.subtitle,
+        d.content_type,
+        d.default_variant,
+    );
     let mut options = sqlx::query!(
         r#"SELECT key AS "key!",
                   label AS "label!",
@@ -339,57 +307,42 @@ pub async fn get(
     .collect::<ApiResult<Vec<_>>>()?;
     // A version written in the app names its parent as its original; an imported one's parent is the issue before
     // it, which isn't an original in that sense.
-    let variants = sqlx::query_as::<_, VariantRow>(
-        "SELECT v.id, v.title, v.subtitle, v.published_at, v.has_steps,
-                (SELECT array_agg(y.servings::float8 ORDER BY y.servings) FROM variant_yields y WHERE y.variant_id = v.id),
-                coalesce((SELECT jsonb_object_agg(a.key, a.value) FROM variant_attributes a WHERE a.variant_id = v.id), '{}'),
-                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1),
-                v.origin = 'user' AND v.household_id IS NOT DISTINCT FROM $2,
-                p.id, p.title, coalesce(src.name, h.name),
-                (SELECT o.name FROM households o WHERE o.id = v.household_id AND o.id <> $2)
-         FROM variants v
-         LEFT JOIN variants p ON p.id = v.parent_variant_id AND v.origin = 'user' AND visible_to(p, $2)
-         LEFT JOIN source_records sr ON sr.id = p.source_record_id
-         LEFT JOIN sources src ON src.id = sr.source_id
-         LEFT JOIN households h ON h.id = p.household_id AND p.origin = 'user'
-         WHERE v.dish_id = $1 AND visible_to(v, $2) ORDER BY v.published_at DESC NULLS LAST",
+    let variants = sqlx::query!(
+        r#"SELECT v.id, v.title, v.subtitle, v.published_at, v.has_steps,
+                  (SELECT array_agg(y.servings::float8 ORDER BY y.servings) FROM variant_yields y
+                   WHERE y.variant_id = v.id) AS yields,
+                  coalesce((SELECT jsonb_object_agg(a.key, a.value) FROM variant_attributes a
+                            WHERE a.variant_id = v.id), '{}') AS "attributes!",
+                  (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero'
+                   LIMIT 1) AS hero,
+                  v.origin = 'user' AND v.household_id IS NOT DISTINCT FROM $2 AS "editable!",
+                  p.id AS "parent?", p.title AS "parent_title?", coalesce(src.name, h.name) AS by,
+                  (SELECT o.name FROM households o WHERE o.id = v.household_id AND o.id <> $2) AS shared_by
+           FROM variants v
+           LEFT JOIN variants p ON p.id = v.parent_variant_id AND v.origin = 'user' AND visible_to(p, $2)
+           LEFT JOIN source_records sr ON sr.id = p.source_record_id
+           LEFT JOIN sources src ON src.id = sr.source_id
+           LEFT JOIN households h ON h.id = p.household_id AND p.origin = 'user'
+           WHERE v.dish_id = $1 AND visible_to(v, $2) ORDER BY v.published_at DESC NULLS LAST"#,
+        id,
+        me.household_id
     )
-    .bind(id)
-    .bind(me.household_id)
     .fetch_all(&s.pool)
     .await?
     .into_iter()
-    .map(
-        |(
-            id,
-            title,
-            subtitle,
-            published_at,
-            has_steps,
-            yields,
-            attributes,
-            hero,
-            editable,
-            parent,
-            parent_title,
-            by,
-            shared_by,
-        )| {
-            VariantSummary {
-                id,
-                title,
-                subtitle,
-                published_at,
-                yields: yields.unwrap_or_default(),
-                has_steps,
-                attributes,
-                image: hero.map(Image::new),
-                editable,
-                original: parent.zip(parent_title).map(|(id, title)| Original { id, title, by }),
-                shared_by,
-            }
-        },
-    )
+    .map(|v| VariantSummary {
+        id: v.id,
+        title: v.title,
+        subtitle: v.subtitle,
+        published_at: v.published_at,
+        yields: v.yields.unwrap_or_default(),
+        has_steps: v.has_steps,
+        attributes: v.attributes,
+        image: v.hero.map(Image::new),
+        editable: v.editable,
+        original: v.parent.zip(v.parent_title).map(|(id, title)| Original { id, title, by: v.by }),
+        shared_by: v.shared_by,
+    })
     .collect::<Vec<_>>();
     // Options are derived across all of a dish's versions; where some are another household's, they are recounted
     // over this household's share, so they neither count nor offer what it can't open.

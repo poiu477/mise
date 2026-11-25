@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ingredient_lines WHERE variant_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d6218c2cb4b8c4a760fc5609e72d321e22407a75453392cd16b2c23cfbd4c9f9"
+}

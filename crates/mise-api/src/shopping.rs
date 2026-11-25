@@ -183,16 +183,6 @@ impl Planned {
 }
 
 type LineRow = (Uuid, Uuid, String, Option<Uuid>, Option<bool>);
-type FoodTreeRow = (
-    Uuid,
-    Option<Uuid>,
-    bool,
-    bool,
-    String,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
 
 /// The week's planned versions and their lines; like the plan, only versions the household can see.
 async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Planned> {
@@ -291,31 +281,36 @@ async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan
     // The plan's foods and everything they are kinds of, for sections, merging and conversions.
     let used_ids: Vec<Uuid> = lines.iter().filter_map(|l| l.3).collect();
     let mut foods: HashMap<Uuid, FoodRow> = HashMap::new();
-    for (id, parent, category, shop_as_one, name, count_unit, count_size, section) in
-        sqlx::query_as::<_, FoodTreeRow>(
-            "WITH RECURSIVE up AS (
-                 SELECT id FROM foods WHERE id = ANY($1)
-                 UNION SELECT f.parent_id FROM foods f JOIN up ON f.id = up.id WHERE f.parent_id IS NOT NULL
-             )
-             SELECT f.id, f.parent_id, f.kind = 'category', coalesce(f.props->'shop_as_one' = 'true'::jsonb, false),
-                    f.name, f.props->>'count_unit', f.props->>'count_size', f.props->>'store_section'
-             FROM foods f JOIN up ON up.id = f.id",
-        )
-        .bind(&used_ids)
-        .fetch_all(&s.pool)
-        .await?
+    for f in sqlx::query!(
+        r#"WITH RECURSIVE up AS (
+               SELECT id FROM foods WHERE id = ANY($1)
+               UNION SELECT f.parent_id FROM foods f JOIN up ON f.id = up.id WHERE f.parent_id IS NOT NULL
+           )
+           SELECT f.id AS "id!",
+                  f.parent_id,
+                  f.kind = 'category' AS "category!",
+                  coalesce(f.props->'shop_as_one' = 'true'::jsonb, false) AS "shop_as_one!",
+                  f.name AS "name!",
+                  f.props->>'count_unit' AS count_unit,
+                  f.props->>'count_size' AS count_size,
+                  f.props->>'store_section' AS section
+           FROM foods f JOIN up ON up.id = f.id"#,
+        &used_ids
+    )
+    .fetch_all(&s.pool)
+    .await?
     {
         foods.insert(
-            id,
+            f.id,
             FoodRow {
-                name,
+                name: f.name,
                 tree: TreeFood {
-                    parent,
-                    category,
-                    shop_as_one,
+                    parent: f.parent_id,
+                    category: f.category,
+                    shop_as_one: f.shop_as_one,
                 },
-                count: CountUnit::from_props(count_unit.as_deref(), count_size.as_deref()),
-                section,
+                count: CountUnit::from_props(f.count_unit.as_deref(), f.count_size.as_deref()),
+                section: f.section,
                 measures: Measures::default(),
             },
         );
@@ -516,9 +511,9 @@ async fn build(s: &AppState, household: Uuid, week: Date) -> ApiResult<ShoppingL
     // Marks are kept per food, so a line shows ticked (or removed) when every food on it is.
     let marks: HashMap<String, (bool, bool)> = sqlx::query!(
         r#"SELECT item_key AS "item_key!",
-                      checked AS "checked!",
-                      hidden AS "hidden!"
-               FROM shopping_marks WHERE household_id = $1 AND week = $2"#,
+                  checked AS "checked!",
+                  hidden AS "hidden!"
+           FROM shopping_marks WHERE household_id = $1 AND week = $2"#,
         household,
         week
     )

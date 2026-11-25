@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id AS \"id!\",\n                      food_id AS \"food_id?\",\n                      raw_name AS \"raw_name!\"\n               FROM ingredient_lines WHERE variant_id = $1",
+  "query": "SELECT id AS \"id!\",\n                  food_id AS \"food_id?\",\n                  raw_name AS \"raw_name!\"\n           FROM ingredient_lines WHERE variant_id = $1",
   "describe": {
     "columns": [
       {
@@ -48,5 +48,5 @@
       false
     ]
   },
-  "hash": "8e089997aeafa302149a1d10dd71e007b58c797100564db79b897b393ccae33b"
+  "hash": "d99594dca09b416a7c398beb66cc4a702500700ea145d7ec288788b024a8860e"
 }

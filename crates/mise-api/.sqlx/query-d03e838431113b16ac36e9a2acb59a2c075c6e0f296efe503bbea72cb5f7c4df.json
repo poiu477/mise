@@ -1,27 +1,27 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT name AS \"name!\",\n                      default_visibility AS \"default_visibility!\"\n               FROM households WHERE id = $1",
+  "query": "SELECT h.id, h.name FROM household_partners p JOIN households h ON h.id = p.partner_id\n         WHERE p.household_id = $1 ORDER BY h.name, h.id",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "name!",
-        "type_info": "Text",
+        "name": "id",
+        "type_info": "Uuid",
         "origin": {
           "Table": {
             "table": "households",
-            "name": "name"
+            "name": "id"
           }
         }
       },
       {
         "ordinal": 1,
-        "name": "default_visibility!",
+        "name": "name",
         "type_info": "Text",
         "origin": {
           "Table": {
             "table": "households",
-            "name": "default_visibility"
+            "name": "name"
           }
         }
       }
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "a9b1e0aaf0e6175bd0c3fdf220b9571ceb11d2ea2ae956c9c453081d225b93b4"
+  "hash": "d03e838431113b16ac36e9a2acb59a2c075c6e0f296efe503bbea72cb5f7c4df"
 }

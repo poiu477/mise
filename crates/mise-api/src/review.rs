@@ -195,8 +195,8 @@ async fn load(s: &AppState, kinds: &[ReviewKind]) -> ApiResult<ReviewQueue> {
         .collect();
     let foods: HashMap<Uuid, String> = sqlx::query!(
         r#"SELECT id AS "id!",
-                      name AS "name!"
-               FROM foods WHERE id = ANY($1)"#,
+                  name AS "name!"
+           FROM foods WHERE id = ANY($1)"#,
         &food_ids
     )
     .fetch_all(&s.pool)
@@ -211,8 +211,8 @@ async fn load(s: &AppState, kinds: &[ReviewKind]) -> ApiResult<ReviewQueue> {
         .collect();
     let dishes: HashMap<Uuid, String> = sqlx::query!(
         r#"SELECT id AS "id!",
-                      slug AS "slug!"
-               FROM dishes WHERE id = ANY($1)"#,
+                  slug AS "slug!"
+           FROM dishes WHERE id = ANY($1)"#,
         &dish_ids
     )
     .fetch_all(&s.pool)

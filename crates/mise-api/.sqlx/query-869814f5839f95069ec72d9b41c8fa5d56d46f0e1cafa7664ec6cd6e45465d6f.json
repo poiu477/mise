@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id AS \"id!\",\n                      name AS \"name!\"\n               FROM foods WHERE id = ANY($1)",
+  "query": "SELECT id AS \"id!\",\n                  name AS \"name!\"\n           FROM foods WHERE id = ANY($1)",
   "describe": {
     "columns": [
       {
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "5ef6cab62c9e285bd187eec31adaefd91a82c47a59282653b708e51e23d8564d"
+  "hash": "869814f5839f95069ec72d9b41c8fa5d56d46f0e1cafa7664ec6cd6e45465d6f"
 }

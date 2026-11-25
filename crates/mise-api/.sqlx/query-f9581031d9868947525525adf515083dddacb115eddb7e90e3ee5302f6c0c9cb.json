@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT food_id AS \"food_id?\",\n                      raw_name AS \"raw_name!\",\n                      shipped AS \"shipped?\",\n                      allergens AS \"allergens!\"\n               FROM ingredient_lines\n           WHERE variant_id = $1 AND (shipped IS NOT NULL OR allergens <> '{}') ORDER BY position",
+  "query": "SELECT food_id AS \"food_id?\",\n                  raw_name AS \"raw_name!\",\n                  shipped AS \"shipped?\",\n                  allergens AS \"allergens!\"\n           FROM ingredient_lines\n       WHERE variant_id = $1 AND (shipped IS NOT NULL OR allergens <> '{}') ORDER BY position",
   "describe": {
     "columns": [
       {
@@ -60,5 +60,5 @@
       false
     ]
   },
-  "hash": "bfca0b99dc36b1f67b4a50015ea0ab8d7abe3f181ceba1199c33ff0275cbebf0"
+  "hash": "f9581031d9868947525525adf515083dddacb115eddb7e90e3ee5302f6c0c9cb"
 }

@@ -149,42 +149,36 @@ async fn sharing(pool: &PgPool, household: Uuid) -> ApiResult<HouseholdSharing> 
     let mut tx = pool.begin().await?;
     let (name, default): (String, String) = sqlx::query!(
         r#"SELECT name AS "name!",
-                      default_visibility AS "default_visibility!"
-               FROM households WHERE id = $1"#,
+                  default_visibility AS "default_visibility!"
+           FROM households WHERE id = $1"#,
         household
     )
     .fetch_one(&mut *tx)
     .await
     .map(|r| (r.name, r.default_visibility))?;
-    let refs = |rows: Vec<(Uuid, String)>| {
-        rows.into_iter()
-            .map(|(id, name)| HouseholdRef { id, name })
-            .collect::<Vec<_>>()
-    };
-    let partners = refs(
-        sqlx::query_as(
-            "SELECT h.id, h.name FROM household_partners p JOIN households h ON h.id = p.partner_id
-             WHERE p.household_id = $1 ORDER BY h.name, h.id",
-        )
-        .bind(household)
-        .fetch_all(&mut *tx)
-        .await?,
-    );
-    let partner_of = refs(
-        sqlx::query_as(
-            "SELECT h.id, h.name FROM household_partners p JOIN households h ON h.id = p.household_id
-             WHERE p.partner_id = $1 ORDER BY h.name, h.id",
-        )
-        .bind(household)
-        .fetch_all(&mut *tx)
-        .await?,
-    );
-    let households = refs(
-        sqlx::query_as("SELECT id, name FROM households WHERE id <> $1 ORDER BY name, id")
-            .bind(household)
-            .fetch_all(&mut *tx)
-            .await?,
-    );
+    let partners = sqlx::query_as!(
+        HouseholdRef,
+        "SELECT h.id, h.name FROM household_partners p JOIN households h ON h.id = p.partner_id
+         WHERE p.household_id = $1 ORDER BY h.name, h.id",
+        household
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let partner_of = sqlx::query_as!(
+        HouseholdRef,
+        "SELECT h.id, h.name FROM household_partners p JOIN households h ON h.id = p.household_id
+         WHERE p.partner_id = $1 ORDER BY h.name, h.id",
+        household
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let households = sqlx::query_as!(
+        HouseholdRef,
+        "SELECT id, name FROM households WHERE id <> $1 ORDER BY name, id",
+        household
+    )
+    .fetch_all(&mut *tx)
+    .await?;
     let max_visibility = cap(&mut tx).await?;
     Ok(HouseholdSharing {
         id: household,

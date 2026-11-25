@@ -171,12 +171,12 @@ pub async fn get(
         Option<String>,
     ) = sqlx::query!(
         r#"SELECT v.title AS "title!",
-                      v.subtitle AS "subtitle?",
-                      v.description AS "description?",
-                      v.meta AS "meta!",
-                      d.slug AS "slug?"
-               FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
-               WHERE v.id = $1 AND visible_to(v, $2)"#,
+                  v.subtitle AS "subtitle?",
+                  v.description AS "description?",
+                  v.meta AS "meta!",
+                  d.slug AS "slug?"
+           FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
+           WHERE v.id = $1 AND visible_to(v, $2)"#,
         id,
         me.household_id
     )
@@ -201,14 +201,43 @@ pub async fn get(
         )));
     }
 
-    let lines: Vec<LineRow> = sqlx::query_as(
-        "SELECT il.id, il.line_key, il.raw_name, il.food_id, f.name, il.shipped, il.allergens, il.note, f.props->>'image_media_id',
-                f.props->>'count_unit', f.props->>'count_size'
-         FROM ingredient_lines il LEFT JOIN foods f ON f.id = il.food_id WHERE il.variant_id = $1 ORDER BY il.position",
+    let lines: Vec<LineRow> = sqlx::query!(
+        r#"SELECT il.id AS "id!",
+                  il.line_key AS "line_key!",
+                  il.raw_name AS "raw_name!",
+                  il.food_id AS "food_id?",
+                  f.name AS "name?",
+                  il.shipped AS "shipped?",
+                  il.allergens AS "allergens!",
+                  il.note AS "note?",
+                  f.props->>'image_media_id' AS "image?",
+                  f.props->>'count_unit' AS "count_unit?",
+                  f.props->>'count_size' AS "count_size?"
+           FROM ingredient_lines il LEFT JOIN foods f ON f.id = il.food_id
+           WHERE il.variant_id = $1 ORDER BY il.position"#,
+        id
     )
-    .bind(id)
     .fetch_all(&s.pool)
-    .await?;
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|r| {
+                (
+                    r.id,
+                    r.line_key,
+                    r.raw_name,
+                    r.food_id,
+                    r.name,
+                    r.shipped,
+                    r.allergens,
+                    r.note,
+                    r.image,
+                    r.count_unit,
+                    r.count_size,
+                )
+            })
+            .collect::<Vec<_>>()
+    })?;
     let mut amounts: HashMap<Uuid, Vec<(f64, f64, Option<String>)>> = HashMap::new();
     for (line, sv, a, u) in sqlx::query!(
         r#"SELECT la.line_id AS "line_id!",

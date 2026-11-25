@@ -16,12 +16,6 @@ use crate::{
     recipes::FoodRef,
 };
 
-/// SQL for whether household `$1` may know of food `f`: every food mise was given or a person edited, and of the
-/// foods matching made, those a version the household can see uses. Categories are shelves, not foods to pick.
-pub const KNOWN_FOOD: &str = "f.kind <> 'category' AND (f.origin <> 'matched' OR EXISTS (
-    SELECT 1 FROM ingredient_lines il JOIN variants v ON v.id = il.variant_id
-    WHERE il.food_id = f.id AND visible_to(v, $1)))";
-
 /// The most foods one search answers with.
 const MAX_LIMIT: i64 = 50;
 
@@ -63,19 +57,18 @@ pub async fn search(
             "q must be between 1 and 100 characters".into(),
         ));
     }
-    let items = sqlx::query_as::<_, (uuid::Uuid, String)>(sqlx::AssertSqlSafe(format!(
+    // Only foods the household may know of (`known_food`, in the database beside `visible_to`).
+    let items = sqlx::query_as!(
+        FoodRef,
         "SELECT f.id, f.name FROM foods f
-         WHERE {KNOWN_FOOD} AND (f.name ILIKE '%' || $2 || '%' OR f.name % $2)
+         WHERE known_food(f, $1) AND (f.name ILIKE '%' || $2 || '%' OR f.name % $2)
          ORDER BY f.name ILIKE $2 || '%' DESC, similarity(f.name, $2) DESC, f.name
-         LIMIT $3"
-    )))
-    .bind(me.household_id)
-    .bind(q)
-    .bind(p.limit.unwrap_or(10).clamp(1, MAX_LIMIT))
+         LIMIT $3",
+        me.household_id,
+        q,
+        p.limit.unwrap_or(10).clamp(1, MAX_LIMIT)
+    )
     .fetch_all(&s.pool)
-    .await?
-    .into_iter()
-    .map(|(id, name)| FoodRef { id, name })
-    .collect();
+    .await?;
     Ok(Json(FoodList { items }))
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO variant_attributes (variant_id, key, value)\n         SELECT $2, key, value FROM variant_attributes WHERE variant_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b7cb3bb535b8c1bf0e5a6d09e73c50fd006d865fcab523418deee481a832ea7"
+}
