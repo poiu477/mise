@@ -13,10 +13,11 @@ Write like the code around you: match its comment density, naming and idiom. Wha
   `CountUnit`. No `Manager`, `Helper` or `Util`.
 - **Errors.** `anyhow` with `.context(...)` in the CLI and ingest; `ApiError` (`error.rs`) in the API, whose messages
   are shown to people, so they are sentences ("enter between 1 and 200 characters").
-- **SQL.** Today: inline strings with `sqlx::query`, `query_as` and `query_scalar` plus `.bind(...)`, rows as
-  tuples with a `type` alias naming their columns, inside the handlers. The target (in the backlog): rows as
-  `#[derive(sqlx::FromRow)]` structs, compile-time checked `query_as!` with the `.sqlx` offline data committed, and
-  SQL in per-domain data modules the handlers call. New code should move that way. Ids are UUID v7 made in Rust
+- **SQL.** In `mise-api`, sqlx's checked macros (`query!`, `query_as!`, `query_scalar!`), never the unchecked
+  functions without a comment saying why; rows read by field name, into a named struct (`query_as!`) or the macro's
+  own record, never a tuple. A domain with a `queries` module (plan, shopping, recipes, auth) keeps its SQL there, one
+  function per statement. Mark a column's nullability in its alias (`AS "total!"`) only where Postgres can't infer
+  it, and never override its type. After changing a query, run `scripts/sqlx-prepare`. Ids are UUID v7 made in Rust
   (`Uuid::now_v7()`).
 - **Pure logic in `mise-core`.** Anything that can be a function of its inputs lives there with unit tests; the API
   and ingest crates do I/O and call it.

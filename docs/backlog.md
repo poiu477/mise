@@ -32,28 +32,6 @@ data kept in `localStorage` survives it too.
   as another household in the same tab, and sees neither the recipe in search nor anything of the first household's
   list.
 
-### T35 · Compile-time checked SQL in `mise-api`
-
-Today every query is a string that sqlx checks only when it runs, so a typo or a query the schema has moved away
-from fails only in the test that happens to run it.
-
-- Every query in `crates/mise-api/src/` becomes a checked macro (`query!`, `query_as!`, `query_scalar!`) against
-  `#[derive(sqlx::FromRow)]` row structs in place of tuple types. A query that must be built at run time (a dynamic
-  `ORDER BY`, a table named in a test) keeps the unchecked form with a comment saying why.
-- Commit the offline metadata (`.sqlx/`, from `cargo sqlx prepare --workspace`) so builds need no database:
-  `SQLX_OFFLINE=true` in the Docker build. `./check`, `.gitlab-ci.yml` and the mirror's `ci.yml` run `cargo sqlx
-  prepare --workspace --check`, so a query that no longer matches the migrations, or stale metadata, fails there.
-- Move each handler's SQL into a module for its domain (recipes, plans, shopping, accounts) beside the handlers, so
-  `recipes.rs` (1,122 lines) splits along what it does. Behaviour stays the same: no route, status or body changes.
-- Say in docs/development.md how to refresh `.sqlx/` after changing a query or a migration.
-- **Touches:** every file in `crates/mise-api/src/`, `.sqlx/`, `check`, `.gitlab-ci.yml`, `.github/workflows/ci.yml`,
-  `Dockerfile`, `docs/development.md`, `docs/architecture.md`.
-- **Needs:** nothing else in flight in `crates/mise-api/src/`: it runs alone.
-- **Done when:** `cargo sqlx prepare --workspace --check` passes in CI and `./check`; a test-only edit that renames a
-  column in one query (not committed) fails `cargo build` with no database; `grep -rn 'sqlx::query(' crates/mise-api/src`
-  finds only the commented exceptions; the API tests, `tests/responses.rs` and the generated `schema.d.ts` are
-  unchanged.
-
 ### T36 · Brands as data
 
 The brands matching strips from ingredient names (`BRANDS` in `mise-core/src/food_names.rs`, 43 of them) are data

@@ -2,8 +2,8 @@
 # Runs CI's build, lint and test steps (.github/workflows/ci.yml) with CI's commands and flags, in CI's order, and
 # stops at the first failure, naming it.
 #
-#   ./check          formatting, lints, tests, the Rust docs, the API document check, then the web app's format, lint,
-#                    tests, build
+#   ./check          formatting, lints, the query metadata, tests, the Rust docs, the API document check, then the web
+#                    app's format, lint, tests, build
 #   ./check --e2e    all of that, then the browser journeys
 #   ./check --fast   formatting and lints only (what .githooks/pre-commit runs)
 #
@@ -99,6 +99,10 @@ if $fast; then
   printf '\n%scheck --fast: passed in %ss%s\n' "$green$bold" "$((SECONDS - started))" "$reset"
   exit 0
 fi
+
+step "Query metadata"
+# The checked queries' metadata in crates/mise-api/.sqlx must match the queries and the migrations.
+scripts/sqlx-prepare --check
 
 step "Rust tests"
 # CI set, as in CI, for every test step: the API tests fail, rather than skip, when the database is missing or

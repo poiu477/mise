@@ -280,28 +280,19 @@ pub async fn get(
         d.default_variant,
     );
     let mut options = sqlx::query!(
-        r#"SELECT key AS "key!",
-                  label AS "label!",
-                  choices AS "choices!",
-                  default_value AS "default_value?"
-           FROM dish_options WHERE dish_id = $1 ORDER BY position"#,
+        "SELECT key, label, choices, default_value FROM dish_options WHERE dish_id = $1 ORDER BY position",
         id
     )
     .fetch_all(&s.pool)
-    .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| (r.key, r.label, r.choices, r.default_value))
-            .collect::<Vec<_>>()
-    })?
+    .await?
     .into_iter()
-    .map(|(key, label, choices, default)| {
-        let choices = serde_json::from_value(choices).map_err(|e| ApiError::Internal(e.into()))?;
+    .map(|o| {
+        let choices = serde_json::from_value(o.choices).map_err(|e| ApiError::Internal(e.into()))?;
         Ok(DishOption {
-            key,
-            label,
+            key: o.key,
+            label: o.label,
             choices,
-            default,
+            default: o.default_value,
         })
     })
     .collect::<ApiResult<Vec<_>>>()?;

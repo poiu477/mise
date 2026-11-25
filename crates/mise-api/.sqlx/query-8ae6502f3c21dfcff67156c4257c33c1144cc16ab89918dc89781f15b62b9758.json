@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id AS \"id!\",\n                  position AS \"position!\",\n                  text AS \"text!\",\n                  template AS \"template?\"\n           FROM steps WHERE variant_id = $1 ORDER BY position",
+  "query": "SELECT id, position, text, template FROM steps WHERE variant_id = $1 ORDER BY position",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "position!",
+        "name": "position",
         "type_info": "Int4",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "text!",
+        "name": "text",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "template?",
+        "name": "template",
         "type_info": "Jsonb",
         "origin": {
           "Table": {
@@ -60,5 +60,5 @@
       true
     ]
   },
-  "hash": "fd7fd8628ca13f66c6a4f3b5e50371857cde89227ec3f8b78602523e1e532d78"
+  "hash": "8ae6502f3c21dfcff67156c4257c33c1144cc16ab89918dc89781f15b62b9758"
 }

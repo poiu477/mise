@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT v.title AS \"title!\",\n                  v.subtitle AS \"subtitle?\",\n                  v.description AS \"description?\",\n                  v.meta AS \"meta!\",\n                  d.slug AS \"slug?\"\n           FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id\n           WHERE v.id = $1 AND visible_to(v, $2)",
+  "query": "SELECT v.title, v.subtitle, v.description, v.meta, d.slug AS \"dish_slug?\"\n           FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id\n           WHERE v.id = $1 AND visible_to(v, $2)",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "title!",
+        "name": "title",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "subtitle?",
+        "name": "subtitle",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "description?",
+        "name": "description",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "meta!",
+        "name": "meta",
         "type_info": "Jsonb",
         "origin": {
           "Table": {
@@ -49,7 +49,7 @@
       },
       {
         "ordinal": 4,
-        "name": "slug?",
+        "name": "dish_slug?",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -73,5 +73,5 @@
       true
     ]
   },
-  "hash": "396be691d9b9488a3383fbee8f82e43434d7bd3e16b0f1a8e81bb5f49652176a"
+  "hash": "9d13378870e866d22fc3b9076b6672e2fcdbdd2d767022a8920846fd0a5c40d4"
 }

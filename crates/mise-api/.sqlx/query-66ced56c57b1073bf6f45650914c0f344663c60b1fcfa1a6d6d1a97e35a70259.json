@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT la.line_id AS \"line_id!\",\n                  la.servings::float8 AS \"servings!\",\n                  la.amount::float8 AS \"amount!\",\n                  la.unit AS \"unit?\"\n           FROM line_amounts la\n           JOIN ingredient_lines il ON il.id = la.line_id WHERE il.variant_id = $1 AND la.amount > 0",
+  "query": "SELECT la.line_id, la.servings::float8 AS \"servings!\", la.amount::float8 AS \"amount!\", la.unit\n           FROM line_amounts la JOIN ingredient_lines il ON il.id = la.line_id\n           WHERE il.variant_id = $1 AND la.amount > 0",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "line_id!",
+        "name": "line_id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -28,7 +28,7 @@
       },
       {
         "ordinal": 3,
-        "name": "unit?",
+        "name": "unit",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -50,5 +50,5 @@
       true
     ]
   },
-  "hash": "59326cbc09782e948ea9bbe9f24d7745f250cdbf8824d36378bf8ac224ddbb84"
+  "hash": "66ced56c57b1073bf6f45650914c0f344663c60b1fcfa1a6d6d1a97e35a70259"
 }

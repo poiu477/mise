@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id AS \"id!\",\n                  kind AS \"kind!\",\n                  subject AS \"subject!\",\n                  proposal AS \"proposal!\",\n                  confidence AS \"confidence?\",\n                  created_at AS \"created_at!\"\n           FROM review_items\n           WHERE status = 'open' AND kind = ANY($1)\n           ORDER BY array_position($1, kind), confidence DESC NULLS LAST, created_at, id",
+  "query": "SELECT id, kind, subject, proposal, confidence, created_at FROM review_items\n         WHERE status = 'open' AND kind = ANY($1)\n         ORDER BY array_position($1, kind), confidence DESC NULLS LAST, created_at, id",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "kind!",
+        "name": "kind",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "subject!",
+        "name": "subject",
         "type_info": "Jsonb",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "proposal!",
+        "name": "proposal",
         "type_info": "Jsonb",
         "origin": {
           "Table": {
@@ -49,7 +49,7 @@
       },
       {
         "ordinal": 4,
-        "name": "confidence?",
+        "name": "confidence",
         "type_info": "Float4",
         "origin": {
           "Table": {
@@ -60,7 +60,7 @@
       },
       {
         "ordinal": 5,
-        "name": "created_at!",
+        "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
@@ -84,5 +84,5 @@
       false
     ]
   },
-  "hash": "b336d92d43f0d60bd5b69f0a0bf83b80e7708c84a60171da49aa48e19e4ee566"
+  "hash": "13257038553c71022d761c9eb6c6761c41a84d9c1e7189b26fd00871f15ec4ca"
 }

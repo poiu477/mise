@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT kind AS \"kind!\",\n                  status AS \"status!\",\n                  subject AS \"subject!\",\n                  proposal AS \"proposal!\"\n           FROM review_items WHERE id = $1 FOR UPDATE",
+  "query": "SELECT kind, status, subject, proposal FROM review_items WHERE id = $1 FOR UPDATE",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "kind!",
+        "name": "kind",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "status!",
+        "name": "status",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "subject!",
+        "name": "subject",
         "type_info": "Jsonb",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "proposal!",
+        "name": "proposal",
         "type_info": "Jsonb",
         "origin": {
           "Table": {
@@ -60,5 +60,5 @@
       false
     ]
   },
-  "hash": "d8b6b2e89982c11c0fd3f2103daf79b53ce92290887f251b33ee3162787c73fc"
+  "hash": "3480f38a9ccd15c597963e68e78d6d6455ee9dedb3d430d5f0f3aa588d908470"
 }

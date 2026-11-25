@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT step_id AS \"step_id!\",\n                  media_id AS \"media_id!\"\n           FROM variant_media WHERE variant_id = $1 AND role = 'step' AND step_id IS NOT NULL ORDER BY position",
+  "query": "SELECT step_id AS \"step_id!\", media_id FROM variant_media\n           WHERE variant_id = $1 AND role = 'step' AND step_id IS NOT NULL ORDER BY position",
   "describe": {
     "columns": [
       {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "media_id!",
+        "name": "media_id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "2840b37274c8dc9e9d07a88ddde677fcbdc1485f070cdb2ed6233b9bedae79f2"
+  "hash": "9c575ab613d6b0d0055859c1b53b8b09d96a1559d0e9026f6563e672d8f2abf1"
 }

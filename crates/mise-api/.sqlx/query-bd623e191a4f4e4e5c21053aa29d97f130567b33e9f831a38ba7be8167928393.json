@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT il.id AS \"id!\",\n                  il.line_key AS \"line_key!\",\n                  il.raw_name AS \"raw_name!\",\n                  il.food_id AS \"food_id?\",\n                  f.name AS \"name?\",\n                  il.shipped AS \"shipped?\",\n                  il.allergens AS \"allergens!\",\n                  il.note AS \"note?\",\n                  f.props->>'image_media_id' AS \"image?\",\n                  f.props->>'count_unit' AS \"count_unit?\",\n                  f.props->>'count_size' AS \"count_size?\"\n           FROM ingredient_lines il LEFT JOIN foods f ON f.id = il.food_id\n           WHERE il.variant_id = $1 ORDER BY il.position",
+  "query": "SELECT il.id, il.line_key, il.raw_name, il.food_id, f.name AS \"food?\", il.shipped, il.allergens, il.note,\n                  f.props->>'image_media_id' AS image,\n                  f.props->>'count_unit' AS count_unit,\n                  f.props->>'count_size' AS count_size\n           FROM ingredient_lines il LEFT JOIN foods f ON f.id = il.food_id\n           WHERE il.variant_id = $1 ORDER BY il.position",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "line_key!",
+        "name": "line_key",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "raw_name!",
+        "name": "raw_name",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "food_id?",
+        "name": "food_id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
@@ -49,7 +49,7 @@
       },
       {
         "ordinal": 4,
-        "name": "name?",
+        "name": "food?",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -60,7 +60,7 @@
       },
       {
         "ordinal": 5,
-        "name": "shipped?",
+        "name": "shipped",
         "type_info": "Bool",
         "origin": {
           "Table": {
@@ -71,7 +71,7 @@
       },
       {
         "ordinal": 6,
-        "name": "allergens!",
+        "name": "allergens",
         "type_info": "TextArray",
         "origin": {
           "Table": {
@@ -82,7 +82,7 @@
       },
       {
         "ordinal": 7,
-        "name": "note?",
+        "name": "note",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -93,19 +93,19 @@
       },
       {
         "ordinal": 8,
-        "name": "image?",
+        "name": "image",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
         "ordinal": 9,
-        "name": "count_unit?",
+        "name": "count_unit",
         "type_info": "Text",
         "origin": "Expression"
       },
       {
         "ordinal": 10,
-        "name": "count_size?",
+        "name": "count_size",
         "type_info": "Text",
         "origin": "Expression"
       }
@@ -129,5 +129,5 @@
       null
     ]
   },
-  "hash": "bef7325691597836517fbae09c352c62a1a5c9c9e01fdda46dc08584edc3d6ce"
+  "hash": "bd623e191a4f4e4e5c21053aa29d97f130567b33e9f831a38ba7be8167928393"
 }

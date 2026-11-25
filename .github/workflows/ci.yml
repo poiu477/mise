@@ -52,6 +52,8 @@ jobs:
         run: cargo fmt --all --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Query metadata matches the queries and the migrations
+        run: scripts/sqlx-prepare --check
       - name: Tests
         run: cargo test --workspace --locked
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

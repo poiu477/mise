@@ -147,15 +147,13 @@ pub struct HouseholdSharing {
 
 async fn sharing(pool: &PgPool, household: Uuid) -> ApiResult<HouseholdSharing> {
     let mut tx = pool.begin().await?;
-    let (name, default): (String, String) = sqlx::query!(
-        r#"SELECT name AS "name!",
-                  default_visibility AS "default_visibility!"
-           FROM households WHERE id = $1"#,
+    let h = sqlx::query!(
+        "SELECT name, default_visibility FROM households WHERE id = $1",
         household
     )
     .fetch_one(&mut *tx)
-    .await
-    .map(|r| (r.name, r.default_visibility))?;
+    .await?;
+    let (name, default) = (h.name, h.default_visibility);
     let partners = sqlx::query_as!(
         HouseholdRef,
         "SELECT h.id, h.name FROM household_partners p JOIN households h ON h.id = p.partner_id

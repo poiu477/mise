@@ -1,34 +1,34 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id AS \"id!\",\n                  slug AS \"slug!\"\n           FROM dishes WHERE id = ANY($1)",
+  "query": "SELECT name, default_visibility FROM households WHERE id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
-        "type_info": "Uuid",
+        "name": "name",
+        "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "dishes",
-            "name": "id"
+            "table": "households",
+            "name": "name"
           }
         }
       },
       {
         "ordinal": 1,
-        "name": "slug!",
+        "name": "default_visibility",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "dishes",
-            "name": "slug"
+            "table": "households",
+            "name": "default_visibility"
           }
         }
       }
     ],
     "parameters": {
       "Left": [
-        "UuidArray"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "05106393c4dcdd5748d863034cab26e65b84d76692b64850c6af0475ece76288"
+  "hash": "bca57f199d6f9f8ebf6efa961922f7e88039bca4837bfdce3b084d3a2eeb4bb5"
 }

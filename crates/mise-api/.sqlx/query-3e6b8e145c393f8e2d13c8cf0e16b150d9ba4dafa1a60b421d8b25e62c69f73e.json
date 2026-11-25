@@ -1,27 +1,27 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id AS \"id!\",\n                  name AS \"name!\"\n           FROM foods WHERE id = ANY($1)",
+  "query": "SELECT id, slug FROM dishes WHERE id = ANY($1)",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id!",
+        "name": "id",
         "type_info": "Uuid",
         "origin": {
           "Table": {
-            "table": "foods",
+            "table": "dishes",
             "name": "id"
           }
         }
       },
       {
         "ordinal": 1,
-        "name": "name!",
+        "name": "slug",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "foods",
-            "name": "name"
+            "table": "dishes",
+            "name": "slug"
           }
         }
       }
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "869814f5839f95069ec72d9b41c8fa5d56d46f0e1cafa7664ec6cd6e45465d6f"
+  "hash": "3e6b8e145c393f8e2d13c8cf0e16b150d9ba4dafa1a60b421d8b25e62c69f73e"
 }

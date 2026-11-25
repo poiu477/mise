@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT key AS \"key!\",\n                  label AS \"label!\",\n                  choices AS \"choices!\",\n                  default_value AS \"default_value?\"\n           FROM dish_options WHERE dish_id = $1 ORDER BY position",
+  "query": "SELECT key, label, choices, default_value FROM dish_options WHERE dish_id = $1 ORDER BY position",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "key!",
+        "name": "key",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -16,7 +16,7 @@
       },
       {
         "ordinal": 1,
-        "name": "label!",
+        "name": "label",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +27,7 @@
       },
       {
         "ordinal": 2,
-        "name": "choices!",
+        "name": "choices",
         "type_info": "Jsonb",
         "origin": {
           "Table": {
@@ -38,7 +38,7 @@
       },
       {
         "ordinal": 3,
-        "name": "default_value?",
+        "name": "default_value",
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -60,5 +60,5 @@
       true
     ]
   },
-  "hash": "5751c14d291a8850f0676bd915bee32cd48ea9b1a0f6b37a9bb9c707c037bcc3"
+  "hash": "3093ec3c8fbc4714614127527ce79e41809b0441c18904dbed8eb4503347cfa5"
 }
