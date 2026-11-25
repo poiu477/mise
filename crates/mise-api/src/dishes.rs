@@ -74,7 +74,6 @@ pub struct DishPage {
     pub items: Vec<DishSummary>,
 }
 
-/// id, slug, title, subtitle, content type, versions, default version, image, total matching.
 /// Search and browse the dishes this household can see.
 #[utoipa::path(get, path = "/api/v1/dishes", operation_id = "list_dishes", tag = "dishes", params(ListParams),
     responses(
@@ -239,7 +238,6 @@ pub struct Dish {
     pub variants: Vec<VariantSummary>,
 }
 
-/// id, slug, title, subtitle, content type, default version.
 /// A dish with its options and versions, by its slug or one it used to have (its `slug` is always the current one).
 /// A dish the household can see no version of is not found, as if it didn't exist.
 #[utoipa::path(
