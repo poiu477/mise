@@ -17,22 +17,6 @@ status.md if it changed either.
 
 ## Ready
 
-### T36 · Brands as data
-
-The brands matching strips from ingredient names (`BRANDS` in `mise-core/src/food_names.rs`, 43 of them) are data
-kept in code, so adding one means a release. A name marked ® or ™ is already caught without the list.
-
-- Keep brands in the database (a new migration, seeded with today's 43), and let curation add and remove them:
-  `{"op": "brand", "name": "Old Bay"}` and `{"op": "unbrand", ...}` in the food curation file, as `mise food apply`
-  reads it (docs/curation.md). Food matching loads them once a run and passes them to `strip_brand`, which takes the
-  list as an argument; `mise-core` keeps the rules, not the words.
-- **Touches:** `crates/mise-core/src/food_names.rs`, `crates/mise-ingest/src/foods.rs` and `curate.rs`, a new
-  migration, `docs/curation.md`.
-- **Needs:** nothing.
-- **Done when:** `BRANDS` is gone from `mise-core`; a test adds a brand through a curation file and a line naming it
-  unmarked ("Smoky Hollow Paprika") then matches the unbranded food ("Paprika"), and removing it undoes that; the
-  pipeline snapshots (`MISE_UPDATE_SNAPSHOTS` not set) are unchanged.
-
 ### T37 · Near-duplicate foods in the review queue
 
 Matching makes a new food for any name it doesn't recognise, and the review queue sees only the matches it was
@@ -110,7 +94,7 @@ of cases written for mise.
   large amounts round down. Fix whichever is wrong, the code or the doc, with the evidence.
 - **Touches:** `crates/mise-core/src/`, `docs/scaling-rules.md`, `fixtures/demo-bundle/snapshots/` (if a demo reading
   changes).
-- **Needs:** T36 not in flight (both change `food_names.rs`).
+- **Needs:** nothing.
 - **Done when:** each item above has a failing test first, then passes; the pipeline snapshots change only where a
   reading was wrong, and the diff says which.
 

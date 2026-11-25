@@ -15,8 +15,21 @@ rebuilt database can be brought back to the same state.
 | `unrelate` | `food`, `other` | Remove a related link |
 | `merge` | `from`, `into` | Same food: move lines, aliases, children, related links and facts to `into`; repeating it is harmless |
 | `set` | `food`, `key`, `value` | A property, e.g. `default_flexibility`: `strict` |
+| `brand` | `name` | A brand matching strips from ingredient names: `{"op": "brand", "name": "Old Bay"}` |
+| `unbrand` | `name` | No longer a brand; matching leaves the word in names |
 
 Foods are found by name, any alias, or slug; plurals and brand marks don't matter.
+
+### Brands
+
+Matching makes a name with a brand in it a `brand` food, a kind of the food without the brand: "Old Bay Seasoning"
+under "Seasoning". It knows a brand two ways: a word marked ® or ™ ("Zesty Brand™ Salsa"), and the brands in the
+`brands` table, which catches them unmarked. mise ships 42 there (migration `0022_brands.sql`); `brand` adds one and
+`unbrand` takes one away, a shipped one included. Case, marks and spacing don't matter. A brand's words also count as
+narrowing when matching decides whether one food is a kind of another.
+
+Matching reads the brands when it runs, so an edit counts from the next run: `mise match-foods --reset` redoes the
+foods matching already made. Both are also `mise food brand` and `mise food unbrand`.
 
 Two properties set how a food's bare counts read, for sources that publish only "1 unit". `count_unit` is the word
 (`packet`, `whole`, `crown`), and `count_size` is how much one is (`1.5 oz`), given only where the source publishes the
@@ -50,8 +63,8 @@ A density alone never turns "2 cloves" into spoons: only an item size does. Both
 
 ## Writing curation back out
 
-`mise food export <file>` writes the hand edits a database holds as a curation file: every food that is yours
-(`add`), names given by hand (`merge` when recipes use the name, `alias` otherwise), where each of your foods sits
+`mise food export <file>` writes the hand edits a database holds as a curation file: the brands added (`brand`)
+and shipped ones taken away (`unbrand`), every food that is yours (`add`), names given by hand (`merge` when recipes use the name, `alias` otherwise), where each of your foods sits
 (`set_parent` or `unparent`, parents first), properties and measures. Applied to a database rebuilt from the same
 recipes, it brings the food model back; applied to the one it came from, it changes nothing. Two edits leave nothing
 to read back, so keep them in a hand-written file: `unrelate`, and `unparent` on a food from a bundle's knowledge.

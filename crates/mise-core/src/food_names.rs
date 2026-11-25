@@ -4,51 +4,37 @@
 
 use crate::text::normalize_name;
 
-/// Brands that recipe sources mark with ® or ™; multi-word brands first so they match whole.
-pub const BRANDS: &[&str] = &[
-    "mike's hot honey",
-    "frank's redhot",
-    "old el paso",
-    "old bay",
-    "eat smart",
-    "nature made",
-    "stuffed puffs",
-    "ocean spray",
-    "should taste good",
-    "standard meat",
-    "open blue",
-    "honest turkey",
-    "tillamook country smoker",
-    "tillamook",
-    "blue diamond",
-    "honeysuckle white",
-    "bonne maman",
-    "reynolds kitchens",
-    "uncle ben's",
-    "sabatino tartufi",
-    "beyond meat",
-    "beyond",
-    "philadelphia",
-    "sargento",
-    "pillsbury",
-    "redhot",
-    "sabra",
-    "cholula",
-    "kikkoman",
-    "craisins",
-    "bachan's",
-    "cinnabon",
-    "oreo",
-    "utz",
-    "colavita",
-    "sunkist",
-    "frank's",
-    "mccormick grill mates",
-    "mccormick",
-    "kerrygold",
-    "boursin",
-    "jazz",
-];
+/// The brands matching strips from ingredient names. The words are data (the `brands` table, which curation edits);
+/// this module keeps only the rules. Longest first, so a brand that holds another matches whole: "tillamook country
+/// smoker" before "tillamook".
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Brands(Vec<String>);
+
+impl Brands {
+    /// The brands named, each as [`normalize_name`] writes it ("Frank's RedHot®" is "frank's redhot"). Blanks and
+    /// repeats are dropped.
+    pub fn new<S: AsRef<str>>(names: impl IntoIterator<Item = S>) -> Brands {
+        let mut list: Vec<String> = names
+            .into_iter()
+            .map(|n| normalize_name(n.as_ref()))
+            .filter(|n| !n.is_empty())
+            .collect();
+        let words = |b: &String| b.split(' ').count();
+        list.sort_by(|a, b| {
+            words(b)
+                .cmp(&words(a))
+                .then(b.len().cmp(&a.len()))
+                .then(a.cmp(b))
+        });
+        list.dedup();
+        Brands(list)
+    }
+
+    /// Whether `word` is one of a brand's words: "frank's" is, through "frank's redhot".
+    fn has_word(&self, word: &str) -> bool {
+        self.0.iter().any(|b| b.split(' ').any(|w| w == word))
+    }
+}
 
 /// Extra words that only narrow a food down: cut, form, size, state, colour, variety, grade.
 /// "Chopped chicken breast", "yukon gold potatoes", "organic baby spinach" stay kinds of their base.
@@ -348,10 +334,10 @@ fn singular(w: &str) -> String {
 }
 
 /// The brand in a name, and the name without it: "PHILADELPHIA® Cream Cheese" → ("philadelphia", "cream cheese").
-/// A word marked ® or ™ counts as a brand even if it isn't in [`BRANDS`].
-pub fn strip_brand(raw: &str) -> Option<(String, String)> {
+/// A word marked ® or ™ counts as a brand even if it isn't one of `brands`.
+pub fn strip_brand(raw: &str, brands: &Brands) -> Option<(String, String)> {
     let norm = normalize_name(raw);
-    for brand in BRANDS {
+    for brand in &brands.0 {
         if let Some(rest) = strip_words(&norm, brand)
             && !rest.is_empty()
         {
@@ -385,8 +371,8 @@ pub enum Relation {
 }
 
 /// If `base` appears in `specific` as whole words (at the start or the end), classify the extra words.
-/// Names are compared by [`singular_key`], so "Yukon Gold Potatoes" contains "Potato".
-pub fn relate(specific: &str, base: &str) -> Option<Relation> {
+/// Names are compared by [`singular_key`], so "Yukon Gold Potatoes" contains "Potato". A brand's words only narrow.
+pub fn relate(specific: &str, base: &str, brands: &Brands) -> Option<Relation> {
     let s: Vec<String> = singular_key(specific)
         .split(' ')
         .map(str::to_string)
@@ -416,7 +402,7 @@ pub fn relate(specific: &str, base: &str) -> Option<Relation> {
         Some(Relation::Related)
     } else if extra
         .iter()
-        .all(|w| is_in(NARROWING, w) || BRANDS.iter().any(|b| b.split(' ').any(|p| p == *w)))
+        .all(|w| is_in(NARROWING, w) || brands.has_word(w))
     {
         Some(Relation::KindOf)
     } else {
@@ -427,6 +413,19 @@ pub fn relate(specific: &str, base: &str) -> Option<Relation> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn none() -> Brands {
+        Brands::default()
+    }
+
+    fn brands() -> Brands {
+        Brands::new([
+            "Cholula",
+            "Philadelphia",
+            "Tillamook",
+            "Tillamook Country Smoker",
+        ])
+    }
 
     #[test]
     fn plurals_fold() {
@@ -441,69 +440,122 @@ mod tests {
     #[test]
     fn brands_strip() {
         assert_eq!(
-            strip_brand("PHILADELPHIA® Cream Cheese"),
+            strip_brand("PHILADELPHIA® Cream Cheese", &brands()),
             Some(("philadelphia".into(), "cream cheese".into()))
         );
         assert_eq!(
-            strip_brand("Cholula® Hot Sauce"),
+            strip_brand("Cholula® Hot Sauce", &brands()),
             Some(("cholula".into(), "hot sauce".into()))
         );
-        assert_eq!(strip_brand("Cream Cheese"), None);
+        assert_eq!(strip_brand("Cream Cheese", &brands()), None);
         assert_eq!(
-            strip_brand("Zesty Brand™ Salsa"),
+            strip_brand("Zesty Brand™ Salsa", &brands()),
             Some(("zesty brand".into(), "salsa".into()))
+        );
+    }
+
+    #[test]
+    fn a_listed_brand_strips_unmarked_and_the_longest_wins() {
+        assert_eq!(
+            strip_brand("Cholula Hot Sauce", &brands()),
+            Some(("cholula".into(), "hot sauce".into()))
+        );
+        assert_eq!(
+            strip_brand("Tillamook Country Smoker Jerky", &brands()),
+            Some(("tillamook country smoker".into(), "jerky".into()))
+        );
+        assert_eq!(strip_brand("Cholula Hot Sauce", &none()), None);
+        assert_eq!(
+            Brands::new(["Old Bay", " old  BAY ", ""]),
+            Brands::new(["old bay"])
+        );
+    }
+
+    #[test]
+    fn a_brands_words_only_narrow() {
+        assert_eq!(
+            relate("Tillamook Cheddar", "Cheddar", &brands()),
+            Some(Relation::KindOf)
+        );
+        assert_eq!(
+            relate("Tillamook Cheddar", "Cheddar", &none()),
+            Some(Relation::Unsure)
         );
     }
 
     #[test]
     fn narrowing_words_make_a_kind_of() {
         assert_eq!(
-            relate("Chopped Chicken Breast", "Chicken Breast"),
+            relate("Chopped Chicken Breast", "Chicken Breast", &none()),
             Some(Relation::KindOf)
         );
         assert_eq!(
-            relate("Yukon Gold Potatoes", "Potato"),
+            relate("Yukon Gold Potatoes", "Potato", &none()),
             Some(Relation::KindOf)
         );
         assert_eq!(
-            relate("Chicken Breast Strips", "Chicken Breast"),
+            relate("Chicken Breast Strips", "Chicken Breast", &none()),
             Some(Relation::KindOf)
         );
         assert_eq!(
-            relate("Broccoli Florets", "Broccoli"),
+            relate("Broccoli Florets", "Broccoli", &none()),
             Some(Relation::KindOf)
         );
-        assert_eq!(relate("Red Onion", "Onions"), Some(Relation::KindOf));
         assert_eq!(
-            relate("Orange Bell Pepper", "Bell Pepper"),
+            relate("Red Onion", "Onions", &none()),
+            Some(Relation::KindOf)
+        );
+        assert_eq!(
+            relate("Orange Bell Pepper", "Bell Pepper", &none()),
             Some(Relation::KindOf)
         );
     }
 
     #[test]
     fn transforming_words_are_only_related() {
-        assert_eq!(relate("Smoked Paprika", "Paprika"), Some(Relation::Related));
         assert_eq!(
-            relate("Sweet Potatoes", "Potatoes"),
+            relate("Smoked Paprika", "Paprika", &none()),
             Some(Relation::Related)
         );
         assert_eq!(
-            relate("Toasted Sesame Oil", "Sesame Oil"),
+            relate("Sweet Potatoes", "Potatoes", &none()),
             Some(Relation::Related)
         );
-        assert_eq!(relate("Peanut Butter", "Butter"), Some(Relation::Related));
-        assert_eq!(relate("Garlic Powder", "Garlic"), Some(Relation::Related));
+        assert_eq!(
+            relate("Toasted Sesame Oil", "Sesame Oil", &none()),
+            Some(Relation::Related)
+        );
+        assert_eq!(
+            relate("Peanut Butter", "Butter", &none()),
+            Some(Relation::Related)
+        );
+        assert_eq!(
+            relate("Garlic Powder", "Garlic", &none()),
+            Some(Relation::Related)
+        );
     }
 
     #[test]
     fn unknown_words_go_to_review_and_unrelated_names_dont_match() {
-        assert_eq!(relate("Bavette Steak", "Steak"), Some(Relation::Unsure));
-        assert_eq!(relate("Cream Cheese", "Sour Cream"), None);
-        assert_eq!(relate("Rice", "Rice"), None);
-        assert_eq!(relate("Flour Tortillas", "Flour"), None);
-        assert_eq!(relate("Honey Butter Cornbread", "Honey"), None);
-        assert_eq!(relate("Pork Chops", "Pork"), Some(Relation::KindOf));
-        assert_eq!(relate("Jasmine Rice", "Rice"), Some(Relation::KindOf));
-        assert_eq!(relate("Ground Pork", "Pork"), Some(Relation::KindOf));
+        assert_eq!(
+            relate("Bavette Steak", "Steak", &none()),
+            Some(Relation::Unsure)
+        );
+        assert_eq!(relate("Cream Cheese", "Sour Cream", &none()), None);
+        assert_eq!(relate("Rice", "Rice", &none()), None);
+        assert_eq!(relate("Flour Tortillas", "Flour", &none()), None);
+        assert_eq!(relate("Honey Butter Cornbread", "Honey", &none()), None);
+        assert_eq!(
+            relate("Pork Chops", "Pork", &none()),
+            Some(Relation::KindOf)
+        );
+        assert_eq!(
+            relate("Jasmine Rice", "Rice", &none()),
+            Some(Relation::KindOf)
+        );
+        assert_eq!(
+            relate("Ground Pork", "Pork", &none()),
+            Some(Relation::KindOf)
+        );
     }
 }

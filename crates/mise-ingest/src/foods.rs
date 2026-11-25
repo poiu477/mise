@@ -2,7 +2,8 @@
 //!
 //! Matching keys every name by [`singular_key`], so "Onion" and "Onions" share one food. Tree links follow
 //! [`relate`]: narrowing words make a kind-of link (applied, still `proposed` until reviewed), transforming
-//! words make a `related` link, and anything else becomes a review item.
+//! words make a `related` link, and anything else becomes a review item. Brands come from the `brands` table, which
+//! curation edits ([`crate::curate`]), read once a run.
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -10,11 +11,11 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use mise_core::food_names::{Relation, relate, singular_key, strip_brand};
+use mise_core::food_names::{Brands, Relation, relate, singular_key, strip_brand};
 use mise_core::text::slugify;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{PgExecutor, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 #[derive(Deserialize)]
@@ -134,6 +135,15 @@ async fn add_alias(tx: &mut Transaction<'_, Postgres>, food_id: Uuid, name: &str
     Ok(())
 }
 
+/// The brands matching strips from names: every one in the `brands` table that curation hasn't removed.
+pub async fn brands(db: impl PgExecutor<'_>) -> Result<Brands> {
+    let names: Vec<String> = sqlx::query_scalar("SELECT name FROM brands WHERE NOT removed")
+        .fetch_all(db)
+        .await
+        .context("reading brands")?;
+    Ok(Brands::new(names))
+}
+
 /// Names that mean different foods depending on context; matched normally but flagged for a person.
 const AMBIGUOUS: &[(&str, &str)] = &[(
     "pepper",
@@ -232,6 +242,7 @@ pub async fn match_foods_in(tx: &mut Transaction<'_, Postgres>) -> Result<MatchS
     if names.is_empty() {
         return Ok(stats);
     }
+    let brands = brands(&mut **tx).await?;
 
     // Existing foods by key.
     let mut by_key: HashMap<String, Food> = HashMap::new();
@@ -274,7 +285,7 @@ pub async fn match_foods_in(tx: &mut Transaction<'_, Postgres>) -> Result<MatchS
                 n += 1;
             }
             slugs_taken.insert(slug.clone());
-            let kind = if strip_brand(raw).is_some() {
+            let kind = if strip_brand(raw, &brands).is_some() {
                 "brand"
             } else {
                 "food"
@@ -342,7 +353,7 @@ pub async fn match_foods_in(tx: &mut Transaction<'_, Postgres>) -> Result<MatchS
     .map(|(id, recipes, all)| (id, (recipes, all)))
     .collect();
 
-    propose_tree(tx, &by_key, &usage, &mut stats).await?;
+    propose_tree(tx, &by_key, &usage, &brands, &mut stats).await?;
     Ok(stats)
 }
 
@@ -352,6 +363,7 @@ async fn propose_tree(
     tx: &mut Transaction<'_, Postgres>,
     by_key: &HashMap<String, Food>,
     usage: &HashMap<Uuid, (i64, i64)>,
+    brands: &Brands,
     stats: &mut MatchStats,
 ) -> Result<()> {
     // Review subjects carry usage; foods seen only in products and ready meals get low confidence so they sort last.
@@ -372,7 +384,7 @@ async fn propose_tree(
 
     for (key, food) in by_key.iter().filter(|(_, f)| f.created) {
         // A branded name links to its unbranded form first.
-        let base_key = strip_brand(&food.name).map(|(_, rest)| singular_key(&rest));
+        let base_key = strip_brand(&food.name, brands).map(|(_, rest)| singular_key(&rest));
         if let Some(base) = base_key
             .as_ref()
             .and_then(|k| by_key.get(k))
@@ -391,7 +403,7 @@ async fn propose_tree(
             .max_by_key(|(c, _)| c.len());
         let Some((_, base)) = best else { continue };
 
-        match relate(&food.name, &base.name) {
+        match relate(&food.name, &base.name, brands) {
             Some(Relation::KindOf) => parents.push((food.id, base.id)),
             Some(Relation::Related) => related.push((food.id, base.id)),
             Some(Relation::Unsure) => reviews.push((
