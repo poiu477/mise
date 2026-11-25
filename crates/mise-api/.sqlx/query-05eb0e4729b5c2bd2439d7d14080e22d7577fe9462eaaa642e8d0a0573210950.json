@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE dishes d SET default_variant_id = (\n             SELECT v.id FROM variants v WHERE v.dish_id = d.id\n             ORDER BY v.household_id IS NULL DESC, v.has_steps DESC, v.published_at DESC NULLS LAST, v.id LIMIT 1)\n         WHERE d.id = $1 AND d.default_variant_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "05eb0e4729b5c2bd2439d7d14080e22d7577fe9462eaaa642e8d0a0573210950"
+}

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT food_id, weight_unit FROM food_weight_units WHERE household_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "food_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "food_weight_units",
+            "name": "food_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "weight_unit",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "food_weight_units",
+            "name": "weight_unit"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "25b9fe57c0cb47a99d509fee8f41671071c7586ef8ab1d58914bb80107c4966d"
+}

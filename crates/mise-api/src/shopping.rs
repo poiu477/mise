@@ -12,6 +12,8 @@ use time::Date;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+mod queries;
+
 use crate::{
     AppState,
     auth::CurrentUser,
@@ -182,96 +184,34 @@ impl Planned {
     }
 }
 
-type LineRow = (Uuid, Uuid, String, Option<Uuid>, Option<bool>);
-
 /// The week's planned versions and their lines; like the plan, only versions the household can see.
 async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Planned> {
-    let entries: Vec<(Uuid, f64, String)> = sqlx::query!(
-        r#"SELECT e.variant_id AS "variant_id!",
-                  e.servings::float8 AS "servings!",
-                  coalesce(d.title, v.title) AS "title!"
-           FROM plan_entries e
-           JOIN variants v ON v.id = e.variant_id LEFT JOIN dishes d ON d.id = v.dish_id
-           WHERE e.household_id = $1 AND e.week = $2 AND visible_to(v, $1) ORDER BY e.created_at, e.id"#,
-        household,
-        week
-    )
-    .fetch_all(&s.pool)
-    .await
-    .map(|rows| rows.into_iter().map(|r| (r.variant_id, r.servings, r.title)).collect::<Vec<_>>())?;
-    let variants: Vec<Uuid> = entries.iter().map(|e| e.0).collect();
+    let entries = queries::planned(&s.pool, household, week).await?;
+    let variants: Vec<Uuid> = entries.iter().map(|e| e.variant_id).collect();
 
-    let lines: Vec<LineRow> = sqlx::query!(
-        r#"SELECT il.id AS "id!",
-                  il.variant_id AS "variant_id!",
-                  il.raw_name AS "raw_name!",
-                  il.food_id AS "food_id?",
-                  il.shipped AS "shipped?"
-           FROM ingredient_lines il
-           WHERE il.variant_id = ANY($1) ORDER BY il.position"#,
-        &variants
-    )
-    .fetch_all(&s.pool)
-    .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| (r.id, r.variant_id, r.raw_name, r.food_id, r.shipped))
-            .collect::<Vec<_>>()
-    })?;
+    let lines = queries::lines(&s.pool, &variants).await?;
     let mut amounts: HashMap<Uuid, Vec<(f64, f64, Option<String>)>> = HashMap::new();
-    for (line, sv, a, u) in sqlx::query!(
-        r#"SELECT la.line_id AS "line_id!",
-                  la.servings::float8 AS "servings!",
-                  la.amount::float8 AS "amount!",
-                  la.unit AS "unit?"
-           FROM line_amounts la
-           JOIN ingredient_lines il ON il.id = la.line_id WHERE il.variant_id = ANY($1) AND la.amount > 0"#,
-        &variants
-    )
-    .fetch_all(&s.pool)
-    .await
-    .map(|rows| rows.into_iter().map(|r| (r.line_id, r.servings, r.amount, r.unit)).collect::<Vec<_>>())?
-    {
-        amounts.entry(line).or_default().push((sv, a, u));
+    for a in queries::amounts(&s.pool, &variants).await? {
+        amounts
+            .entry(a.line_id)
+            .or_default()
+            .push((a.servings, a.amount, a.unit));
     }
 
     // As the dish page does: published amounts that would shrink as servings grow are derived instead.
     let mut yields: HashMap<Uuid, Vec<f64>> = HashMap::new();
-    for (v, y) in sqlx::query!(
-        r#"SELECT variant_id AS "variant_id!",
-                  servings::float8 AS "servings!"
-           FROM variant_yields WHERE variant_id = ANY($1)"#,
-        &variants
-    )
-    .fetch_all(&s.pool)
-    .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| (r.variant_id, r.servings))
-            .collect::<Vec<_>>()
-    })? {
-        yields.entry(v).or_default().push(y);
+    for y in queries::yields(&s.pool, &variants).await? {
+        yields.entry(y.variant_id).or_default().push(y.servings);
     }
     let mut templates: HashMap<Uuid, Vec<Template>> = HashMap::new();
-    for (v, t) in sqlx::query!(
-        r#"SELECT variant_id AS "variant_id!",
-                  template AS "template!"
-           FROM steps WHERE variant_id = ANY($1) AND template IS NOT NULL"#,
-        &variants
-    )
-    .fetch_all(&s.pool)
-    .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| (r.variant_id, r.template))
-            .collect::<Vec<_>>()
-    })? {
-        if let Ok(t) = serde_json::from_value(t) {
-            templates.entry(v).or_default().push(t);
+    for t in queries::templates(&s.pool, &variants).await? {
+        if let Ok(template) = serde_json::from_value(t.template) {
+            templates.entry(t.variant_id).or_default().push(template);
         }
     }
-    for (line, variant, ..) in &lines {
-        if let Some(list) = amounts.get_mut(line) {
+    for l in &lines {
+        if let Some(list) = amounts.get_mut(&l.id) {
+            let variant = &l.variant_id;
             let ys = yields.get(variant).map(Vec::as_slice).unwrap_or(&[]);
             let base = step_amounts::text_base(ys, templates.get(variant).into_iter().flatten());
             servings::keep_consistent(list, &[base, base * 2.0]);
@@ -279,27 +219,9 @@ async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan
     }
 
     // The plan's foods and everything they are kinds of, for sections, merging and conversions.
-    let used_ids: Vec<Uuid> = lines.iter().filter_map(|l| l.3).collect();
+    let used_ids: Vec<Uuid> = lines.iter().filter_map(|l| l.food_id).collect();
     let mut foods: HashMap<Uuid, FoodRow> = HashMap::new();
-    for f in sqlx::query!(
-        r#"WITH RECURSIVE up AS (
-               SELECT id FROM foods WHERE id = ANY($1)
-               UNION SELECT f.parent_id FROM foods f JOIN up ON f.id = up.id WHERE f.parent_id IS NOT NULL
-           )
-           SELECT f.id AS "id!",
-                  f.parent_id,
-                  f.kind = 'category' AS "category!",
-                  coalesce(f.props->'shop_as_one' = 'true'::jsonb, false) AS "shop_as_one!",
-                  f.name AS "name!",
-                  f.props->>'count_unit' AS count_unit,
-                  f.props->>'count_size' AS count_size,
-                  f.props->>'store_section' AS section
-           FROM foods f JOIN up ON up.id = f.id"#,
-        &used_ids
-    )
-    .fetch_all(&s.pool)
-    .await?
-    {
+    for f in queries::food_tree(&s.pool, &used_ids).await? {
         foods.insert(
             f.id,
             FoodRow {
@@ -316,33 +238,18 @@ async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan
         );
     }
     let known: Vec<Uuid> = foods.keys().copied().collect();
-    for (food, kind, item, ml, grams) in sqlx::query!(
-        r#"SELECT food_id AS "food_id!",
-                  kind AS "kind!",
-                  item AS "item!",
-                  ml::float8 AS "ml?",
-                  grams::float8 AS "grams?"
-           FROM food_measures WHERE food_id = ANY($1) ORDER BY created_at, id"#,
-        &known
-    )
-    .fetch_all(&s.pool)
-    .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| (r.food_id, r.kind, r.item, r.ml, r.grams))
-            .collect::<Vec<_>>()
-    })? {
-        let Some(f) = foods.get_mut(&food) else {
+    for m in queries::measures(&s.pool, &known).await? {
+        let Some(f) = foods.get_mut(&m.food_id) else {
             continue;
         };
-        match (kind.as_str(), ml, grams) {
+        match (m.kind.as_str(), m.ml, m.grams) {
             ("density", Some(ml), Some(g)) => f.measures.add_density(ml, g),
             ("item", ml, g) => {
                 if let Some(ml) = ml {
-                    f.measures.add_item(&item, &Quantity::new(ml, Unit::Ml));
+                    f.measures.add_item(&m.item, &Quantity::new(ml, Unit::Ml));
                 }
                 if let Some(g) = g {
-                    f.measures.add_item(&item, &Quantity::new(g, Unit::G));
+                    f.measures.add_item(&m.item, &Quantity::new(g, Unit::G));
                 }
             }
             _ => {}
@@ -357,12 +264,7 @@ async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan
     };
     let count_of = |food: Uuid| nearest(food).find_map(|f| f.count.clone());
 
-    let staple_ids: Vec<Uuid> = sqlx::query_scalar!(
-        "SELECT food_id FROM pantry_staples WHERE household_id = $1",
-        household
-    )
-    .fetch_all(&s.pool)
-    .await?;
+    let staple_ids = queries::staples(&s.pool, household).await?;
 
     // Every food the plan uses, in the plan's order, with what it needs.
     struct Use {
@@ -373,13 +275,14 @@ async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan
     let mut order: Vec<String> = Vec::new();
     let mut uses: HashMap<String, Use> = HashMap::new();
     let mut raw_names: HashMap<String, String> = HashMap::new();
-    for (variant, target, dish) in &entries {
-        for (line, line_variant, raw, food_id, shipped) in &lines {
-            if line_variant != variant {
-                continue;
-            }
-            let key = food_id.map_or_else(|| raw.to_lowercase(), |f| f.to_string());
-            raw_names.entry(key.clone()).or_insert_with(|| raw.clone());
+    for e in &entries {
+        for l in lines.iter().filter(|l| l.variant_id == e.variant_id) {
+            let key = l
+                .food_id
+                .map_or_else(|| l.raw_name.to_lowercase(), |f| f.to_string());
+            raw_names
+                .entry(key.clone())
+                .or_insert_with(|| l.raw_name.clone());
             let u = uses.entry(key.clone()).or_insert_with(|| {
                 order.push(key.clone());
                 Use {
@@ -388,13 +291,13 @@ async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan
                     recipes: Vec::new(),
                 }
             });
-            u.pantry &= *shipped == Some(false);
-            let count = food_id.and_then(count_of);
+            u.pantry &= l.shipped == Some(false);
+            let count = l.food_id.and_then(count_of);
             // A bare "1" is counted in the food's own words before kinds of one food add up together.
             u.needs.extend(
                 amounts
-                    .get(line)
-                    .and_then(|a| servings::line_quantity(a, *target))
+                    .get(&l.id)
+                    .and_then(|a| servings::line_quantity(a, e.servings))
                     .map(|q| match (&q.unit, &count) {
                         (Unit::Count(noun), Some(c)) if noun.is_empty() => {
                             Quantity::new(q.amount, Unit::Count(c.noun.clone()))
@@ -402,8 +305,8 @@ async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan
                         _ => q,
                     }),
             );
-            if !u.recipes.contains(dish) {
-                u.recipes.push(dish.clone());
+            if !u.recipes.contains(&e.dish) {
+                u.recipes.push(e.dish.clone());
             }
         }
     }
@@ -509,47 +412,17 @@ async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan
 async fn build(s: &AppState, household: Uuid, week: Date) -> ApiResult<ShoppingList> {
     let planned = plan_lines(s, household, week).await?;
     // Marks are kept per food, so a line shows ticked (or removed) when every food on it is.
-    let marks: HashMap<String, (bool, bool)> = sqlx::query!(
-        r#"SELECT item_key AS "item_key!",
-                  checked AS "checked!",
-                  hidden AS "hidden!"
-           FROM shopping_marks WHERE household_id = $1 AND week = $2"#,
-        household,
-        week
-    )
-    .fetch_all(&s.pool)
-    .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| (r.item_key, r.checked, r.hidden))
-            .collect::<Vec<_>>()
-    })?
-    .into_iter()
-    .map(|(k, c, h)| (k, (c, h)))
-    .collect();
-    let usual: String = sqlx::query_scalar!(
-        "SELECT weight_unit FROM households WHERE id = $1",
-        household
-    )
-    .fetch_one(&s.pool)
-    .await?;
-    let usual = Weights::stored(&usual);
-    let per_food: HashMap<Uuid, Weights> = sqlx::query!(
-        r#"SELECT food_id AS "food_id!",
-                  weight_unit AS "weight_unit!"
-           FROM food_weight_units WHERE household_id = $1"#,
-        household
-    )
-    .fetch_all(&s.pool)
-    .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| (r.food_id, r.weight_unit))
-            .collect::<Vec<_>>()
-    })?
-    .into_iter()
-    .map(|(f, w)| (f, Weights::stored(&w)))
-    .collect();
+    let marks: HashMap<String, (bool, bool)> = queries::marks(&s.pool, household, week)
+        .await?
+        .into_iter()
+        .map(|m| (m.item_key, (m.checked, m.hidden)))
+        .collect();
+    let usual = Weights::stored(&queries::weight_unit(&s.pool, household).await?);
+    let per_food: HashMap<Uuid, Weights> = queries::food_weight_units(&s.pool, household)
+        .await?
+        .into_iter()
+        .map(|f| (f.food_id, Weights::stored(&f.weight_unit)))
+        .collect();
 
     let mut by_section: BTreeMap<(usize, String), Vec<ShoppingItem>> = BTreeMap::new();
     let mut removed = Vec::new();
@@ -608,30 +481,7 @@ async fn build(s: &AppState, household: Uuid, week: Date) -> ApiResult<ShoppingL
     left_out.sort_by_key(|l: &LeftOut| l.name.to_lowercase());
     left_out.dedup_by(|a, b| a.key == b.key);
 
-    let extras = sqlx::query!(
-        r#"SELECT id AS "id!",
-                  name AS "name!",
-                  checked AS "checked!",
-                  client_key AS "client_key?"
-           FROM shopping_extras WHERE household_id = $1 AND week = $2 ORDER BY created_at, id"#,
-        household,
-        week
-    )
-    .fetch_all(&s.pool)
-    .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(|r| (r.id, r.name, r.checked, r.client_key))
-            .collect::<Vec<_>>()
-    })?
-    .into_iter()
-    .map(|(id, name, checked, client_key)| ShoppingExtra {
-        id,
-        name,
-        checked,
-        client_key,
-    })
-    .collect();
+    let extras = queries::extras(&s.pool, household, week).await?;
     Ok(ShoppingList {
         week,
         meals: planned.entries,
@@ -695,19 +545,7 @@ pub async fn mark(
     let foods = plan_lines(&s, me.household_id, week)
         .await?
         .foods_to_mark(&b.key);
-    sqlx::query!(
-        "INSERT INTO shopping_marks (household_id, week, item_key, checked, hidden)
-         SELECT $1, $2, k, coalesce($4, false), coalesce($5, false) FROM UNNEST($3::text[]) AS k
-         ON CONFLICT (household_id, week, item_key)
-         DO UPDATE SET checked = coalesce($4, shopping_marks.checked), hidden = coalesce($5, shopping_marks.hidden)",
-        me.household_id,
-        week,
-        &foods,
-        b.checked,
-        b.hidden
-    )
-    .execute(&s.pool)
-    .await?;
+    queries::mark(&s.pool, me.household_id, week, &foods, b.checked, b.hidden).await?;
     Ok(Json(build(&s, me.household_id, week).await?))
 }
 
@@ -758,18 +596,7 @@ pub async fn add_extra(
             "client_key must be between 1 and 100 characters".into(),
         ));
     }
-    // Two missing keys never conflict, so additions without one always go in.
-    sqlx::query!(
-        "INSERT INTO shopping_extras (id, household_id, week, name, client_key) VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (household_id, client_key) DO NOTHING",
-        Uuid::now_v7(),
-        me.household_id,
-        week,
-        clean(&b.name)?,
-        key
-    )
-    .execute(&s.pool)
-    .await?;
+    queries::add_extra(&s.pool, me.household_id, week, clean(&b.name)?, key).await?;
     Ok(Json(build(&s, me.household_id, week).await?))
 }
 
@@ -798,13 +625,7 @@ pub async fn update_extra(
     Path(id): Path<Uuid>,
     JsonBody(b): JsonBody<ExtraChange>,
 ) -> ApiResult<Json<ShoppingList>> {
-    let week: Date = sqlx::query_scalar!(
-        "UPDATE shopping_extras SET checked = $3 WHERE id = $1 AND household_id = $2 RETURNING week",
-        id,
-        me.household_id,
-        b.checked
-    )
-        .fetch_optional(&s.pool)
+    let week = queries::check_extra(&s.pool, id, me.household_id, b.checked)
         .await?
         .ok_or(ApiError::NotFound)?;
     Ok(Json(build(&s, me.household_id, week).await?))
@@ -826,14 +647,9 @@ pub async fn remove_extra(
     Extension(me): Extension<CurrentUser>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<ShoppingList>> {
-    let week: Date = sqlx::query_scalar!(
-        "DELETE FROM shopping_extras WHERE id = $1 AND household_id = $2 RETURNING week",
-        id,
-        me.household_id
-    )
-    .fetch_optional(&s.pool)
-    .await?
-    .ok_or(ApiError::NotFound)?;
+    let week = queries::remove_extra(&s.pool, id, me.household_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     Ok(Json(build(&s, me.household_id, week).await?))
 }
 
@@ -863,20 +679,9 @@ pub async fn add_staple(
     Extension(me): Extension<CurrentUser>,
     JsonBody(b): JsonBody<NewStaple>,
 ) -> ApiResult<Json<ShoppingList>> {
-    let added = sqlx::query!(
-        "INSERT INTO pantry_staples (household_id, food_id) SELECT $1, f.id FROM foods f WHERE f.id = $2 ON CONFLICT DO NOTHING",
-        me.household_id,
-        b.food_id
-    )
-        .execute(&s.pool)
-        .await?;
-    if added.rows_affected() == 0
-        && !sqlx::query_scalar!(
-            r#"SELECT EXISTS (SELECT 1 FROM foods WHERE id = $1) AS "value!""#,
-            b.food_id
-        )
-        .fetch_one(&s.pool)
-        .await?
+    // Nothing added is fine when it is already a staple; not when there is no such food.
+    if !queries::add_staple(&s.pool, me.household_id, b.food_id).await?
+        && !queries::food_exists(&s.pool, b.food_id).await?
     {
         return Err(ApiError::NotFound);
     }
@@ -900,13 +705,7 @@ pub async fn remove_staple(
     Path(food_id): Path<Uuid>,
     Query(p): Query<WeekParams>,
 ) -> ApiResult<Json<ShoppingList>> {
-    sqlx::query!(
-        "DELETE FROM pantry_staples WHERE household_id = $1 AND food_id = $2",
-        me.household_id,
-        food_id
-    )
-    .execute(&s.pool)
-    .await?;
+    queries::remove_staple(&s.pool, me.household_id, food_id).await?;
     Ok(Json(build(&s, me.household_id, monday(p.week)).await?))
 }
 
@@ -929,12 +728,7 @@ pub async fn settings(
     State(s): State<AppState>,
     Extension(me): Extension<CurrentUser>,
 ) -> ApiResult<Json<ShoppingSettings>> {
-    let w: String = sqlx::query_scalar!(
-        "SELECT weight_unit FROM households WHERE id = $1",
-        me.household_id
-    )
-    .fetch_one(&s.pool)
-    .await?;
+    let w = queries::weight_unit(&s.pool, me.household_id).await?;
     Ok(Json(ShoppingSettings {
         weight_unit: Weights::stored(&w),
     }))
@@ -955,13 +749,7 @@ pub async fn update_settings(
     Extension(me): Extension<CurrentUser>,
     JsonBody(b): JsonBody<ShoppingSettings>,
 ) -> ApiResult<Json<ShoppingSettings>> {
-    sqlx::query!(
-        "UPDATE households SET weight_unit = $2 WHERE id = $1",
-        me.household_id,
-        b.weight_unit.core().as_str()
-    )
-    .execute(&s.pool)
-    .await?;
+    queries::set_weight_unit(&s.pool, me.household_id, b.weight_unit.core().as_str()).await?;
     Ok(Json(b))
 }
 
@@ -993,32 +781,10 @@ pub async fn set_food_weights(
     Extension(me): Extension<CurrentUser>,
     JsonBody(b): JsonBody<FoodWeights>,
 ) -> ApiResult<Json<ShoppingList>> {
-    if !sqlx::query_scalar!(
-        r#"SELECT EXISTS (SELECT 1 FROM foods WHERE id = $1) AS "value!""#,
-        b.food_id
-    )
-    .fetch_one(&s.pool)
-    .await?
-    {
+    if !queries::food_exists(&s.pool, b.food_id).await? {
         return Err(ApiError::NotFound);
     }
-    match b.weight_unit {
-        Some(w) => sqlx::query!(
-            "INSERT INTO food_weight_units (household_id, food_id, weight_unit) VALUES ($1, $2, $3)
-             ON CONFLICT (household_id, food_id) DO UPDATE SET weight_unit = $3",
-            me.household_id,
-            b.food_id,
-            w.core().as_str()
-        ),
-        None => {
-            sqlx::query!(
-                "DELETE FROM food_weight_units WHERE household_id = $1 AND food_id = $2",
-                me.household_id,
-                b.food_id
-            )
-        }
-    }
-    .execute(&s.pool)
-    .await?;
+    let unit = b.weight_unit.map(|w| w.core().as_str());
+    queries::set_food_weight_unit(&s.pool, me.household_id, b.food_id, unit).await?;
     Ok(Json(build(&s, me.household_id, monday(b.week)).await?))
 }
