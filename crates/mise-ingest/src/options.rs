@@ -113,20 +113,41 @@ pub async fn derive_options(pool: &PgPool) -> Result<OptionStats> {
     .map(|f| (f.id, f))
     .collect();
 
-    // Fold each food up to its most generic kind, stopping at strict foods and at categories.
-    let fold = |mut id: Uuid| -> Uuid {
+    // Fold each food up to its most generic kind, stopping at strict foods and at categories. A loop in the tree
+    // (which curation refuses to make) stops it with an error naming the foods, rather than running on forever.
+    let fold = |mut id: Uuid| -> Result<Uuid> {
+        let mut seen = HashSet::from([id]);
         while let Some(f) = foods.get(&id) {
             match f.parent_id.and_then(|p| foods.get(&p)) {
-                Some(p) if !f.strict && p.kind != "category" => id = p.id,
+                Some(p) if !f.strict && p.kind != "category" => {
+                    if !seen.insert(p.id) {
+                        let names: Vec<&str> = seen
+                            .iter()
+                            .filter_map(|id| foods.get(id).map(|f| f.name.as_str()))
+                            .collect();
+                        anyhow::bail!(
+                            "the food tree has a loop through {}: fix it with `mise food apply` (set_parent or unparent)",
+                            names.join(", ")
+                        );
+                    }
+                    id = p.id
+                }
                 _ => break,
             }
         }
-        id
+        Ok(id)
     };
     let mut folded: HashMap<Uuid, Uuid> = HashMap::new();
     let mut shipped_share: HashMap<Uuid, (u32, u32)> = HashMap::new();
     for l in &lines {
-        let root = *folded.entry(l.food_id).or_insert_with(|| fold(l.food_id));
+        let root = match folded.get(&l.food_id) {
+            Some(root) => *root,
+            None => {
+                let root = fold(l.food_id)?;
+                folded.insert(l.food_id, root);
+                root
+            }
+        };
         let e = shipped_share.entry(root).or_default();
         e.1 += 1;
         e.0 += l.shipped.unwrap_or(false) as u32;

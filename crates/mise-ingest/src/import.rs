@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use mise_core::ingredient_line;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{PgPool, Postgres, Transaction, pool::PoolConnection};
 use uuid::Uuid;
 
 use crate::media::{UploadError, store_upload};
@@ -80,28 +80,43 @@ pub(crate) async fn finish(pool: &PgPool, stored: Vec<Stored>) -> Result<Vec<Imp
 /// dish from what they read, so two imports finishing together take turns.
 const STAGES_LOCK: i64 = 0x6d69_7365_2069_6d70;
 
+/// A pooled connection holding the stages' lock. Dropped while it still holds it (an import cancelled or panicking
+/// mid-stages, or the unlock failing), it closes the connection instead of returning it to the pool, and the server
+/// ends the lock with the session: a lock left on a pooled connection would stop every later import.
+struct Locked(Option<PoolConnection<Postgres>>);
+
+impl Drop for Locked {
+    fn drop(&mut self) {
+        if let Some(conn) = self.0.take() {
+            drop(conn.detach());
+        }
+    }
+}
+
 /// Groups dishes and derives their options, one import at a time. The lock is held by one connection for the session
-/// and given back however the stages end.
-async fn shared_stages(pool: &PgPool) -> Result<()> {
+/// and given back however the stages end, the import cancelled included.
+pub async fn shared_stages(pool: &PgPool) -> Result<()> {
     let mut conn = pool.acquire().await?;
     sqlx::query("SELECT pg_advisory_lock($1)")
         .bind(STAGES_LOCK)
         .execute(&mut *conn)
         .await
         .context("waiting for another import")?;
+    let mut held = Locked(Some(conn));
     let ran = async {
         crate::dishes::group_dishes(pool).await?;
         crate::options::derive_options(pool).await?;
         anyhow::Ok(())
     }
     .await;
+    let conn = held.0.as_mut().expect("held until here");
     let unlocked = sqlx::query("SELECT pg_advisory_unlock($1)")
         .bind(STAGES_LOCK)
-        .execute(&mut *conn)
+        .execute(&mut **conn)
         .await;
-    if unlocked.is_err() {
-        // A connection that may still hold the lock never goes back to the pool.
-        conn.detach();
+    if unlocked.is_ok() {
+        // Unlocked: back to the pool as usual. Otherwise `held` closes it on the way out.
+        drop(held.0.take());
     }
     ran
 }
@@ -131,6 +146,21 @@ async fn source_id(tx: &mut Transaction<'_, Postgres>, source: &Source) -> Resul
     .bind(source.kind)
     .fetch_one(&mut **tx)
     .await?)
+}
+
+/// The most characters a title keeps, as the editor allows: a page can name a recipe at any length.
+pub const MAX_TITLE: usize = 200;
+
+/// A title cut to [`MAX_TITLE`] characters, at a word when one ends near the limit.
+pub fn capped_title(title: &str) -> String {
+    if title.chars().count() <= MAX_TITLE {
+        return title.to_owned();
+    }
+    let cut: String = title.chars().take(MAX_TITLE).collect();
+    match cut.rfind(' ') {
+        Some(at) if at > MAX_TITLE / 2 => cut[..at].trim_end().to_owned(),
+        _ => cut.trim_end().to_owned(),
+    }
 }
 
 /// Stores the record and its version, with lines, amounts and steps, then matches the lines' foods, all in one
@@ -203,7 +233,7 @@ pub(crate) async fn store(
     .bind(id)
     .bind(latest.map(|(_, v)| v))
     .bind(household)
-    .bind(&record.title)
+    .bind(capped_title(&record.title))
     .bind(&record.description)
     .bind(!record.steps.is_empty())
     .bind(&meta)

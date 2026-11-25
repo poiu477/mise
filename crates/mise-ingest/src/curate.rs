@@ -263,10 +263,17 @@ pub async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<Str
             if from_id == into_id {
                 return Ok(format!("{from} is already merged into {into}"));
             }
+            // `into` takes over `from`'s place in the tree when it sits anywhere under it (a child, or a grandchild
+            // through `from`'s other kinds), so moving `from`'s kinds under `into` makes no loop.
+            if is_ancestor(tx, from_id, into_id).await? {
+                sqlx::query("UPDATE foods SET parent_id = (SELECT parent_id FROM foods WHERE id = $1) WHERE id = $2")
+                    .bind(from_id)
+                    .bind(into_id)
+                    .execute(&mut **tx)
+                    .await?;
+            }
             for sql in [
                 "UPDATE ingredient_lines SET food_id = $2 WHERE food_id = $1",
-                // `into` takes over `from`'s place in the tree if it sat under it; nothing becomes its own parent.
-                "UPDATE foods SET parent_id = (SELECT parent_id FROM foods WHERE id = $1) WHERE id = $2 AND parent_id = $1",
                 "UPDATE foods SET parent_id = $2 WHERE parent_id = $1 AND id <> $2",
                 "UPDATE food_facts SET food_id = $2 WHERE food_id = $1",
                 // `into`'s own measures win; `from`'s fill in what it lacks and the rest go with it.
@@ -288,6 +295,10 @@ pub async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<Str
                 .bind(from_id)
                 .execute(&mut **tx)
                 .await?;
+            // Nothing above should make one, but a loop would hang every later import: refuse rather than store it.
+            if is_ancestor(tx, into_id, into_id).await? {
+                anyhow::bail!("merging {from} into {into} would make {into} a kind of itself");
+            }
             adopt(tx, into_id).await?;
             Ok(format!("merged {from} into {into}"))
         }

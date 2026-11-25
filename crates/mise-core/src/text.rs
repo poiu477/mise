@@ -24,8 +24,20 @@ pub fn normalize_name(s: &str) -> String {
 
 /// URL-safe slug: normalized name with spaces as hyphens, apostrophes dropped.
 pub fn slugify(s: &str) -> String {
-    normalize_name(s).replace('\'', "").replace(' ', "-")
+    let slug = normalize_name(s).replace('\'', "").replace(' ', "-");
+    if slug.chars().count() <= MAX_SLUG {
+        return slug;
+    }
+    let cut: String = slug.chars().take(MAX_SLUG).collect();
+    match cut.rfind('-') {
+        Some(at) if at > MAX_SLUG / 2 => cut[..at].to_owned(),
+        _ => cut,
+    }
 }
+
+/// The longest slug: plenty for any dish or food's name, and far inside what Postgres can index (a slug past about
+/// 2,700 bytes can't be stored at all, and one such name would stop every later run of dish grouping).
+pub const MAX_SLUG: usize = 80;
 
 #[cfg(test)]
 mod tests {
