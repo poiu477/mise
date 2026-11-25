@@ -11,6 +11,8 @@ RUN npm run build
 # The same Rust as rust-toolchain.toml.
 FROM rust:1.100.0-bookworm AS server
 WORKDIR /src
+# The checked SQL macros build from the query metadata in crates/mise-api/.sqlx, not a database.
+ENV SQLX_OFFLINE=true
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
 COPY migrations ./migrations

@@ -101,7 +101,12 @@ const READY_WITHIN: Duration = Duration::from_secs(2);
     )
 )]
 pub async fn ready(State(s): State<AppState>) -> ApiResult<Json<Ready>> {
-    match tokio::time::timeout(READY_WITHIN, sqlx::query("SELECT 1").execute(&s.pool)).await {
+    match tokio::time::timeout(
+        READY_WITHIN,
+        sqlx::query_scalar!(r#"SELECT 1 AS "one!""#).fetch_one(&s.pool),
+    )
+    .await
+    {
         Ok(Ok(_)) => Ok(Json(Ready { status: "ready" })),
         Ok(Err(e)) => {
             tracing::warn!(error = %e, "not ready: the database isn't answering");

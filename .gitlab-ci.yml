@@ -101,6 +101,8 @@ rust:
     - rustup show active-toolchain
     - cargo fmt --all --check
     - cargo clippy --workspace --all-targets --locked -- -D warnings
+    # The checked queries' metadata (crates/mise-api/.sqlx) matches the queries and the migrations.
+    - scripts/sqlx-prepare --check
     - cargo test --workspace --locked
     # For the jobs after this one: the API document, and the binaries the browser journeys run.
     - cargo run -q --locked -p mise-api -- openapi > web/openapi.json

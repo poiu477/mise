@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT f.id, f.name FROM foods f\n         WHERE known_food(f, $1) AND (f.name ILIKE '%' || $2 || '%' OR f.name % $2)\n         ORDER BY f.name ILIKE $2 || '%' DESC, similarity(f.name, $2) DESC, f.name\n         LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "foods",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "foods",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d6bf204933bc3585c145a0710bbba5b99c9d50d4e3a502b078e4ace7fab9d124"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE review_items SET status = $2, decision = $3, decided_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "306a7bb624beef90bf1220d7b64d7f66f4674cb985cc1ea9484c4a9ce784455c"
+}

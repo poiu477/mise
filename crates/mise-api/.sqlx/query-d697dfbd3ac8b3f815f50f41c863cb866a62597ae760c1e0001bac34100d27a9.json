@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM shopping_extras WHERE id = $1 AND household_id = $2 RETURNING week",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "week",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "shopping_extras",
+            "name": "week"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d697dfbd3ac8b3f815f50f41c863cb866a62597ae760c1e0001bac34100d27a9"
+}

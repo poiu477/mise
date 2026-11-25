@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET is_admin = $2, disabled = $3, household_id = coalesce($4, household_id),\n                          password_hash = coalesce($5, password_hash)\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5f5819e116db60489caa7f0e37d645cfc4d3a910067b3db66a2b3e563a3730c9"
+}

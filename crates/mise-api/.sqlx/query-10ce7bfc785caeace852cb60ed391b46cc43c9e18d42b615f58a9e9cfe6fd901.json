@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, food_id, raw_name FROM ingredient_lines WHERE variant_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "ingredient_lines",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "food_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "ingredient_lines",
+            "name": "food_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "raw_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ingredient_lines",
+            "name": "raw_name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "10ce7bfc785caeace852cb60ed391b46cc43c9e18d42b615f58a9e9cfe6fd901"
+}

@@ -143,8 +143,6 @@ pub struct QueueParams {
     pub kind: Option<ReviewKind>,
 }
 
-type ItemRow = (Uuid, String, Value, Value, Option<f32>, OffsetDateTime);
-
 /// A text field of a stored item's JSON.
 fn text(v: &Value, key: &str) -> Option<String> {
     v.get(key).and_then(Value::as_str).map(str::to_string)
@@ -158,39 +156,44 @@ fn id(v: &Value, key: &str) -> Option<Uuid> {
 /// The open items of `kinds`, as the page shows them. Food and dish names are read as they are now, so an item
 /// follows a renamed food or a regrouped dish.
 async fn load(s: &AppState, kinds: &[ReviewKind]) -> ApiResult<ReviewQueue> {
-    let names: Vec<&str> = kinds.iter().map(|k| k.as_str()).collect();
-    let rows: Vec<ItemRow> = sqlx::query_as(
+    let names: Vec<String> = kinds.iter().map(|k| k.as_str().to_owned()).collect();
+    let rows = sqlx::query!(
         "SELECT id, kind, subject, proposal, confidence, created_at FROM review_items
          WHERE status = 'open' AND kind = ANY($1)
          ORDER BY array_position($1, kind), confidence DESC NULLS LAST, created_at, id",
+        &names
     )
-    .bind(&names)
     .fetch_all(&s.pool)
     .await?;
 
     let food_ids: Vec<Uuid> = rows
         .iter()
-        .flat_map(|r| [id(&r.2, "food_id"), id(&r.3, "parent_id")])
+        .flat_map(|r| [id(&r.subject, "food_id"), id(&r.proposal, "parent_id")])
         .flatten()
         .collect();
     let foods: HashMap<Uuid, String> =
-        sqlx::query_as::<_, (Uuid, String)>("SELECT id, name FROM foods WHERE id = ANY($1)")
-            .bind(&food_ids)
+        sqlx::query!("SELECT id, name FROM foods WHERE id = ANY($1)", &food_ids)
             .fetch_all(&s.pool)
             .await?
             .into_iter()
+            .map(|f| (f.id, f.name))
             .collect();
     let dish_ids: Vec<Uuid> = rows
         .iter()
-        .flat_map(|r| [id(&r.2, "dish_id"), id(&r.3, "merge_into_dish")])
+        .flat_map(|r| {
+            [
+                id(&r.subject, "dish_id"),
+                id(&r.proposal, "merge_into_dish"),
+            ]
+        })
         .flatten()
         .collect();
     let dishes: HashMap<Uuid, String> =
-        sqlx::query_as::<_, (Uuid, String)>("SELECT id, slug FROM dishes WHERE id = ANY($1)")
-            .bind(&dish_ids)
+        sqlx::query!("SELECT id, slug FROM dishes WHERE id = ANY($1)", &dish_ids)
             .fetch_all(&s.pool)
             .await?
             .into_iter()
+            .map(|d| (d.id, d.slug))
             .collect();
     let food_name = |v: &Value, id_key: &str, name_key: &str| {
         id(v, id_key)
@@ -200,35 +203,36 @@ async fn load(s: &AppState, kinds: &[ReviewKind]) -> ApiResult<ReviewQueue> {
     };
 
     let mut items = Vec::new();
-    for (item_id, kind, subject, proposal, confidence, created_at) in rows {
-        let Some(kind) = ReviewKind::from_str(&kind) else {
+    for row in rows {
+        let (subject, proposal) = (&row.subject, &row.proposal);
+        let Some(kind) = ReviewKind::from_str(&row.kind) else {
             continue;
         };
         let (name, sentence, note, recipe_uses, pair) = match kind {
             ReviewKind::FoodMatch | ReviewKind::FoodParent => {
-                let name = food_name(&subject, "food_id", "name");
+                let name = food_name(subject, "food_id", "name");
                 let sentence = if kind == ReviewKind::FoodParent {
-                    let parent = food_name(&proposal, "parent_id", "parent_name");
+                    let parent = food_name(proposal, "parent_id", "parent_name");
                     format!("{name} is a kind of {parent}")
                 } else {
                     format!("{name} is a food of its own")
                 };
                 let uses = subject.get("recipe_uses").and_then(Value::as_i64);
-                (name, sentence, text(&proposal, "note"), uses, None)
+                (name, sentence, text(proposal, "note"), uses, None)
             }
             ReviewKind::DishMerge => {
-                let title = text(&subject, "title").unwrap_or_default();
-                let original = text(&proposal, "copied_from_title").unwrap_or_default();
+                let title = text(subject, "title").unwrap_or_default();
+                let original = text(proposal, "copied_from_title").unwrap_or_default();
                 let slug = |v: &Value, key: &str| id(v, key).and_then(|d| dishes.get(&d).cloned());
                 let number = |key: &str| proposal.get(key).and_then(Value::as_f64).unwrap_or(0.0);
                 let pair = DishPair {
                     version: DishRef {
                         title: title.clone(),
-                        dish_slug: slug(&subject, "dish_id"),
+                        dish_slug: slug(subject, "dish_id"),
                     },
                     copied_from: DishRef {
                         title: original.clone(),
-                        dish_slug: slug(&proposal, "merge_into_dish"),
+                        dish_slug: slug(proposal, "merge_into_dish"),
                     },
                     title_similarity: number("title_similarity"),
                     shipped_overlap: number("shipped_overlap"),
@@ -238,16 +242,16 @@ async fn load(s: &AppState, kinds: &[ReviewKind]) -> ApiResult<ReviewQueue> {
             }
         };
         items.push(ReviewItem {
-            id: item_id,
+            id: row.id,
             kind,
             subject: name,
             proposal: sentence,
             note,
-            confidence,
+            confidence: row.confidence,
             recipe_uses,
             dishes: pair,
             verdicts: kind.verdicts(),
-            created_at,
+            created_at: row.created_at,
         });
     }
     Ok(ReviewQueue { items })
@@ -312,22 +316,22 @@ fn checked(text: Option<&str>, what: &str) -> ApiResult<Option<String>> {
 
 /// The record a version came from, as dish decisions name it; None for a version written in the app.
 async fn record_of(tx: &mut Transaction<'_, Postgres>, variant: Uuid) -> ApiResult<Option<Record>> {
-    Ok(sqlx::query_as::<_, (String, String)>(
+    Ok(sqlx::query!(
         "SELECT s.key, sr.external_id FROM variants v JOIN source_records sr ON sr.id = v.source_record_id
          JOIN sources s ON s.id = sr.source_id WHERE v.id = $1",
+        variant
     )
-    .bind(variant)
     .fetch_optional(&mut **tx)
     .await?
-    .map(|(source, external)| Record(source, external)))
+    .map(|r| Record(r.key, r.external_id)))
 }
 
 /// The food a stored item names, by its slug (unique, unlike names), or refused when it is gone.
 async fn food_slug(tx: &mut Transaction<'_, Postgres>, v: &Value, key: &str) -> ApiResult<String> {
-    let found: Option<String> = sqlx::query_scalar("SELECT slug FROM foods WHERE id = $1")
-        .bind(id(v, key))
-        .fetch_optional(&mut **tx)
-        .await?;
+    let found: Option<String> =
+        sqlx::query_scalar!("SELECT slug FROM foods WHERE id = $1", id(v, key))
+            .fetch_optional(&mut **tx)
+            .await?;
     found.ok_or_else(|| {
         ApiError::BadRequest("a food this item names is gone; run match-foods again".into())
     })
@@ -371,13 +375,14 @@ pub async fn decide(
     let note = checked(d.note.as_deref(), "a note")?;
 
     let mut tx = s.pool.begin().await?;
-    let row: Option<(String, String, Value, Value)> = sqlx::query_as(
+    let row = sqlx::query!(
         "SELECT kind, status, subject, proposal FROM review_items WHERE id = $1 FOR UPDATE",
+        item
     )
-    .bind(item)
     .fetch_optional(&mut *tx)
-    .await?;
-    let (kind, status, subject, proposal) = row.ok_or(ApiError::NotFound)?;
+    .await?
+    .ok_or(ApiError::NotFound)?;
+    let (kind, status, subject, proposal) = (row.kind, row.status, row.subject, row.proposal);
     let kind = ReviewKind::from_str(&kind).ok_or(ApiError::NotFound)?;
     if status != "open" {
         return Err(ApiError::Conflict("that item was decided already".into()));
@@ -458,12 +463,12 @@ pub async fn decide(
     if let Some(n) = note {
         decision["note"] = json!(n);
     }
-    sqlx::query(
+    sqlx::query!(
         "UPDATE review_items SET status = $2, decision = $3, decided_at = now() WHERE id = $1",
+        item,
+        status,
+        decision
     )
-    .bind(item)
-    .bind(status)
-    .bind(decision)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;

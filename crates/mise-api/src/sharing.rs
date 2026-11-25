@@ -68,11 +68,11 @@ pub fn cap_from_env() -> anyhow::Result<Visibility> {
 
 /// Makes `cap` the install's cap, where `visible_to` reads it.
 pub async fn set_cap(pool: &PgPool, cap: Visibility) -> anyhow::Result<()> {
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO sharing_cap (only_row, max_level) VALUES (true, $1)
          ON CONFLICT (only_row) DO UPDATE SET max_level = excluded.max_level",
+        cap.as_str()
     )
-    .bind(cap.as_str())
     .execute(pool)
     .await?;
     Ok(())
@@ -80,7 +80,7 @@ pub async fn set_cap(pool: &PgPool, cap: Visibility) -> anyhow::Result<()> {
 
 /// The install's cap.
 async fn cap(tx: &mut Transaction<'_, Postgres>) -> ApiResult<Visibility> {
-    let stored: Option<String> = sqlx::query_scalar("SELECT max_level FROM sharing_cap")
+    let stored: Option<String> = sqlx::query_scalar!("SELECT max_level FROM sharing_cap")
         .fetch_optional(&mut **tx)
         .await?;
     Ok(stored
@@ -107,11 +107,12 @@ pub async fn default_for(
     tx: &mut Transaction<'_, Postgres>,
     household: Uuid,
 ) -> ApiResult<Visibility> {
-    let stored: String =
-        sqlx::query_scalar("SELECT default_visibility FROM households WHERE id = $1")
-            .bind(household)
-            .fetch_one(&mut **tx)
-            .await?;
+    let stored: String = sqlx::query_scalar!(
+        "SELECT default_visibility FROM households WHERE id = $1",
+        household
+    )
+    .fetch_one(&mut **tx)
+    .await?;
     let default = Visibility::parse(&stored).unwrap_or(Visibility::Private);
     Ok(default.min(cap(tx).await?))
 }
@@ -146,40 +147,36 @@ pub struct HouseholdSharing {
 
 async fn sharing(pool: &PgPool, household: Uuid) -> ApiResult<HouseholdSharing> {
     let mut tx = pool.begin().await?;
-    let (name, default): (String, String) =
-        sqlx::query_as("SELECT name, default_visibility FROM households WHERE id = $1")
-            .bind(household)
-            .fetch_one(&mut *tx)
-            .await?;
-    let refs = |rows: Vec<(Uuid, String)>| {
-        rows.into_iter()
-            .map(|(id, name)| HouseholdRef { id, name })
-            .collect::<Vec<_>>()
-    };
-    let partners = refs(
-        sqlx::query_as(
-            "SELECT h.id, h.name FROM household_partners p JOIN households h ON h.id = p.partner_id
-             WHERE p.household_id = $1 ORDER BY h.name, h.id",
-        )
-        .bind(household)
-        .fetch_all(&mut *tx)
-        .await?,
-    );
-    let partner_of = refs(
-        sqlx::query_as(
-            "SELECT h.id, h.name FROM household_partners p JOIN households h ON h.id = p.household_id
-             WHERE p.partner_id = $1 ORDER BY h.name, h.id",
-        )
-        .bind(household)
-        .fetch_all(&mut *tx)
-        .await?,
-    );
-    let households = refs(
-        sqlx::query_as("SELECT id, name FROM households WHERE id <> $1 ORDER BY name, id")
-            .bind(household)
-            .fetch_all(&mut *tx)
-            .await?,
-    );
+    let h = sqlx::query!(
+        "SELECT name, default_visibility FROM households WHERE id = $1",
+        household
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    let (name, default) = (h.name, h.default_visibility);
+    let partners = sqlx::query_as!(
+        HouseholdRef,
+        "SELECT h.id, h.name FROM household_partners p JOIN households h ON h.id = p.partner_id
+         WHERE p.household_id = $1 ORDER BY h.name, h.id",
+        household
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let partner_of = sqlx::query_as!(
+        HouseholdRef,
+        "SELECT h.id, h.name FROM household_partners p JOIN households h ON h.id = p.household_id
+         WHERE p.partner_id = $1 ORDER BY h.name, h.id",
+        household
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let households = sqlx::query_as!(
+        HouseholdRef,
+        "SELECT id, name FROM households WHERE id <> $1 ORDER BY name, id",
+        household
+    )
+    .fetch_all(&mut *tx)
+    .await?;
     let max_visibility = cap(&mut tx).await?;
     Ok(HouseholdSharing {
         id: household,
@@ -235,11 +232,13 @@ pub async fn set_default(
 ) -> ApiResult<Json<HouseholdSharing>> {
     let mut tx = s.pool.begin().await?;
     allowed(&mut tx, input.default_visibility).await?;
-    sqlx::query("UPDATE households SET default_visibility = $2 WHERE id = $1")
-        .bind(me.household_id)
-        .bind(input.default_visibility.as_str())
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query!(
+        "UPDATE households SET default_visibility = $2 WHERE id = $1",
+        me.household_id,
+        input.default_visibility.as_str()
+    )
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     Ok(Json(sharing(&s.pool, me.household_id).await?))
 }
@@ -267,21 +266,22 @@ pub async fn add_partner(
             "a household can't be its own partner".into(),
         ));
     }
-    let added = sqlx::query(
+    let added = sqlx::query!(
         "INSERT INTO household_partners (household_id, partner_id)
          SELECT $1, h.id FROM households h WHERE h.id = $2
          ON CONFLICT DO NOTHING",
+        me.household_id,
+        id
     )
-    .bind(me.household_id)
-    .bind(id)
     .execute(&s.pool)
     .await?;
     if added.rows_affected() == 0 {
-        let exists: bool =
-            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM households WHERE id = $1)")
-                .bind(id)
-                .fetch_one(&s.pool)
-                .await?;
+        let exists: bool = sqlx::query_scalar!(
+            r#"SELECT EXISTS (SELECT 1 FROM households WHERE id = $1) AS "exists!""#,
+            id
+        )
+        .fetch_one(&s.pool)
+        .await?;
         if !exists {
             return Err(ApiError::NotFound);
         }
@@ -306,10 +306,12 @@ pub async fn remove_partner(
     Extension(me): Extension<CurrentUser>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<StatusCode> {
-    sqlx::query("DELETE FROM household_partners WHERE household_id = $1 AND partner_id = $2")
-        .bind(me.household_id)
-        .bind(id)
-        .execute(&s.pool)
-        .await?;
+    sqlx::query!(
+        "DELETE FROM household_partners WHERE household_id = $1 AND partner_id = $2",
+        me.household_id,
+        id
+    )
+    .execute(&s.pool)
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }

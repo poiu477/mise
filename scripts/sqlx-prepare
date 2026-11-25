@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# sqlx's checked query macros in mise-api build from query metadata committed in crates/mise-api/.sqlx, so a build needs
+# no database (.cargo/config.toml sets SQLX_OFFLINE). This writes that metadata from a database migrated to this
+# checkout's migrations (mise-db's migrate example): mise_sqlx, on the Postgres DATABASE_URL names (created when
+# missing), or SQLX_DATABASE_URL.
+#
+#   scripts/sqlx-prepare           rewrite crates/mise-api/.sqlx; run it after changing a query or adding a migration, and
+#                                  commit what changes
+#   scripts/sqlx-prepare --check   write it to a scratch folder and fail when it differs from what is committed (./check
+#                                  and CI): a query the schema has moved away from, or metadata left stale
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+check=false
+case "${1:-}" in
+  "") ;;
+  --check) check=true ;;
+  -h | --help)
+    sed -n '2,11s/^# \{0,1\}//p' "$0"
+    exit 0
+    ;;
+  *)
+    echo "sqlx-prepare: unknown option '$1'" >&2
+    exit 2
+    ;;
+esac
+
+if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then
+  DATABASE_URL=$(grep '^DATABASE_URL=' .env | cut -d= -f2-)
+fi
+: "${DATABASE_URL:?DATABASE_URL must name the development Postgres (docs/development.md)}"
+url="${SQLX_DATABASE_URL:-${DATABASE_URL%/*}/mise_sqlx}"
+
+# The database as this checkout's migrations make it.
+DATABASE_URL="$url" cargo run -q --locked -p mise-db --example migrate
+
+committed=crates/mise-api/.sqlx
+if $check; then
+  out=$(mktemp -d)
+  trap 'rm -rf "$out"' EXIT
+else
+  out=$committed
+  mkdir -p "$out"
+  rm -f "$out"/query-*.json
+fi
+
+# The macros write their metadata while they compile against the database, and run only when mise-api compiles again.
+touch crates/mise-api/src/lib.rs
+SQLX_OFFLINE=false SQLX_OFFLINE_DIR="$(cd "$out" && pwd)" DATABASE_URL="$url" \
+  cargo check -q --locked -p mise-api --all-targets
+
+if $check; then
+  if ! diff -r -q "$committed" "$out" >/dev/null; then
+    diff -r "$committed" "$out" || true
+    echo "sqlx-prepare: crates/mise-api/.sqlx is out of date with the queries or the migrations; run scripts/sqlx-prepare and commit it" >&2
+    exit 1
+  fi
+  echo "sqlx-prepare: crates/mise-api/.sqlx matches the queries and the migrations"
+else
+  echo "sqlx-prepare: wrote $(ls "$out" | wc -l | tr -d ' ') queries to $out"
+fi

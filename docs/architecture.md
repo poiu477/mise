@@ -31,7 +31,9 @@ Migrations in `migrations/` are the schema of record; each file starts with a co
   A variant belongs to one household (`household_id`, with a `visibility`: `private`, `partners` or `install`) or,
   for seed and bundle versions, to none; the SQL function `visible_to(variant, household)` says whether a household
   can see it, from that level, the owning household's `household_partners` and the install's `sharing_cap`, and a
-  dish shows to a household only through the versions it can see.
+  dish shows to a household only through the versions it can see. Two more functions beside it are rules several
+  queries share: `default_version(dish, household)`, the version a dish opens on for a household, and
+  `known_food(food, household)`, whether a household may know of a food.
   `variant_yields` are the serving counts a version was published for. `dish_options` (protein, portion, version) are
   derived from the differences between a dish's variants. `dish_decisions` (merge, keep apart) and
   `preferred_versions` (how often each version was had) steer grouping and the default version. `retired_slugs` keep
@@ -168,6 +170,15 @@ lists every status it can answer: its own, and the shared sets in `error.rs` (`S
 `TooLarge`, `ServerError`) for what the middleware, the body extractor and a failing server answer;
 `tests/responses.rs` checks each route gives all of them and nothing else. Endpoints that change a plan or a
 list answer with the whole plan or list, so the client never has to merge.
+
+Every query is one of sqlx's checked macros, compared with the schema when `mise-api` compiles, against the metadata
+committed in `crates/mise-api/.sqlx` (docs/development.md, "Changing a query"). The larger domains keep their SQL in
+a `queries` module beside their handlers (`plan/queries.rs`, `shopping/queries.rs`, `recipes/queries.rs`,
+`auth/queries.rs` for accounts, sessions, tokens, kitchen devices and single sign-on): a function per statement,
+answering with a row struct named for what it reads, or with the API type itself when the columns are its fields.
+The handlers hold the rules and the shapes. The smaller handlers (dishes, versions, review, sharing, foods, media)
+keep their few queries inline. A rule more than one query needs (`visible_to`, `default_version`, `known_food`)
+lives in the database as a SQL function, so each query stays a single statement the compiler can check.
 
 ### Security headers and requests from other sites
 

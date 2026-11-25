@@ -34,6 +34,7 @@ Then `./target/release/mise-server` serves the app on :8080, and the first visit
 | `mise_demo` | The demo recipes (First setup above) | Development (`.env.example` points here) |
 | `mise_test_<uuid>` | Made and dropped by each API integration test | Tests only |
 | `mise_e2e` | Rebuilt from the demo recipes by each browser-journey run | The browser journeys only |
+| `mise_sqlx` | Empty, migrated to this checkout's migrations by `scripts/sqlx-prepare` | Checking `mise-api`'s queries against the schema |
 | `mise_seed` | Maintainer only: the launch seed, 237 dishes and 308 versions from meals the household received | Day-to-day use |
 | `mise` | Maintainer only: the full private archive import, about 9,900 dishes | Evidence: package sizes, pack counts, more dishes to add later |
 
@@ -263,8 +264,33 @@ Add the handler with a `#[utoipa::path]` attribute, register it in `ApiDoc` and 
 integration test in `crates/mise-api/tests/`, then regenerate the web types (`cd web && npm run api`) and add the
 type alias to `web/src/api/client.ts`.
 
+## Changing a query
+
+`mise-api`'s queries are sqlx's checked macros (`query!`, `query_as!`, `query_scalar!`): each is compared with the
+schema when it compiles, so a column that doesn't exist or a type that doesn't fit fails the build. The build reads
+what it compares against from `crates/mise-api/.sqlx`, committed, so it needs no database (`.cargo/config.toml` sets
+`SQLX_OFFLINE`, and the Dockerfile does too).
+
+After changing a query in `mise-api`, or adding a migration, refresh that metadata and commit what changes:
+
+```bash
+scripts/sqlx-prepare           # migrates mise_sqlx on the dev Postgres and rewrites crates/mise-api/.sqlx
+scripts/sqlx-prepare --check   # fails when the committed metadata no longer matches (./check and CI run this)
+```
+
+It works on `mise_sqlx`, a database of its own on the Postgres `DATABASE_URL` names, made when missing and migrated
+to the checkout's migrations each time, so it never touches a database in use (`SQLX_DATABASE_URL` names another).
+While writing a query, `SQLX_OFFLINE=false DATABASE_URL=<…>/mise_sqlx cargo check -p mise-api` checks against the
+database directly, before the metadata exists.
+
+A query that must be built at run time (a dynamic `ORDER BY`, say) keeps sqlx's unchecked functions, with a comment
+saying why. None does today. Postgres can't always tell whether a computed column can be null (a `count(*)`, an
+`EXISTS`, a cast); the column's alias says so for it, `AS "total!"` for never null and `AS "total?"` for maybe, and
+nothing else about its type is overridden, so the type is still checked.
+
 ## Changing the schema
 
 Add `migrations/00NN_<what>.sql` with a first-line comment saying what it adds. The server and `mise migrate` apply
 it. An older binary refuses to start against a database that has a migration it doesn't know, so rebuild before
-restarting after pulling.
+restarting after pulling. Then run `scripts/sqlx-prepare` (above), since the queries are checked against the new
+schema.

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE variants SET parent_variant_id = NULL WHERE parent_variant_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "18dfe2e559f6b3cf0d04c604ee82ea2a723582680c95e588cc90d6c104590bc2"
+}

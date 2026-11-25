@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM dishes d WHERE d.id = $1 AND d.origin = 'user'\n           AND NOT EXISTS (SELECT 1 FROM variants v WHERE v.dish_id = d.id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "615e462edc4d188ab89850436045e4fa504d0f206456e4ec7ac1c43ea53a93ac"
+}

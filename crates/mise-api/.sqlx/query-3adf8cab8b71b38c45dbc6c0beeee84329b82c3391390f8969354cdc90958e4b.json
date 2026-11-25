@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE variants SET title = $2, subtitle = $3, description = $4, has_steps = $5, content_hash = $6,\n                            visibility = coalesce($7, visibility)\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3adf8cab8b71b38c45dbc6c0beeee84329b82c3391390f8969354cdc90958e4b"
+}

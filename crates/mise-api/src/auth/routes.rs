@@ -11,7 +11,7 @@ use time::OffsetDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::{CurrentUser, SESSION_COOKIE, TOKEN_PREFIX, Via};
+use super::{CurrentUser, SESSION_COOKIE, TOKEN_PREFIX, Via, queries};
 use crate::{
     AppState,
     error::{ApiError, ApiResult},
@@ -37,15 +37,18 @@ pub struct AuthInfo {
     )
 )]
 pub async fn config(State(s): State<AppState>) -> ApiResult<Json<AuthInfo>> {
-    let users: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
-        .fetch_one(&s.pool)
-        .await?;
+    let users = queries::count_users(&s.pool).await?;
     Ok(Json(AuthInfo {
         local: s.auth.config.local,
         oidc: s.auth.config.oidc.as_ref().map(|o| o.name.clone()),
         setup_required: users == 0,
     }))
 }
+
+/// Held while the first account is made, so two first visitors cannot both become admin.
+const SETUP_LOCK: i64 = 724163;
+/// Held while an account changes, so two changes cannot together leave no admin.
+const ADMINS_LOCK: i64 = 724164;
 
 /// A household, by id and name.
 #[derive(Serialize, ToSchema, Clone)]
@@ -79,26 +82,20 @@ pub struct Me {
 }
 
 pub(crate) async fn load_me(pool: &sqlx::PgPool, id: Uuid) -> ApiResult<Me> {
-    let (username, display_name, email, is_admin, has_password, hid, hname): (String, String, Option<String>, bool, bool, Uuid, String) =
-        sqlx::query_as(
-            "SELECT u.username, u.display_name, u.email, u.is_admin, u.password_hash IS NOT NULL, h.id, h.name
-             FROM users u JOIN households h ON h.id = u.household_id WHERE u.id = $1",
-        )
-        .bind(id)
-        .fetch_optional(pool)
+    let a = queries::account(pool, id)
         .await?
         .ok_or(ApiError::Unauthorized)?;
     Ok(Me {
         id,
-        username,
-        display_name,
-        email,
-        is_admin,
+        username: a.username,
+        display_name: a.display_name,
+        email: a.email,
+        is_admin: a.is_admin,
         household: Household {
-            id: hid,
-            name: hname,
+            id: a.household_id,
+            name: a.household,
         },
-        has_password,
+        has_password: a.has_password,
         kitchen: false,
     })
 }
@@ -136,33 +133,28 @@ pub async fn setup(
     super::validate_password(&r.password)?;
     let hash = super::hash_password(&r.password)?;
     let mut tx = s.pool.begin().await?;
-    // One setup at a time, so two first visitors cannot both become admin.
-    sqlx::query("SELECT pg_advisory_xact_lock(724163)")
-        .execute(&mut *tx)
-        .await?;
-    let users: i64 = sqlx::query_scalar("SELECT count(*) FROM users")
-        .fetch_one(&mut *tx)
-        .await?;
+    queries::lock_accounts(&mut *tx, SETUP_LOCK).await?;
+    let users = queries::count_users(&mut *tx).await?;
     if users > 0 {
         return Err(ApiError::Conflict(
             "this install is already set up; sign in instead".into(),
         ));
     }
     let household = Uuid::now_v7();
-    sqlx::query("INSERT INTO households (id, name) VALUES ($1, $2)")
-        .bind(household)
-        .bind(non_empty(r.household).unwrap_or_else(|| "Home".into()))
-        .execute(&mut *tx)
-        .await?;
+    let household_name = non_empty(r.household).unwrap_or_else(|| "Home".into());
+    queries::add_household(&mut *tx, household, &household_name).await?;
     let id = Uuid::now_v7();
-    sqlx::query("INSERT INTO users (id, username, display_name, password_hash, is_admin, household_id) VALUES ($1, $2, $3, $4, true, $5)")
-        .bind(id)
-        .bind(&username)
-        .bind(non_empty(r.display_name).unwrap_or_else(|| username.clone()))
-        .bind(hash)
-        .bind(household)
-        .execute(&mut *tx)
-        .await?;
+    let display_name = non_empty(r.display_name).unwrap_or_else(|| username.clone());
+    let account = queries::NewAccount {
+        id,
+        username: &username,
+        display_name: &display_name,
+        email: None,
+        password_hash: Some(&hash),
+        is_admin: true,
+        household,
+    };
+    queries::add_account(&mut *tx, account).await?;
     tx.commit().await?;
     tracing::info!(%username, "first account created");
     let token = super::create_session(
@@ -214,17 +206,13 @@ pub async fn login(
     if let Some(wait) = s.auth.limiter.locked_for(&key) {
         return Err(ApiError::TooManyRequests(wait));
     }
-    let row: Option<(Uuid, Option<String>, bool)> =
-        sqlx::query_as("SELECT id, password_hash, disabled FROM users WHERE lower(username) = $1")
-            .bind(&key)
-            .fetch_optional(&s.pool)
-            .await?;
+    let row = queries::login(&s.pool, &key).await?;
     let password = r.password;
-    let hash = row.as_ref().and_then(|r| r.1.clone());
+    let hash = row.as_ref().and_then(|r| r.password_hash.clone());
     let ok = tokio::task::spawn_blocking(move || super::check_password(&password, hash.as_deref()))
         .await
         .map_err(|e| ApiError::Internal(e.into()))?;
-    let Some((id, _, disabled)) = row.filter(|_| ok) else {
+    let Some(queries::LoginRow { id, disabled, .. }) = row.filter(|_| ok) else {
         s.auth.limiter.failed(&key);
         return Err(ApiError::BadCredentials);
     };
@@ -258,10 +246,7 @@ pub async fn logout(
     jar: CookieJar,
 ) -> ApiResult<(CookieJar, StatusCode)> {
     if let Some(c) = jar.get(SESSION_COOKIE) {
-        sqlx::query("DELETE FROM sessions WHERE token_hash = $1")
-            .bind(super::secret_hash(c.value()))
-            .execute(&s.pool)
-            .await?;
+        queries::end_session(&s.pool, &super::secret_hash(c.value())).await?;
     }
     Ok((
         jar.add(super::removal_cookie(&s.auth.config)),
@@ -313,11 +298,7 @@ pub async fn change_password(
 ) -> ApiResult<StatusCode> {
     session_only(&u)?;
     super::validate_password(&r.new)?;
-    let current: Option<String> =
-        sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1")
-            .bind(u.id)
-            .fetch_one(&s.pool)
-            .await?;
+    let current = queries::password_hash(&s.pool, u.id).await?;
     if let Some(hash) = current {
         let given = r.current.unwrap_or_default();
         let ok = tokio::task::spawn_blocking(move || super::verify_password(&given, &hash))
@@ -331,20 +312,12 @@ pub async fn change_password(
     let hash = tokio::task::spawn_blocking(move || super::hash_password(&new))
         .await
         .map_err(|e| ApiError::Internal(e.into()))??;
-    sqlx::query("UPDATE users SET password_hash = $2 WHERE id = $1")
-        .bind(u.id)
-        .bind(hash)
-        .execute(&s.pool)
-        .await?;
+    queries::set_password_hash(&s.pool, u.id, &hash).await?;
     let keep = jar
         .get(SESSION_COOKIE)
         .map(|c| super::secret_hash(c.value()))
         .unwrap_or_default();
-    sqlx::query("DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2")
-        .bind(u.id)
-        .bind(keep)
-        .execute(&s.pool)
-        .await?;
+    queries::end_other_sessions(&s.pool, u.id, &keep).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -383,9 +356,6 @@ pub struct NewToken {
     pub info: TokenInfo,
 }
 
-/// id, name, scope, created, last used.
-type TokenRow = (Uuid, String, String, OffsetDateTime, Option<OffsetDateTime>);
-
 /// This account's API tokens.
 #[utoipa::path(get, path = "/api/v1/me/tokens", operation_id = "list_tokens", tag = "account",
     responses(
@@ -398,22 +368,7 @@ pub async fn list_tokens(
     State(s): State<AppState>,
     Extension(u): Extension<CurrentUser>,
 ) -> ApiResult<Json<Vec<TokenInfo>>> {
-    let rows: Vec<TokenRow> =
-        sqlx::query_as("SELECT id, name, scope, created_at, last_used_at FROM api_tokens WHERE user_id = $1 ORDER BY created_at")
-            .bind(u.id)
-            .fetch_all(&s.pool)
-            .await?;
-    Ok(Json(
-        rows.into_iter()
-            .map(|(id, name, scope, created_at, last_used_at)| TokenInfo {
-                id,
-                name,
-                scope,
-                created_at,
-                last_used_at,
-            })
-            .collect(),
-    ))
+    Ok(Json(queries::api_tokens(&s.pool, u.id).await?))
 }
 
 /// Make an API token. Only from a browser session, so one token cannot mint another.
@@ -441,15 +396,15 @@ pub async fn create_token(
         .ok_or_else(|| ApiError::BadRequest("give the token a name".into()))?;
     let secret = super::new_secret();
     let id = Uuid::now_v7();
-    let created_at: OffsetDateTime =
-        sqlx::query_scalar("INSERT INTO api_tokens (id, user_id, name, token_hash, scope) VALUES ($1, $2, $3, $4, $5) RETURNING created_at")
-            .bind(id)
-            .bind(u.id)
-            .bind(&name)
-            .bind(super::secret_hash(&secret))
-            .bind(&r.scope)
-            .fetch_one(&s.pool)
-            .await?;
+    let created_at = queries::add_api_token(
+        &s.pool,
+        id,
+        u.id,
+        &name,
+        &super::secret_hash(&secret),
+        &r.scope,
+    )
+    .await?;
     Ok(Json(NewToken {
         token: format!("{TOKEN_PREFIX}{secret}"),
         info: TokenInfo {
@@ -477,16 +432,10 @@ pub async fn delete_token(
     Extension(u): Extension<CurrentUser>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<StatusCode> {
-    let n = sqlx::query("DELETE FROM api_tokens WHERE id = $1 AND user_id = $2")
-        .bind(id)
-        .bind(u.id)
-        .execute(&s.pool)
-        .await?
-        .rows_affected();
-    if n == 0 {
-        Err(ApiError::NotFound)
-    } else {
+    if queries::delete_api_token(&s.pool, id, u.id).await? {
         Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(ApiError::NotFound)
     }
 }
 
@@ -526,54 +475,24 @@ pub async fn list_users(
     Extension(u): Extension<CurrentUser>,
 ) -> ApiResult<Json<Vec<UserInfo>>> {
     u.require_admin()?;
-    type Row = (
-        Uuid,
-        String,
-        String,
-        Option<String>,
-        bool,
-        bool,
-        Uuid,
-        String,
-        bool,
-        i64,
-    );
-    let rows: Vec<Row> = sqlx::query_as(
-        "SELECT u.id, u.username, u.display_name, u.email, u.is_admin, u.disabled, h.id, h.name, u.password_hash IS NOT NULL,
-                (SELECT count(*) FROM user_identities i WHERE i.user_id = u.id)
-         FROM users u JOIN households h ON h.id = u.household_id ORDER BY lower(u.username)",
-    )
-    .fetch_all(&s.pool)
-    .await?;
     Ok(Json(
-        rows.into_iter()
-            .map(
-                |(
-                    id,
-                    username,
-                    display_name,
-                    email,
-                    is_admin,
-                    disabled,
-                    hid,
-                    hname,
-                    has_password,
-                    identities,
-                )| UserInfo {
-                    id,
-                    username,
-                    display_name,
-                    email,
-                    is_admin,
-                    disabled,
-                    household: Household {
-                        id: hid,
-                        name: hname,
-                    },
-                    has_password,
-                    identities,
+        queries::accounts(&s.pool)
+            .await?
+            .into_iter()
+            .map(|a| UserInfo {
+                id: a.id,
+                username: a.username,
+                display_name: a.display_name,
+                email: a.email,
+                is_admin: a.is_admin,
+                disabled: a.disabled,
+                household: Household {
+                    id: a.household_id,
+                    name: a.household,
                 },
-            )
+                has_password: a.has_password,
+                identities: a.identities,
+            })
             .collect(),
     ))
 }
@@ -630,11 +549,7 @@ pub async fn add_user(pool: &sqlx::PgPool, r: NewUser) -> ApiResult<Uuid> {
         None => None,
     };
     let mut tx = pool.begin().await?;
-    let taken: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM users WHERE lower(username) = lower($1) OR (email IS NOT NULL AND lower(email) = lower($2)))")
-        .bind(&username)
-        .bind(r.email.as_deref().unwrap_or(""))
-        .fetch_one(&mut *tx)
-        .await?;
+    let taken = queries::name_taken(&mut *tx, &username, r.email.as_deref().unwrap_or("")).await?;
     if taken {
         return Err(ApiError::Conflict(
             "that username or email is already in use".into(),
@@ -642,11 +557,7 @@ pub async fn add_user(pool: &sqlx::PgPool, r: NewUser) -> ApiResult<Uuid> {
     }
     let household = match (r.household_id, non_empty(r.household_name)) {
         (Some(h), _) => {
-            let exists: bool =
-                sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM households WHERE id = $1)")
-                    .bind(h)
-                    .fetch_one(&mut *tx)
-                    .await?;
+            let exists = queries::household_exists(&mut *tx, h).await?;
             if !exists {
                 return Err(ApiError::BadRequest("no such household".into()));
             }
@@ -654,27 +565,24 @@ pub async fn add_user(pool: &sqlx::PgPool, r: NewUser) -> ApiResult<Uuid> {
         }
         (None, name) => {
             let h = Uuid::now_v7();
-            sqlx::query("INSERT INTO households (id, name) VALUES ($1, $2)")
-                .bind(h)
-                .bind(name.unwrap_or_else(|| format!("{username}'s household")))
-                .execute(&mut *tx)
-                .await?;
+            let name = name.unwrap_or_else(|| format!("{username}'s household"));
+            queries::add_household(&mut *tx, h, &name).await?;
             h
         }
     };
     let id = Uuid::now_v7();
-    sqlx::query(
-        "INSERT INTO users (id, username, display_name, email, password_hash, is_admin, household_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-    )
-    .bind(id)
-    .bind(&username)
-    .bind(non_empty(r.display_name).unwrap_or_else(|| username.clone()))
-    .bind(non_empty(r.email))
-    .bind(hash)
-    .bind(r.is_admin)
-    .bind(household)
-    .execute(&mut *tx)
-    .await?;
+    let display_name = non_empty(r.display_name).unwrap_or_else(|| username.clone());
+    let email = non_empty(r.email);
+    let account = queries::NewAccount {
+        id,
+        username: &username,
+        display_name: &display_name,
+        email: email.as_deref(),
+        password_hash: hash.as_deref(),
+        is_admin: r.is_admin,
+        household,
+    };
+    queries::add_account(&mut *tx, account).await?;
     tx.commit().await?;
     Ok(id)
 }
@@ -711,15 +619,10 @@ pub async fn update_user(
 ) -> ApiResult<Json<Me>> {
     u.require_admin()?;
     let mut tx = s.pool.begin().await?;
-    sqlx::query("SELECT pg_advisory_xact_lock(724164)")
-        .execute(&mut *tx)
-        .await?;
-    let (is_admin, disabled): (bool, bool) =
-        sqlx::query_as("SELECT is_admin, disabled FROM users WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or(ApiError::NotFound)?;
+    queries::lock_accounts(&mut *tx, ADMINS_LOCK).await?;
+    let queries::RoleRow { is_admin, disabled } = queries::role(&mut *tx, id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     let (new_admin, new_disabled) = (
         r.is_admin.unwrap_or(is_admin),
         r.disabled.unwrap_or(disabled),
@@ -730,22 +633,13 @@ pub async fn update_user(
         ));
     }
     if is_admin && !disabled && (!new_admin || new_disabled) {
-        let others: i64 = sqlx::query_scalar(
-            "SELECT count(*) FROM users WHERE is_admin AND NOT disabled AND id <> $1",
-        )
-        .bind(id)
-        .fetch_one(&mut *tx)
-        .await?;
+        let others = queries::other_admins(&mut *tx, id).await?;
         if others == 0 {
             return Err(ApiError::BadRequest("this is the last admin".into()));
         }
     }
     if let Some(h) = r.household_id {
-        let exists: bool =
-            sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM households WHERE id = $1)")
-                .bind(h)
-                .fetch_one(&mut *tx)
-                .await?;
+        let exists = queries::household_exists(&mut *tx, h).await?;
         if !exists {
             return Err(ApiError::BadRequest("no such household".into()));
         }
@@ -757,21 +651,17 @@ pub async fn update_user(
         }
         None => None,
     };
-    sqlx::query(
-        "UPDATE users SET is_admin = $2, disabled = $3, household_id = coalesce($4, household_id), password_hash = coalesce($5, password_hash) WHERE id = $1",
+    queries::update_account(
+        &mut *tx,
+        id,
+        new_admin,
+        new_disabled,
+        r.household_id,
+        hash.as_deref(),
     )
-    .bind(id)
-    .bind(new_admin)
-    .bind(new_disabled)
-    .bind(r.household_id)
-    .bind(&hash)
-    .execute(&mut *tx)
     .await?;
     if new_disabled || hash.is_some() {
-        sqlx::query("DELETE FROM sessions WHERE user_id = $1")
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
+        queries::end_sessions(&mut *tx, id).await?;
     }
     tx.commit().await?;
     Ok(Json(load_me(&s.pool, id).await?))
@@ -790,14 +680,7 @@ pub async fn list_households(
     Extension(u): Extension<CurrentUser>,
 ) -> ApiResult<Json<Vec<Household>>> {
     u.require_admin()?;
-    let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, name FROM households ORDER BY name")
-        .fetch_all(&s.pool)
-        .await?;
-    Ok(Json(
-        rows.into_iter()
-            .map(|(id, name)| Household { id, name })
-            .collect(),
-    ))
+    Ok(Json(queries::households(&s.pool).await?))
 }
 
 /// A household to make.
@@ -826,11 +709,7 @@ pub async fn create_household(
     let name = non_empty(Some(r.name))
         .ok_or_else(|| ApiError::BadRequest("give the household a name".into()))?;
     let id = Uuid::now_v7();
-    sqlx::query("INSERT INTO households (id, name) VALUES ($1, $2)")
-        .bind(id)
-        .bind(&name)
-        .execute(&s.pool)
-        .await?;
+    queries::add_household(&s.pool, id, &name).await?;
     Ok(Json(Household { id, name }))
 }
 

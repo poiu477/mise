@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO variant_media (variant_id, media_id, role, position)\n         SELECT $2, media_id, 'hero', 0 FROM variant_media WHERE variant_id = $1 AND role = 'hero' LIMIT 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "035d1dc067024a6314d490c03dbb64d75cf3408e0e3ae71f2bb76b72468578d5"
+}

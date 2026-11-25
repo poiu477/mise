@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT step_id AS \"step_id!\", media_id FROM variant_media\n           WHERE variant_id = $1 AND role = 'step' AND step_id IS NOT NULL ORDER BY position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "step_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "variant_media",
+            "name": "step_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "media_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "variant_media",
+            "name": "media_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "9c575ab613d6b0d0055859c1b53b8b09d96a1559d0e9026f6563e672d8f2abf1"
+}

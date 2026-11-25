@@ -47,19 +47,6 @@ impl Image {
     }
 }
 
-/// Where photo `$1` is stored and its type, at web size `$3` when that copy exists and as the original otherwise
-/// (`$3` null asks for the original); no row unless household `$2` may see the photo. Photos are stored once by
-/// content, so one photo can be several versions': it is enough that the household can see one of them
-/// (`visible_to`, the rule every recipe query uses). A food's picture comes only from versions no household owns
-/// (`mise-ingest`'s media pass), so it is everyone's.
-const VISIBLE_PHOTO: &str = "
-    SELECT coalesce(d.path, m.path), coalesce(d.mime, m.mime)
-    FROM media m LEFT JOIN media_derivatives d ON d.media_id = m.id AND d.max_side = $3
-    WHERE m.id = $1
-      AND (EXISTS (SELECT 1 FROM variant_media vm JOIN variants v ON v.id = vm.variant_id
-                   WHERE vm.media_id = m.id AND visible_to(v, $2))
-           OR EXISTS (SELECT 1 FROM foods f WHERE f.props->>'image_media_id' = m.id::text))";
-
 /// A photo. `size` is `400`, `1200` or `original`; a size the photo was never made in falls back to the original.
 /// A photo is served only to a household that can see a version using it; a food's picture is served to everyone.
 /// Another household's photo is not found, as if it didn't exist.
@@ -88,13 +75,26 @@ pub async fn get(
                 .ok_or_else(|| ApiError::BadRequest("size must be 400, 1200 or original".into()))?,
         ),
     };
-    let (path, mime): (String, String) = sqlx::query_as(VISIBLE_PHOTO)
-        .bind(id)
-        .bind(me.household_id)
-        .bind(max_side)
-        .fetch_optional(&s.pool)
-        .await?
-        .ok_or(ApiError::NotFound)?;
+    // Where the photo is stored and its type, at the web size asked for when that copy exists and as the original
+    // otherwise (a null size asks for the original); no row unless the household may see the photo. Photos are
+    // stored once by content, so one photo can be several versions': it is enough that the household can see one of
+    // them (`visible_to`, the rule every recipe query uses). A food's picture comes only from versions no household
+    // owns (`mise-ingest`'s media pass), so it is everyone's.
+    let photo = sqlx::query!(
+        r#"SELECT coalesce(d.path, m.path) AS "path!", coalesce(d.mime, m.mime) AS "mime!"
+           FROM media m LEFT JOIN media_derivatives d ON d.media_id = m.id AND d.max_side = $3
+           WHERE m.id = $1
+             AND (EXISTS (SELECT 1 FROM variant_media vm JOIN variants v ON v.id = vm.variant_id
+                          WHERE vm.media_id = m.id AND visible_to(v, $2))
+                  OR EXISTS (SELECT 1 FROM foods f WHERE f.props->>'image_media_id' = m.id::text))"#,
+        id,
+        me.household_id,
+        max_side
+    )
+    .fetch_optional(&s.pool)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+    let (path, mime) = (photo.path, photo.mime);
     let bytes = tokio::fs::read(s.media_root.join(&path))
         .await
         .map_err(|e| {

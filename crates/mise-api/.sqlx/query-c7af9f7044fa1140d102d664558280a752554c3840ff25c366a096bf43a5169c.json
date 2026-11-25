@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE api_tokens SET last_used_at = now()\n         WHERE token_hash = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c7af9f7044fa1140d102d664558280a752554c3840ff25c366a096bf43a5169c"
+}

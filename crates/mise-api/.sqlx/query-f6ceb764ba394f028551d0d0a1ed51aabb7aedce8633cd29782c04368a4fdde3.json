@@ -1,0 +1,104 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.id, d.slug, d.title, d.subtitle, d.content_type::text AS \"content_type!\",\n                  (SELECT count(*) FROM variants v WHERE v.dish_id = d.id AND visible_to(v, $1)) AS \"versions!\",\n                  dv.id AS default_variant,\n                  (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = dv.id AND vm.role = 'hero'\n                   LIMIT 1) AS hero,\n                  count(*) OVER () AS \"total!\"\n           FROM dishes d CROSS JOIN LATERAL (SELECT default_version(d, $1) AS id) dv\n           WHERE dv.id IS NOT NULL\n             AND ($2::text IS NULL OR d.title ILIKE '%' || $2 || '%' OR d.title % $2\n                  OR d.subtitle ILIKE '%' || $2 || '%')\n             AND ($3::text IS NULL OR EXISTS (\n                   SELECT 1 FROM ingredient_lines il JOIN foods f ON f.id = il.food_id\n                   WHERE il.variant_id = dv.id AND f.name ILIKE '%' || $3 || '%'))\n             AND ($4::text IS NULL OR d.content_type::text = $4)\n           ORDER BY CASE WHEN $2::text IS NULL THEN 0 ELSE similarity(d.title, $2) END DESC, \"versions!\" DESC, d.title\n           LIMIT $5 OFFSET $6",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "dishes",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "dishes",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "dishes",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "subtitle",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "dishes",
+            "name": "subtitle"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "content_type!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "versions!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "default_variant",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "hero",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "f6ceb764ba394f028551d0d0a1ed51aabb7aedce8633cd29782c04368a4fdde3"
+}

@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT coalesce(d.path, m.path) AS \"path!\", coalesce(d.mime, m.mime) AS \"mime!\"\n           FROM media m LEFT JOIN media_derivatives d ON d.media_id = m.id AND d.max_side = $3\n           WHERE m.id = $1\n             AND (EXISTS (SELECT 1 FROM variant_media vm JOIN variants v ON v.id = vm.variant_id\n                          WHERE vm.media_id = m.id AND visible_to(v, $2))\n                  OR EXISTS (SELECT 1 FROM foods f WHERE f.props->>'image_media_id' = m.id::text))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "path!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "mime!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "5abdca6ffec2fef4d000d9ac26ab2559de0ea9977b999a2e4789237e75606478"
+}

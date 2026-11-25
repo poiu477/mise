@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT key, label, choices, default_value FROM dish_options WHERE dish_id = $1 ORDER BY position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "dish_options",
+            "name": "key"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "dish_options",
+            "name": "label"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "choices",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "dish_options",
+            "name": "choices"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "default_value",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "dish_options",
+            "name": "default_value"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3093ec3c8fbc4714614127527ce79e41809b0441c18904dbed8eb4503347cfa5"
+}

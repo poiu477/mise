@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM variant_media WHERE variant_id = $1 AND role = 'hero'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1b15e41dbeeb67de0f197e1ee7ec79be87eec04722da95d035402a64c40f2ede"
+}

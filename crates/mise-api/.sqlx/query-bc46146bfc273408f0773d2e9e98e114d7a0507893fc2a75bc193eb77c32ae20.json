@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO sharing_cap (only_row, max_level) VALUES (true, $1)\n         ON CONFLICT (only_row) DO UPDATE SET max_level = excluded.max_level",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bc46146bfc273408f0773d2e9e98e114d7a0507893fc2a75bc193eb77c32ae20"
+}

@@ -6,6 +6,8 @@ use time::{Date, OffsetDateTime};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
+mod queries;
+
 use crate::{
     AppState,
     auth::CurrentUser,
@@ -58,45 +60,22 @@ pub struct Plan {
     pub entries: Vec<PlanEntry>,
 }
 
-type EntryRow = (
-    Uuid,
-    Uuid,
-    Option<String>,
-    String,
-    Option<String>,
-    f64,
-    Vec<f64>,
-    Option<Uuid>,
-);
-
 /// A week's plan, with only the versions the household can see: one it can no longer see drops out rather than
 /// showing another household's recipe.
 async fn load(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan> {
-    let rows: Vec<EntryRow> = sqlx::query_as(
-        "SELECT e.id, e.variant_id, d.slug, v.title, v.subtitle, e.servings::float8,
-                ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id ORDER BY y.servings),
-                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1)
-         FROM plan_entries e JOIN variants v ON v.id = e.variant_id LEFT JOIN dishes d ON d.id = v.dish_id
-         WHERE e.household_id = $1 AND e.week = $2 AND visible_to(v, $1) ORDER BY e.created_at, e.id",
-    )
-    .bind(household)
-    .bind(week)
-    .fetch_all(&s.pool)
-    .await?;
-    let entries = rows
+    let entries = queries::entries(&s.pool, household, week)
+        .await?
         .into_iter()
-        .map(
-            |(id, variant_id, dish_slug, title, subtitle, servings, yields, hero)| PlanEntry {
-                id,
-                variant_id,
-                dish_slug,
-                title,
-                subtitle,
-                servings,
-                yields,
-                image: hero.map(Image::new),
-            },
-        )
+        .map(|e| PlanEntry {
+            id: e.id,
+            variant_id: e.variant_id,
+            dish_slug: e.dish_slug,
+            title: e.title,
+            subtitle: e.subtitle,
+            servings: e.servings,
+            yields: e.yields,
+            image: e.hero.map(Image::new),
+        })
         .collect();
     Ok(Plan { week, entries })
 }
@@ -158,14 +137,9 @@ pub async fn add(
     Extension(me): Extension<CurrentUser>,
     JsonBody(b): JsonBody<NewEntry>,
 ) -> ApiResult<Json<Plan>> {
-    let yields: Option<(Vec<f64>,)> = sqlx::query_as(
-        "SELECT ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = v.id ORDER BY y.servings) FROM variants v WHERE v.id = $1 AND visible_to(v, $2)",
-    )
-    .bind(b.variant_id)
-    .bind(me.household_id)
-    .fetch_optional(&s.pool)
-    .await?;
-    let (yields,) = yields.ok_or(ApiError::NotFound)?;
+    let yields = queries::version_yields(&s.pool, b.variant_id, me.household_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     let servings = b.servings.unwrap_or_else(|| {
         if yields.contains(&2.0) {
             2.0
@@ -175,15 +149,15 @@ pub async fn add(
     });
     check_servings(servings, &yields)?;
     let week = monday(b.week);
-    sqlx::query("INSERT INTO plan_entries (id, household_id, week, variant_id, servings, added_by) VALUES ($1, $2, $3, $4, $5::float8::numeric, $6)")
-        .bind(Uuid::now_v7())
-        .bind(me.household_id)
-        .bind(week)
-        .bind(b.variant_id)
-        .bind(servings)
-        .bind(me.id)
-        .execute(&s.pool)
-        .await?;
+    queries::add(
+        &s.pool,
+        me.household_id,
+        week,
+        b.variant_id,
+        servings,
+        me.id,
+    )
+    .await?;
     Ok(Json(load(&s, me.household_id, week).await?))
 }
 
@@ -213,21 +187,11 @@ pub async fn update(
     Path(id): Path<Uuid>,
     JsonBody(b): JsonBody<EntryChange>,
 ) -> ApiResult<Json<Plan>> {
-    let yields: Vec<f64> = sqlx::query_scalar(
-        "SELECT ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = e.variant_id)
-         FROM plan_entries e WHERE e.id = $1 AND e.household_id = $2",
-    )
-    .bind(id)
-    .bind(me.household_id)
-    .fetch_optional(&s.pool)
-    .await?
-    .ok_or(ApiError::NotFound)?;
+    let yields = queries::entry_yields(&s.pool, id, me.household_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     check_servings(b.servings, &yields)?;
-    let week: Date = sqlx::query_scalar("UPDATE plan_entries SET servings = $3::float8::numeric WHERE id = $1 AND household_id = $2 RETURNING week")
-        .bind(id)
-        .bind(me.household_id)
-        .bind(b.servings)
-        .fetch_optional(&s.pool)
+    let week = queries::set_servings(&s.pool, id, me.household_id, b.servings)
         .await?
         .ok_or(ApiError::NotFound)?;
     Ok(Json(load(&s, me.household_id, week).await?))
@@ -249,14 +213,9 @@ pub async fn remove(
     Extension(me): Extension<CurrentUser>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Plan>> {
-    let week: Date = sqlx::query_scalar(
-        "DELETE FROM plan_entries WHERE id = $1 AND household_id = $2 RETURNING week",
-    )
-    .bind(id)
-    .bind(me.household_id)
-    .fetch_optional(&s.pool)
-    .await?
-    .ok_or(ApiError::NotFound)?;
+    let week = queries::remove(&s.pool, id, me.household_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     Ok(Json(load(&s, me.household_id, week).await?))
 }
 

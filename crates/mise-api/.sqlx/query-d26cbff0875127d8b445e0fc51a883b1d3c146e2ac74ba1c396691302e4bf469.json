@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO dishes (id, title, subtitle, slug, content_type, default_variant_id, origin)\n         VALUES ($1, $2, $3, $4, 'recipe', $5, 'user')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d26cbff0875127d8b445e0fc51a883b1d3c146e2ac74ba1c396691302e4bf469"
+}

@@ -34,6 +34,8 @@ use tokio::sync::Semaphore;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+mod queries;
+
 use crate::{
     AppState,
     auth::CurrentUser,
@@ -264,7 +266,7 @@ impl Checked {
 }
 
 /// Refuses a recipe that names a food that doesn't exist, saying which line. A food the household couldn't have
-/// found by searching (`foods::KNOWN_FOOD`) doesn't exist for it.
+/// found by searching (`known_food`, a database function) doesn't exist for it.
 async fn check_foods(
     tx: &mut Transaction<'_, Postgres>,
     household: Uuid,
@@ -274,14 +276,7 @@ async fn check_foods(
     if chosen.is_empty() {
         return Ok(());
     }
-    let known: Vec<Uuid> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-        "SELECT f.id FROM foods f WHERE f.id = ANY($2) AND {}",
-        crate::foods::KNOWN_FOOD
-    )))
-    .bind(household)
-    .bind(&chosen)
-    .fetch_all(&mut **tx)
-    .await?;
+    let known = queries::known_foods(&mut **tx, household, &chosen).await?;
     match lines
         .iter()
         .position(|l| l.food_id.is_some_and(|f| !known.contains(&f)))
@@ -292,15 +287,6 @@ async fn check_foods(
         ))),
         None => Ok(()),
     }
-}
-
-/// Waits for any other save to finish; held until this transaction ends.
-async fn take_turn(tx: &mut Transaction<'_, Postgres>) -> ApiResult<()> {
-    sqlx::query("SELECT pg_advisory_xact_lock($1)")
-        .bind(SAVING_LOCK)
-        .execute(&mut **tx)
-        .await?;
-    Ok(())
 }
 
 /// An address no dish has or used to have, for a dish titled `title`: its slug, or that with "-2", "-3" and so on.
@@ -314,16 +300,7 @@ async fn free_slug(
         s if s.is_empty() => "recipe".to_string(),
         s => s,
     };
-    // A slug holds letters, digits and hyphens only, so it is safe as a LIKE pattern.
-    let taken: Vec<String> = sqlx::query_scalar(
-        "SELECT slug FROM dishes WHERE (slug = $1 OR slug LIKE $1 || '-%') AND id IS DISTINCT FROM $2
-         UNION
-         SELECT slug FROM retired_slugs WHERE (slug = $1 OR slug LIKE $1 || '-%') AND dish_id IS DISTINCT FROM $2",
-    )
-    .bind(&base)
-    .bind(dish)
-    .fetch_all(&mut **tx)
-    .await?;
+    let taken = queries::taken_slugs(&mut **tx, &base, dish).await?;
     let mut slug = base.clone();
     let mut n = 2;
     while taken.contains(&slug) {
@@ -340,13 +317,7 @@ async fn write_parts(
     variant: Uuid,
     recipe: &Checked,
 ) -> ApiResult<()> {
-    sqlx::query(
-        "INSERT INTO variant_yields (variant_id, servings) VALUES ($1, $2::float8::numeric)",
-    )
-    .bind(variant)
-    .bind(recipe.servings)
-    .execute(&mut **tx)
-    .await?;
+    queries::add_yield(&mut **tx, variant, recipe.servings).await?;
 
     // A line's key is its place from 1, as an imported page's lines are keyed.
     let keyed: Vec<(String, String)> = recipe
@@ -357,47 +328,32 @@ async fn write_parts(
         .collect();
     for (i, (line, (key, name))) in recipe.lines.iter().zip(&keyed).enumerate() {
         let id = Uuid::now_v7();
-        sqlx::query(
-            "INSERT INTO ingredient_lines (id, variant_id, line_key, position, raw_name, food_id, note, text)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-        )
-        .bind(id)
-        .bind(variant)
-        .bind(key)
-        .bind(i as i32)
-        .bind(name)
-        .bind(line.food_id)
-        .bind(&line.read.note)
-        .bind(&line.text)
-        .execute(&mut **tx)
-        .await?;
+        let new = queries::NewLine {
+            id,
+            variant,
+            key,
+            position: i as i32,
+            name,
+            food_id: line.food_id,
+            note: line.read.note.as_deref(),
+            text: &line.text,
+        };
+        queries::add_line(&mut **tx, new).await?;
         if let Some(amount) = line.read.amount {
-            sqlx::query(
-                "INSERT INTO line_amounts (line_id, servings, amount, unit)
-                 VALUES ($1, $2::float8::numeric, $3::float8::numeric, $4)",
+            queries::add_amount(
+                &mut **tx,
+                id,
+                recipe.servings,
+                amount,
+                line.read.unit_word(),
             )
-            .bind(id)
-            .bind(recipe.servings)
-            .bind(amount)
-            .bind(line.read.unit_word())
-            .execute(&mut **tx)
             .await?;
         }
     }
     for (i, text) in recipe.steps.iter().enumerate() {
         let template = mise_ingest::steps::template(text, &recipe.title, &keyed);
-        let template =
-            serde_json::to_string(&template).map_err(|e| ApiError::Internal(e.into()))?;
-        sqlx::query(
-            "INSERT INTO steps (id, variant_id, position, text, template) VALUES ($1, $2, $3, $4, $5::jsonb)",
-        )
-        .bind(Uuid::now_v7())
-        .bind(variant)
-        .bind(i as i32)
-        .bind(text)
-        .bind(template)
-        .execute(&mut **tx)
-        .await?;
+        let template = serde_json::to_value(&template).map_err(|e| ApiError::Internal(e.into()))?;
+        queries::add_step(&mut **tx, variant, i as i32, text, template).await?;
     }
     mise_ingest::foods::match_foods_in(tx).await?;
     Ok(())
@@ -417,23 +373,16 @@ async fn line_facts(
     tx: &mut Transaction<'_, Postgres>,
     variant: Uuid,
 ) -> ApiResult<Vec<LineFacts>> {
-    Ok(
-        sqlx::query_as::<_, (Option<Uuid>, String, Option<bool>, Vec<String>)>(
-            "SELECT food_id, raw_name, shipped, allergens FROM ingredient_lines
-         WHERE variant_id = $1 AND (shipped IS NOT NULL OR allergens <> '{}') ORDER BY position",
-        )
-        .bind(variant)
-        .fetch_all(&mut **tx)
+    Ok(queries::line_facts(&mut **tx, variant)
         .await?
         .into_iter()
-        .map(|(food_id, name, shipped, allergens)| LineFacts {
-            food_id,
-            name: singular_key(&name),
-            shipped,
-            allergens,
+        .map(|f| LineFacts {
+            food_id: f.food_id,
+            name: singular_key(&f.raw_name),
+            shipped: f.shipped,
+            allergens: f.allergens,
         })
-        .collect(),
-    )
+        .collect())
 }
 
 /// Gives each of a version's lines the facts of the line it replaces: the one for the same food, or with the same
@@ -447,24 +396,14 @@ async fn carry_facts(
     if facts.is_empty() {
         return Ok(());
     }
-    let lines: Vec<(Uuid, Option<Uuid>, String)> =
-        sqlx::query_as("SELECT id, food_id, raw_name FROM ingredient_lines WHERE variant_id = $1")
-            .bind(variant)
-            .fetch_all(&mut **tx)
-            .await?;
-    for (id, food_id, name) in lines {
-        let name = singular_key(&name);
-        let same = |f: &&LineFacts| match (food_id, f.food_id) {
+    for line in queries::lines(&mut **tx, variant).await? {
+        let name = singular_key(&line.raw_name);
+        let same = |f: &&LineFacts| match (line.food_id, f.food_id) {
             (Some(a), Some(b)) => a == b,
             _ => f.name == name,
         };
         if let Some(f) = facts.iter().find(same) {
-            sqlx::query("UPDATE ingredient_lines SET shipped = $2, allergens = $3 WHERE id = $1")
-                .bind(id)
-                .bind(f.shipped)
-                .bind(&f.allergens)
-                .execute(&mut **tx)
-                .await?;
+            queries::set_line_facts(&mut **tx, line.id, f.shipped, &f.allergens).await?;
         }
     }
     Ok(())
@@ -473,75 +412,33 @@ async fn carry_facts(
 /// The recipe `id` as it was written, for the household that wrote it; not found for anyone else, and for a
 /// version that wasn't written in the app.
 async fn load(tx: &mut Transaction<'_, Postgres>, id: Uuid, household: Uuid) -> ApiResult<Recipe> {
-    type Row = (
-        String,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<f64>,
-        Option<Uuid>,
-        String,
-    );
-    let (title, subtitle, description, dish_slug, servings, hero, visibility): Row = sqlx::query_as(
-        "SELECT v.title, v.subtitle, v.description, d.slug,
-                (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id),
-                (SELECT vm.media_id FROM variant_media vm WHERE vm.variant_id = v.id AND vm.role = 'hero' LIMIT 1),
-                v.visibility
-         FROM variants v LEFT JOIN dishes d ON d.id = v.dish_id
-         WHERE v.id = $1 AND v.origin = 'user' AND v.household_id = $2",
-    )
-    .bind(id)
-    .bind(household)
-    .fetch_optional(&mut **tx)
-    .await?
-    .ok_or(ApiError::NotFound)?;
-    type LineRow = (
-        Option<String>,
-        String,
-        Option<String>,
-        Option<f64>,
-        Option<String>,
-        Option<Uuid>,
-        Option<String>,
-    );
-    let ingredients = sqlx::query_as::<_, LineRow>(
-        "SELECT il.text, il.raw_name, il.note, la.amount::float8, la.unit, f.id, f.name
-         FROM ingredient_lines il
-         LEFT JOIN line_amounts la ON la.line_id = il.id
-         LEFT JOIN foods f ON f.id = il.food_id
-         WHERE il.variant_id = $1 ORDER BY il.position",
-    )
-    .bind(id)
-    .fetch_all(&mut **tx)
-    .await?
-    .into_iter()
-    .map(
-        |(text, name, note, amount, unit, food_id, food)| RecipeLine {
-            text: text.unwrap_or_else(|| name.clone()),
-            amount,
-            unit,
-            name,
-            note,
-            food: food_id.zip(food).map(|(id, name)| FoodRef { id, name }),
-        },
-    )
-    .collect();
-    let steps =
-        sqlx::query_scalar("SELECT text FROM steps WHERE variant_id = $1 ORDER BY position")
-            .bind(id)
-            .fetch_all(&mut **tx)
-            .await?;
+    let v = queries::recipe(&mut **tx, id, household)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let ingredients = queries::recipe_lines(&mut **tx, id)
+        .await?
+        .into_iter()
+        .map(|l| RecipeLine {
+            text: l.text.unwrap_or_else(|| l.raw_name.clone()),
+            amount: l.amount,
+            unit: l.unit,
+            name: l.raw_name,
+            note: l.note,
+            food: l.food_id.zip(l.food).map(|(id, name)| FoodRef { id, name }),
+        })
+        .collect();
+    let steps = queries::steps(&mut **tx, id).await?;
     Ok(Recipe {
         id,
-        dish_slug: dish_slug.unwrap_or_default(),
-        title,
-        subtitle,
-        description,
-        servings: servings.unwrap_or(1.0),
+        dish_slug: v.dish_slug.unwrap_or_default(),
+        title: v.title,
+        subtitle: v.subtitle,
+        description: v.description,
+        servings: v.servings.unwrap_or(1.0),
         ingredients,
         steps,
-        image: hero.map(Image::new),
-        visibility: Visibility::parse(&visibility).unwrap_or(Visibility::Private),
+        image: v.hero.map(Image::new),
+        visibility: Visibility::parse(&v.visibility).unwrap_or(Visibility::Private),
     })
 }
 
@@ -571,36 +468,19 @@ pub async fn create(
         None => sharing::default_for(&mut tx, me.household_id).await?,
     };
     check_foods(&mut tx, me.household_id, &recipe.lines).await?;
-    take_turn(&mut tx).await?;
+    queries::take_turn(&mut *tx).await?;
     let (dish, variant) = (Uuid::now_v7(), Uuid::now_v7());
     let slug = free_slug(&mut tx, &recipe.title, None).await?;
     // The dish names its version and the version its dish; the first of the two checks waits for the commit.
-    sqlx::query(
-        "INSERT INTO dishes (id, title, subtitle, slug, content_type, default_variant_id, origin)
-         VALUES ($1, $2, $3, $4, 'recipe', $5, 'user')",
+    queries::add_dish(&mut *tx, dish, &recipe, &slug, variant).await?;
+    queries::add_recipe(
+        &mut *tx,
+        variant,
+        dish,
+        me.household_id,
+        &recipe,
+        visibility,
     )
-    .bind(dish)
-    .bind(&recipe.title)
-    .bind(&recipe.subtitle)
-    .bind(&slug)
-    .bind(variant)
-    .execute(&mut *tx)
-    .await?;
-    sqlx::query(
-        "INSERT INTO variants (id, dish_id, dish_pinned, origin, household_id, title, subtitle, description,
-                               published_at, has_steps, meta, content_hash, visibility)
-         VALUES ($1, $2, true, 'user', $3, $4, $5, $6, now(), $7, '{\"content_type\": \"recipe\"}', $8, $9)",
-    )
-    .bind(variant)
-    .bind(dish)
-    .bind(me.household_id)
-    .bind(&recipe.title)
-    .bind(&recipe.subtitle)
-    .bind(&recipe.description)
-    .bind(!recipe.steps.is_empty())
-    .bind(recipe.content_hash())
-    .bind(visibility.as_str())
-    .execute(&mut *tx)
     .await?;
     write_parts(&mut tx, variant, &recipe).await?;
     let stored = load(&mut tx, variant, me.household_id).await?;
@@ -655,69 +535,23 @@ pub async fn update(
     if let Some(v) = asked {
         sharing::allowed(&mut tx, v).await?;
     }
-    take_turn(&mut tx).await?;
+    queries::take_turn(&mut *tx).await?;
     // The dish follows the recipe only when it is the recipe's own: one a person made that opens on this version.
-    let own_dish: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT d.id, d.slug FROM variants v
-         LEFT JOIN dishes d ON d.id = v.dish_id AND d.origin = 'user' AND d.default_variant_id = v.id
-         WHERE v.id = $1 AND v.origin = 'user' AND v.household_id = $2 FOR UPDATE OF v",
-    )
-    .bind(id)
-    .bind(me.household_id)
-    .fetch_optional(&mut *tx)
-    .await?
-    .map(|(dish, slug): (Option<Uuid>, Option<String>)| dish.zip(slug))
-    .ok_or(ApiError::NotFound)?;
+    let own_dish = queries::lock_recipe(&mut *tx, id, me.household_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let own_dish = own_dish.id.zip(own_dish.slug);
     check_foods(&mut tx, me.household_id, &recipe.lines).await?;
 
-    sqlx::query(
-        "UPDATE variants SET title = $2, subtitle = $3, description = $4, has_steps = $5, content_hash = $6,
-                            visibility = coalesce($7, visibility)
-         WHERE id = $1",
-    )
-    .bind(id)
-    .bind(&recipe.title)
-    .bind(&recipe.subtitle)
-    .bind(&recipe.description)
-    .bind(!recipe.steps.is_empty())
-    .bind(recipe.content_hash())
-    .bind(asked.map(Visibility::as_str))
-    .execute(&mut *tx)
-    .await?;
+    queries::update_recipe(&mut *tx, id, &recipe, asked).await?;
     let facts = line_facts(&mut tx, id).await?;
-    // Amounts go with their lines, and a step's photos with the step.
-    for delete in [
-        "DELETE FROM variant_yields WHERE variant_id = $1",
-        "DELETE FROM ingredient_lines WHERE variant_id = $1",
-        "DELETE FROM steps WHERE variant_id = $1",
-    ] {
-        sqlx::query(delete).bind(id).execute(&mut *tx).await?;
-    }
+    queries::clear_parts(&mut tx, id).await?;
     if let Some((dish, old_slug)) = own_dish {
         let slug = free_slug(&mut tx, &recipe.title, Some(dish)).await?;
-        sqlx::query(
-            "UPDATE dishes SET title = $2, subtitle = $3, slug = $4, updated_at = now() WHERE id = $1",
-        )
-        .bind(dish)
-        .bind(&recipe.title)
-        .bind(&recipe.subtitle)
-        .bind(&slug)
-        .execute(&mut *tx)
-        .await?;
+        queries::rename_dish(&mut *tx, dish, &recipe, &slug).await?;
         if slug != old_slug {
             // The old address still finds the dish; the one it holds again is no longer a former one.
-            sqlx::query(
-                "INSERT INTO retired_slugs (slug, dish_id) VALUES ($1, $2)
-                 ON CONFLICT (slug) DO UPDATE SET dish_id = excluded.dish_id, retired_at = now()",
-            )
-            .bind(&old_slug)
-            .bind(dish)
-            .execute(&mut *tx)
-            .await?;
-            sqlx::query("DELETE FROM retired_slugs WHERE slug = $1")
-                .bind(&slug)
-                .execute(&mut *tx)
-                .await?;
+            queries::retire_slug(&mut tx, dish, &old_slug, &slug).await?;
         }
     }
     write_parts(&mut tx, id, &recipe).await?;
@@ -749,74 +583,37 @@ pub async fn fork(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<Recipe>> {
     let mut tx = s.pool.begin().await?;
-    take_turn(&mut tx).await?;
-    // Nutrition is left behind: it stops being true at the first change.
-    type Source = (
-        Uuid,
-        String,
-        Option<String>,
-        Option<String>,
-        serde_json::Value,
-        Option<f64>,
-        Option<Uuid>,
-    );
-    let (dish, title, subtitle, description, meta, servings, owner): Source = sqlx::query_as(
-        "SELECT v.dish_id, v.title, v.subtitle, v.description, v.meta - 'nutrition',
-                (SELECT min(y.servings)::float8 FROM variant_yields y WHERE y.variant_id = v.id),
-                v.household_id
-         FROM variants v WHERE v.id = $1 AND v.dish_id IS NOT NULL AND visible_to(v, $2)",
-    )
-    .bind(id)
-    .bind(me.household_id)
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or(ApiError::NotFound)?;
+    queries::take_turn(&mut *tx).await?;
+    let source = queries::source(&mut *tx, id, me.household_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     // A version without amounts has no yield; its copy is written for two, the size a dish page opens at.
-    let servings = servings.unwrap_or(2.0);
-    type LineRow = (
-        String,
-        Option<String>,
-        Option<Uuid>,
-        Option<String>,
-        Option<f64>,
-        Option<String>,
-    );
-    let lines = sqlx::query_as::<_, LineRow>(
-        "SELECT il.raw_name, il.note, il.food_id, il.text, la.amount::float8, la.unit
-         FROM ingredient_lines il
-         LEFT JOIN line_amounts la ON la.line_id = il.id AND la.servings = $2::float8::numeric
-         WHERE il.variant_id = $1 ORDER BY il.position",
-    )
-    .bind(id)
-    .bind(servings)
-    .fetch_all(&mut *tx)
-    .await?
-    .into_iter()
-    .map(|(name, note, food_id, text, amount, unit)| {
-        let read = Line {
-            amount,
-            unit: amount.and(unit.as_deref()).and_then(Unit::parse),
-            name,
-            note,
-        };
-        // A line typed into the app, or read from a page, keeps its words; any other is written out from its parts.
-        let text = text.unwrap_or_else(|| read.text());
-        CheckedLine {
-            text,
-            food_id,
-            read,
-        }
-    })
-    .collect();
-    let steps: Vec<String> =
-        sqlx::query_scalar("SELECT text FROM steps WHERE variant_id = $1 ORDER BY position")
-            .bind(id)
-            .fetch_all(&mut *tx)
-            .await?;
+    let servings = source.servings.unwrap_or(2.0);
+    let lines = queries::source_lines(&mut *tx, id, servings)
+        .await?
+        .into_iter()
+        .map(|l| {
+            let read = Line {
+                amount: l.amount,
+                unit: l.amount.and(l.unit.as_deref()).and_then(Unit::parse),
+                name: l.raw_name,
+                note: l.note,
+            };
+            // A line typed into the app, or read from a page, keeps its words; any other is written out from its
+            // parts.
+            let text = l.text.unwrap_or_else(|| read.text());
+            CheckedLine {
+                text,
+                food_id: l.food_id,
+                read,
+            }
+        })
+        .collect();
+    let steps = queries::steps(&mut *tx, id).await?;
     let recipe = Checked {
-        title,
-        subtitle,
-        description,
+        title: source.title,
+        subtitle: source.subtitle,
+        description: source.description,
         servings,
         lines,
         steps,
@@ -824,45 +621,26 @@ pub async fn fork(
     let facts = line_facts(&mut tx, id).await?;
     // A copy of another household's recipe starts private, whatever this household's default: that household chose
     // who sees it, and sharing the copy further is this household's choice to make in the editor, not a default's.
-    let visibility = match owner {
+    let visibility = match source.household_id {
         Some(owner) if owner != me.household_id => Visibility::Private,
         _ => sharing::default_for(&mut tx, me.household_id).await?,
     };
 
     let copy = Uuid::now_v7();
-    // Pinned to the dish, so grouping leaves it where it was made, as it leaves a written recipe.
-    sqlx::query(
-        "INSERT INTO variants (id, dish_id, dish_pinned, origin, parent_variant_id, household_id, title, subtitle,
-                               description, published_at, has_steps, meta, content_hash, visibility)
-         VALUES ($1, $2, true, 'user', $3, $4, $5, $6, $7, now(), $8, $9, $10, $11)",
+    queries::add_copy(
+        &mut *tx,
+        copy,
+        source.dish_id,
+        id,
+        me.household_id,
+        &recipe,
+        source.meta,
+        visibility,
     )
-    .bind(copy)
-    .bind(dish)
-    .bind(id)
-    .bind(me.household_id)
-    .bind(&recipe.title)
-    .bind(&recipe.subtitle)
-    .bind(&recipe.description)
-    .bind(!recipe.steps.is_empty())
-    .bind(meta)
-    .bind(recipe.content_hash())
-    .bind(visibility.as_str())
-    .execute(&mut *tx)
     .await?;
     write_parts(&mut tx, copy, &recipe).await?;
     carry_facts(&mut tx, copy, &facts).await?;
-    for copy_rows in [
-        "INSERT INTO variant_attributes (variant_id, key, value)
-         SELECT $2, key, value FROM variant_attributes WHERE variant_id = $1",
-        "INSERT INTO variant_media (variant_id, media_id, role, position)
-         SELECT $2, media_id, 'hero', 0 FROM variant_media WHERE variant_id = $1 AND role = 'hero' LIMIT 1",
-    ] {
-        sqlx::query(copy_rows)
-            .bind(id)
-            .bind(copy)
-            .execute(&mut *tx)
-            .await?;
-    }
+    queries::copy_attributes_and_photo(&mut tx, id, copy).await?;
     let stored = load(&mut tx, copy, me.household_id).await?;
     tx.commit().await?;
     Ok(Json(stored))
@@ -886,45 +664,11 @@ pub async fn delete(
     Path(id): Path<Uuid>,
 ) -> ApiResult<StatusCode> {
     let mut tx = s.pool.begin().await?;
-    take_turn(&mut tx).await?;
-    let dish: Option<Uuid> = sqlx::query_scalar(
-        "SELECT dish_id FROM variants WHERE id = $1 AND origin = 'user' AND household_id = $2 FOR UPDATE",
-    )
-    .bind(id)
-    .bind(me.household_id)
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or(ApiError::NotFound)?;
-    sqlx::query("UPDATE variants SET parent_variant_id = NULL WHERE parent_variant_id = $1")
-        .bind(id)
-        .execute(&mut *tx)
-        .await?;
-    // Its yields, lines, amounts, steps, photo links and plan entries go with the version.
-    sqlx::query("DELETE FROM variants WHERE id = $1")
-        .bind(id)
-        .execute(&mut *tx)
-        .await?;
-    if let Some(dish) = dish {
-        // A dish a person made goes with its last version. Any other dish that opened on this version opens on the
-        // best of what is left, as the dish page would choose for a household that couldn't see its default.
-        sqlx::query(
-            "DELETE FROM dishes d WHERE d.id = $1 AND d.origin = 'user'
-               AND NOT EXISTS (SELECT 1 FROM variants v WHERE v.dish_id = d.id)",
-        )
-        .bind(dish)
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query(
-            "UPDATE dishes d SET default_variant_id = (
-                 SELECT v.id FROM variants v WHERE v.dish_id = d.id
-                 ORDER BY v.household_id IS NULL DESC, v.has_steps DESC, v.published_at DESC NULLS LAST, v.id LIMIT 1)
-             WHERE d.id = $1 AND d.default_variant_id = $2",
-        )
-        .bind(dish)
-        .bind(id)
-        .execute(&mut *tx)
-        .await?;
-    }
+    queries::take_turn(&mut *tx).await?;
+    let dish = queries::lock_for_delete(&mut *tx, id, me.household_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    queries::delete_recipe(&mut tx, id, dish).await?;
     tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -965,15 +709,11 @@ impl<S: Send + Sync> FromRequest<S> for PhotoBody {
 
 /// Refuses a recipe the household didn't write, before any work is done for it.
 async fn require_own(s: &AppState, id: Uuid, household: Uuid) -> ApiResult<()> {
-    sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM variants WHERE id = $1 AND origin = 'user' AND household_id = $2",
-    )
-    .bind(id)
-    .bind(household)
-    .fetch_optional(&s.pool)
-    .await?
-    .map(|_| ())
-    .ok_or(ApiError::NotFound)
+    if queries::is_own(&s.pool, id, household).await? {
+        Ok(())
+    } else {
+        Err(ApiError::NotFound)
+    }
 }
 
 /// Give a recipe the household wrote its photo, replacing any it had. The body is the image itself (JPEG, PNG,
@@ -1016,17 +756,7 @@ pub async fn set_photo(
         UploadError::Failed(e) => ApiError::Internal(e),
     })?;
     let mut tx = s.pool.begin().await?;
-    sqlx::query("DELETE FROM variant_media WHERE variant_id = $1 AND role = 'hero'")
-        .bind(id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query(
-        "INSERT INTO variant_media (variant_id, media_id, role, position) VALUES ($1, $2, 'hero', 0)",
-    )
-    .bind(id)
-    .bind(media)
-    .execute(&mut *tx)
-    .await?;
+    queries::set_photo(&mut tx, id, media).await?;
     let stored = load(&mut tx, id, me.household_id).await?;
     tx.commit().await?;
     Ok(Json(stored))
@@ -1050,10 +780,7 @@ pub async fn remove_photo(
 ) -> ApiResult<Json<Recipe>> {
     let mut tx = s.pool.begin().await?;
     let stored = load(&mut tx, id, me.household_id).await?;
-    sqlx::query("DELETE FROM variant_media WHERE variant_id = $1 AND role = 'hero'")
-        .bind(id)
-        .execute(&mut *tx)
-        .await?;
+    queries::remove_photo(&mut *tx, id).await?;
     tx.commit().await?;
     Ok(Json(Recipe {
         image: None,
@@ -1104,21 +831,21 @@ pub async fn read_lines(
             .collect(),
     )?;
     // Foods are found by the same key the matcher uses, so what shows here is what saving will choose; only those
-    // the household could find by searching (`foods::KNOWN_FOOD`), so a food named only in another household's
+    // the household could find by searching (`known_food`), so a food named only in another household's
     // private recipe doesn't show its name here.
     let keys: Vec<String> = lines.iter().map(|l| singular_key(l.name())).collect();
-    let foods: HashMap<String, FoodRef> =
-        sqlx::query_as::<_, (String, Uuid, String)>(sqlx::AssertSqlSafe(format!(
-            "SELECT a.alias, f.id, f.name FROM food_aliases a JOIN foods f ON f.id = a.food_id
-             WHERE a.alias = ANY($2) AND {}",
-            crate::foods::KNOWN_FOOD
-        )))
-        .bind(me.household_id)
-        .bind(&keys)
-        .fetch_all(&s.pool)
+    let foods: HashMap<String, FoodRef> = queries::foods_by_alias(&s.pool, me.household_id, &keys)
         .await?
         .into_iter()
-        .map(|(alias, id, name)| (alias, FoodRef { id, name }))
+        .map(|f| {
+            (
+                f.alias,
+                FoodRef {
+                    id: f.id,
+                    name: f.name,
+                },
+            )
+        })
         .collect();
     let lines = lines
         .into_iter()

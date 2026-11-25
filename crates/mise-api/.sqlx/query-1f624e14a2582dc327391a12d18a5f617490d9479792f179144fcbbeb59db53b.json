@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO household_partners (household_id, partner_id)\n         SELECT $1, h.id FROM households h WHERE h.id = $2\n         ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1f624e14a2582dc327391a12d18a5f617490d9479792f179144fcbbeb59db53b"
+}
