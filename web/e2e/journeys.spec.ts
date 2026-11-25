@@ -773,6 +773,67 @@ test("work queued as one person never lands on whoever signs in after them", asy
   await other.close();
 });
 
+test("what one household read never shows to the next one signed in on this tab", async () => {
+  // The last journey left Sam signed in. Robin signs back in, writes a recipe only Robin's household sees, and
+  // searches for it here.
+  const robins = await context.newPage();
+  await robins.request.post("/api/v1/auth/logout");
+  const robin = await robins.request.post("/api/v1/auth/login", {
+    data: { username: "robin", password: "a long enough password" },
+  });
+  expect(robin.ok()).toBe(true);
+  await robins.close();
+  const written = await page.request.post("/api/v1/recipes", {
+    data: {
+      title: "Robin's Secret Soup",
+      servings: 2,
+      ingredients: [{ text: "2 leeks, sliced" }],
+      steps: ["Simmer the leeks."],
+    },
+  });
+  expect(written.ok()).toBe(true);
+  await page.goto("/?q=Secret+Soup");
+  const soup = page.getByRole("link", { name: /Robin's Secret Soup/ });
+  await expect(soup).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Shopping" })
+    .click();
+  await expect(shoppingItem("Black Beans")).toBeVisible();
+
+  // Sam, of another household, signs in in another tab, without anyone signing out here.
+  const sams = await context.newPage();
+  await sams.request.post("/api/v1/auth/logout");
+  const sam = await sams.request.post("/api/v1/auth/login", {
+    data: { username: "sam", password: "sam's long password" },
+  });
+  expect(sam.ok()).toBe(true);
+  await sams.close();
+
+  // This tab moves on to the plan; the server says the account changed, and the app follows Sam.
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Plan" }).click();
+  await expect(page.getByText("Nothing planned yet")).toBeVisible();
+
+  // Back to Robin's search with the network gone: nothing Robin read comes back, from the app's memory or from the
+  // recipes the service worker keeps for offline use.
+  await context.setOffline(true);
+  await page.goBack();
+  await page.goBack();
+  await expect(page).toHaveURL(/q=Secret/);
+  await expect(page.getByText("Couldn't reach the server.")).toBeVisible();
+  await expect(soup).toHaveCount(0);
+  await context.setOffline(false);
+
+  // Sam's own list holds nothing of Robin's household.
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Shopping" })
+    .click();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await expect(shoppingItem("Black Beans")).toHaveCount(0);
+});
+
 const pages = [
   "/",
   "/dishes/weeknight-tomato-pasta",

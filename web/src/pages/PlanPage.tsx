@@ -157,7 +157,7 @@ function AddDishes({ onAdd }: { onAdd: (d: DishSummary) => void }) {
     return () => clearTimeout(wait);
   }, [q]);
   const found = useQuery({
-    queryKey: ["suggestions", asked],
+    queryKey: ["suggestions", useAccount(), asked],
     queryFn: ({ signal }) =>
       answer(
         api.GET("/api/v1/dishes", {
