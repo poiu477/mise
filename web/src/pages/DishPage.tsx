@@ -17,12 +17,14 @@ import { OwnVersion } from "../components/OwnVersion";
 import { Servings } from "../components/Servings";
 import { StepText } from "../components/StepText";
 import { allergens, difficulty, minutes } from "../recipe";
+import { useAccount } from "../session";
 
 const NONE: Selection = {};
 
 /** A dish: its options, any serving count, adding it to the plan, then ingredients and steps for the chosen
  * version. The URL keeps the version (?v=), servings (?s=) and options, so a reload or a link opens the same. */
 export function DishPage() {
+  const account = useAccount();
   const { slug = "" } = useParams();
   const [params, setParams] = useSearchParams();
 
@@ -32,14 +34,14 @@ export function DishPage() {
 
   const queryClient = useQueryClient();
   const dishQuery = useQuery({
-    queryKey: ["dish", slug],
+    queryKey: ["dish", account, slug],
     /** Loads the dish. An old address answers with the dish under its current slug, which is cached too, so
      * moving to the current address below shows it at once. */
     queryFn: async ({ signal }) => {
       const dish = await answer(
         api.GET("/api/v1/dishes/{slug}", { params: { path: { slug } }, signal }),
       );
-      if (dish.slug !== slug) queryClient.setQueryData(["dish", dish.slug], dish);
+      if (dish.slug !== slug) queryClient.setQueryData(["dish", account, dish.slug], dish);
       return dish;
     },
   });
@@ -62,7 +64,7 @@ export function DishPage() {
   const servings = chosenServings ?? defaultServings;
 
   const variantQuery = useQuery({
-    queryKey: ["variant", chosen?.id, servings],
+    queryKey: ["variant", account, chosen?.id, servings],
     queryFn: ({ signal }) =>
       answer(
         api.GET("/api/v1/variants/{id}", {

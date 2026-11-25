@@ -17,21 +17,6 @@ status.md if it changed either.
 
 ## Ready
 
-
-### T41 · A browser's cached data follows the account
-
-From the code review (item 11). The web app's cached recipe queries don't name the account, so after one person signs
-out and another, from another household, signs in, the first household's private search results can show; shopping
-data kept in `localStorage` survives it too.
-
-- Put the signed-in account's id in every query key that reads household data (as the shopping list's already do),
-  clear the query cache when the account changes, and clear or key by account what `localStorage` holds.
-- **Touches:** `web/src/session.tsx`, the query keys in `web/src/pages/` and `web/src/components/`, `web/src/offline.ts`.
-- **Needs:** nothing.
-- **Done when:** a browser journey signs in as one household, searches and opens its private recipe, signs out, signs in
-  as another household in the same tab, and sees neither the recipe in search nor anything of the first household's
-  list.
-
 ### T36 · Brands as data
 
 The brands matching strips from ingredient names (`BRANDS` in `mise-core/src/food_names.rs`, 43 of them) are data
