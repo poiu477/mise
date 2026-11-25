@@ -1561,7 +1561,7 @@ export interface components {
          * @description What a review item asks.
          * @enum {string}
          */
-        ReviewKind: "food_match" | "food_parent" | "dish_merge";
+        ReviewKind: "food_match" | "food_parent" | "food_duplicate" | "dish_merge";
         /** @description Every open item, food matches first, then food parents, then dish merges; the surest first within each. */
         ReviewQueue: {
             /** @description The open items. */

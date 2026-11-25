@@ -394,9 +394,10 @@ test("every demo recipe's card prints on one page", async () => {
 });
 
 test("an admin accepts a food match from the review queue", async () => {
-  // serve.mjs asks whether "Black Pepper" is right as matched, as matching asks of a name that could mean two foods.
+  // serve.mjs asks whether "Black Pepper" is right as matched, as matching asks of a name that could mean two
+  // foods, and whether "Cheddar Cheese" and "Shredded Cheddar Cheese" are one food.
   await page.goto("/account");
-  await expect(page.getByText("1 waiting.")).toBeVisible();
+  await expect(page.getByText("2 waiting.")).toBeVisible();
   await page.getByRole("link", { name: "Review queue" }).click();
   await expect(page).toHaveURL(/\/review$/);
   const item = page
@@ -422,9 +423,21 @@ test("an admin accepts a food match from the review queue", async () => {
   expect(serious).toEqual([]);
 
   await item.getByRole("button", { name: "Accept" }).click();
+  await expect(item).toBeHidden();
+
+  // The near-duplicate pair: merging folds the second spelling into the first, and the queue empties.
+  const pair = page
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("heading", { name: "Cheddar Cheese", exact: true }) });
+  await expect(pair).toContainText("Cheddar Cheese and Shredded Cheddar Cheese are one food.");
+  await pair.getByRole("button", { name: "One food" }).click();
+
   await expect(page.getByText("Nothing to review.")).toBeVisible();
   const queue = await (await page.request.get("/api/v1/review-items")).json();
   expect(queue.items).toEqual([]);
+  // The second spelling is gone: one food covers both names now.
+  const foods = await (await page.request.get("/api/v1/foods?q=cheddar")).json();
+  expect(foods.items.map((f: { name: string }) => f.name)).not.toContain("Shredded Cheddar Cheese");
 });
 
 /** Lines to lengthen a demo recipe's ingredients to a long recipe's. */

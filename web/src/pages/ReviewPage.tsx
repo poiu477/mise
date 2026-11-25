@@ -26,12 +26,24 @@ const KINDS: { kind: ReviewKind; title: string; about: string }[] = [
       "New foods that may be a kind of another. Kinds of a food share its shopping line and store section.",
   },
   {
+    kind: "food_duplicate",
+    title: "Near-duplicate foods",
+    about:
+      "Two foods whose names look like one food written twice. Merging folds the second into the first; or keep two foods, or file one under the other.",
+  },
+  {
     kind: "dish_merge",
     title: "Dish merges",
     about:
       "Copies too unlike their original to join its dish without asking. Dishes change the next time they're grouped (mise group-dishes).",
   },
 ];
+
+/** What "reject" means for each kind, in the person's words; every other kind just rejects the proposal. */
+const REJECTS: Partial<Record<ReviewKind, string>> = {
+  dish_merge: "Keep apart",
+  food_duplicate: "Two foods",
+};
 
 /** The review queue: what importing recipes left for an admin to decide. Each answer is kept the way the `mise`
  * curation commands keep theirs, so importing again doesn't ask again. Admins only; needs the server. */
@@ -146,12 +158,12 @@ function Item({ item, queryKey }: { item: ReviewItem; queryKey: unknown[] }) {
             disabled={busy}
             onClick={() => send({ decision: "accept" })}
           >
-            Accept
+            {item.kind === "food_duplicate" ? "One food" : "Accept"}
           </button>
         )}
         {item.verdicts.includes("reject") && (
           <button type="button" disabled={busy} onClick={() => send({ decision: "reject" })}>
-            {item.kind === "dish_merge" ? "Keep apart" : "Reject"}
+            {REJECTS[item.kind] ?? "Reject"}
           </button>
         )}
         {item.verdicts.includes("edit") && (
@@ -169,10 +181,15 @@ function Item({ item, queryKey }: { item: ReviewItem; queryKey: unknown[] }) {
         <form className="form row" onSubmit={edit}>
           <label>
             {item.subject} is
-            <select value={how} onChange={(e) => setHow(e.target.value as typeof how)}>
-              <option value="same_as">the same food as</option>
-              <option value="parent">a kind of</option>
-            </select>
+            {/* A near-duplicate's "One food" button already merges the two, so only the parent is left to name. */}
+            {item.kind === "food_duplicate" ? (
+              " a kind of"
+            ) : (
+              <select value={how} onChange={(e) => setHow(e.target.value as typeof how)}>
+                <option value="same_as">the same food as</option>
+                <option value="parent">a kind of</option>
+              </select>
+            )}
           </label>
           <label>
             Food

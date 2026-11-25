@@ -56,6 +56,20 @@ await db.query(
           '{"note": "black pepper or bell pepper (as a pantry item it is usually black pepper)"}', 0.3
    FROM foods WHERE name = 'Black Pepper'`,
 );
+// A near-duplicate pair, as matching raises one when two names it doesn't know are the same food written twice.
+// The demo recipes name each food one way, so the second spelling is made here.
+await db.query(
+  `WITH extra AS (
+     INSERT INTO foods (id, name, slug, kind, origin)
+     VALUES (gen_random_uuid(), 'Shredded Cheddar Cheese', 'shredded-cheddar-cheese', 'food', 'matched')
+     RETURNING id, name
+   )
+   INSERT INTO review_items (id, kind, subject, proposal, confidence)
+   SELECT gen_random_uuid(), 'food_duplicate',
+          jsonb_build_object('food_id', f.id, 'name', f.name, 'recipe_uses', 1, 'all_uses', 1),
+          jsonb_build_object('other_id', extra.id, 'other_name', extra.name, 'other_uses', 0), 0.83
+   FROM foods f, extra WHERE f.name = 'Cheddar Cheese'`,
+);
 await db.end();
 
 // The sample pages, by name: /web-pages/no-image.html. Nothing else.
