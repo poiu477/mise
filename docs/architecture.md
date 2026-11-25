@@ -71,6 +71,8 @@ A seed bundle (see [seed-bundle.md](seed-bundle.md)) is built offline from a pri
 `mise import-bundle`. Then, in order: `match-foods` (one food per ingredient name, a proposed tree, review items),
 `food apply` (curation file), `dish apply` and `dish prefer` (decisions and preferred versions), `group-dishes`,
 `derive-options`, `parse-steps`, `ingest-media`. Every stage is re-runnable and leaves what a person decided alone.
+Matching's rules for relating names (plurals, brands, narrowing words) are in `mise_core::food_names`; the brands
+themselves are data, the `brands` table, which curation edits and each matching run reads.
 
 Web pages and other apps' export files come in through the same stages. `schema_org::read_page`, `read_json`
 and `read_value` turn schema.org Recipe data (JSON-LD, or microdata when a page has none) into records shaped like a

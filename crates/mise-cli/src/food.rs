@@ -53,6 +53,10 @@ pub enum FoodCommand {
         item: String,
         size: String,
     },
+    /// NAME is a brand: matching strips it from ingredient names from its next run.
+    Brand { name: String },
+    /// NAME is no longer a brand: matching leaves it in names from its next run.
+    Unbrand { name: String },
     /// Apply a JSON file of operations (see docs/curation.md), all or nothing.
     Apply { file: std::path::PathBuf },
     /// Write the hand edits this database holds to FILE, as operations `apply` reads (see docs/curation.md).
@@ -101,6 +105,8 @@ pub async fn run(pool: &PgPool, cmd: FoodCommand) -> Result<()> {
             weight,
         },
         FoodCommand::ItemSize { food, item, size } => Op::ItemSize { food, item, size },
+        FoodCommand::Brand { name } => Op::Brand { name },
+        FoodCommand::Unbrand { name } => Op::Unbrand { name },
         FoodCommand::Set { food, key, value } => {
             let value = serde_json::from_str(&value).unwrap_or(serde_json::Value::String(value));
             Op::Set { food, key, value }

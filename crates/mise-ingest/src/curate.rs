@@ -1,5 +1,6 @@
 //! Hand edits to the food model: add foods and brands, set parents, add aliases, merge duplicates, set
-//! properties, and record what a food's amounts convert by (its density, the size of one item). Every food an edit
+//! properties, record what a food's amounts convert by (its density, the size of one item), and say which words are
+//! brands for matching to strip from names. Every food an edit
 //! touches becomes `origin = 'user'`, so re-running matching keeps it.
 //!
 //! The same operations run one at a time from the CLI or as a list from a JSON file, so curation can be
@@ -13,7 +14,7 @@ use anyhow::{Context, Result};
 use mise_core::food_names::singular_key;
 use mise_core::quantity::{Family, Quantity, Unit};
 use mise_core::shopping;
-use mise_core::text::slugify;
+use mise_core::text::{normalize_name, slugify};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Transaction};
@@ -126,6 +127,17 @@ pub enum Op {
         item: String,
         /// One item's volume or weight: "1 tsp", "8 oz".
         size: String,
+    },
+    /// A brand matching strips from ingredient names, so "Old Bay Seasoning" is made a brand of "Seasoning". It
+    /// counts from the next matching run (`mise match-foods --reset` redoes the foods matching already made).
+    Brand {
+        /// The brand as recipes write it: "Old Bay". Case, marks and spacing don't matter.
+        name: String,
+    },
+    /// No longer a brand: matching leaves the word in names from its next run.
+    Unbrand {
+        /// The brand: "Old Bay".
+        name: String,
     },
 }
 
@@ -380,7 +392,53 @@ pub async fn apply_in(tx: &mut Transaction<'_, Postgres>, op: &Op) -> Result<Str
             adopt(tx, id).await?;
             Ok(format!("{food}: one {word} is {size}"))
         }
+        Op::Brand { name } => {
+            let brand = brand_name(name)?;
+            let added = sqlx::query(
+                "INSERT INTO brands (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET removed = false WHERE brands.removed",
+            )
+            .bind(&brand)
+            .execute(&mut **tx)
+            .await?
+            .rows_affected();
+            Ok(if added == 0 {
+                format!("{brand}: already a brand")
+            } else {
+                format!("{brand} is a brand")
+            })
+        }
+        Op::Unbrand { name } => {
+            let brand = brand_name(name)?;
+            // A shipped brand stays as a removed row, so the export can say so; a rebuilt database has it again.
+            let mut removed = 0;
+            for sql in [
+                "UPDATE brands SET removed = true WHERE name = $1 AND seeded AND NOT removed",
+                "DELETE FROM brands WHERE name = $1 AND NOT seeded",
+            ] {
+                removed += sqlx::query(sql)
+                    .bind(&brand)
+                    .execute(&mut **tx)
+                    .await?
+                    .rows_affected();
+            }
+            Ok(if removed == 0 {
+                format!("{brand}: not a brand")
+            } else {
+                format!("{brand} is no longer a brand")
+            })
+        }
     }
+}
+
+/// A brand as the `brands` table keeps it ("Frank's RedHot®" is "frank's redhot"), or a refusal when nothing is left.
+fn brand_name(name: &str) -> Result<String> {
+    let brand = normalize_name(name);
+    if brand.is_empty() || brand.chars().count() > 100 {
+        return refuse(format!(
+            "'{name}' isn't a brand name: give its words, such as \"Old Bay\""
+        ));
+    }
+    Ok(brand)
 }
 
 /// A size of the kind asked for, or an error that says what was expected.
@@ -425,7 +483,8 @@ struct Exported {
 /// same sources and matched, they bring the food model back to where it is now. Applying them here changes nothing.
 ///
 /// The database keeps what an edit left, not the edit, so the list is worked out from it, in an order that
-/// applies cleanly: every food that is someone's own (`add`, which only adopts a food matching makes anyway), the
+/// applies cleanly: the brands (`brand` for each added by hand, `unbrand` for each shipped one taken away), every
+/// food that is someone's own (`add`, which only adopts a food matching makes anyway), the
 /// names given by hand (`merge` where recipes use the name, since a rebuilt database has a food for it again;
 /// `alias` otherwise), where each of those foods sits (`set_parent` or `unparent`, parents before their kinds),
 /// properties (`set`) and measures (`density`, `item_size`). It reads the same every time for the same edits.
@@ -443,6 +502,19 @@ pub async fn export(pool: &PgPool) -> Result<Vec<Op>> {
     .context("reading foods")?;
     let by_id: HashMap<Uuid, &Exported> = foods.iter().map(|f| (f.id, f)).collect();
     let mut ops = Vec::new();
+
+    let brands: Vec<(String, bool)> =
+        sqlx::query_as("SELECT name, seeded FROM brands WHERE NOT seeded OR removed ORDER BY name")
+            .fetch_all(pool)
+            .await
+            .context("reading brands")?;
+    for (name, seeded) in brands {
+        ops.push(if seeded {
+            Op::Unbrand { name }
+        } else {
+            Op::Brand { name }
+        });
+    }
 
     for f in foods.iter().filter(|f| f.origin == "user") {
         ops.push(Op::Add {
