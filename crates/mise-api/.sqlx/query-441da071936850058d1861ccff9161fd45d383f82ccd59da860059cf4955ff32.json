@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT slug AS \"value!\" FROM dishes WHERE (slug = $1 OR slug LIKE $1 || '-%') AND id IS DISTINCT FROM $2\n         UNION\n         SELECT slug FROM retired_slugs WHERE (slug = $1 OR slug LIKE $1 || '-%') AND dish_id IS DISTINCT FROM $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "441da071936850058d1861ccff9161fd45d383f82ccd59da860059cf4955ff32"
+}

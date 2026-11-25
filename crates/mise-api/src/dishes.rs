@@ -379,11 +379,11 @@ pub async fn get(
     .collect::<Vec<_>>();
     // Options are derived across all of a dish's versions; where some are another household's, they are recounted
     // over this household's share, so they neither count nor offer what it can't open.
-    let hidden: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM variants v WHERE v.dish_id = $1 AND NOT visible_to(v, $2)",
+    let hidden: i64 = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "hidden!" FROM variants v WHERE v.dish_id = $1 AND NOT visible_to(v, $2)"#,
+        id,
+        me.household_id
     )
-    .bind(id)
-    .bind(me.household_id)
     .fetch_one(&s.pool)
     .await?;
     if hidden > 0 {

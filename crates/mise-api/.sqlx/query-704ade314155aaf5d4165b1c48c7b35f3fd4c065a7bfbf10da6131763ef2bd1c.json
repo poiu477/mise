@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM food_weight_units WHERE household_id = $1 AND food_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "704ade314155aaf5d4165b1c48c7b35f3fd4c065a7bfbf10da6131763ef2bd1c"
+}

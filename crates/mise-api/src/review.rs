@@ -324,10 +324,10 @@ async fn record_of(tx: &mut Transaction<'_, Postgres>, variant: Uuid) -> ApiResu
 
 /// The food a stored item names, by its slug (unique, unlike names), or refused when it is gone.
 async fn food_slug(tx: &mut Transaction<'_, Postgres>, v: &Value, key: &str) -> ApiResult<String> {
-    let found: Option<String> = sqlx::query_scalar("SELECT slug FROM foods WHERE id = $1")
-        .bind(id(v, key))
-        .fetch_optional(&mut **tx)
-        .await?;
+    let found: Option<String> =
+        sqlx::query_scalar!("SELECT slug FROM foods WHERE id = $1", id(v, key))
+            .fetch_optional(&mut **tx)
+            .await?;
     found.ok_or_else(|| {
         ApiError::BadRequest("a food this item names is gone; run match-foods again".into())
     })
@@ -458,12 +458,12 @@ pub async fn decide(
     if let Some(n) = note {
         decision["note"] = json!(n);
     }
-    sqlx::query(
+    sqlx::query!(
         "UPDATE review_items SET status = $2, decision = $3, decided_at = now() WHERE id = $1",
+        item,
+        status,
+        decision
     )
-    .bind(item)
-    .bind(status)
-    .bind(decision)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;

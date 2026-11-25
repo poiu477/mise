@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT food_id FROM pantry_staples WHERE household_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "food_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "pantry_staples",
+            "name": "food_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "69b6defa81cdd9ffba0ffbcf277755928801d171ee4e0f2fa9c4a3342715638a"
+}

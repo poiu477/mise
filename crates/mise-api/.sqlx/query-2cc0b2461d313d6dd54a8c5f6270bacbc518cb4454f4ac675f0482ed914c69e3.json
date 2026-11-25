@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO food_weight_units (household_id, food_id, weight_unit) VALUES ($1, $2, $3)\n             ON CONFLICT (household_id, food_id) DO UPDATE SET weight_unit = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2cc0b2461d313d6dd54a8c5f6270bacbc518cb4454f4ac675f0482ed914c69e3"
+}

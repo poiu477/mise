@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO shopping_marks (household_id, week, item_key, checked, hidden)\n         SELECT $1, $2, k, coalesce($4, false), coalesce($5, false) FROM UNNEST($3::text[]) AS k\n         ON CONFLICT (household_id, week, item_key)\n         DO UPDATE SET checked = coalesce($4, shopping_marks.checked), hidden = coalesce($5, shopping_marks.hidden)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "TextArray",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "00ea87ee9d83f6f716bc633861852341ba15b116f2579c619221e0001e264168"
+}

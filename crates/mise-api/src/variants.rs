@@ -173,10 +173,10 @@ pub async fn get(
         .fetch_optional(&s.pool)
         .await?
         .ok_or(ApiError::NotFound)?;
-    let yields: Vec<f64> = sqlx::query_scalar(
-        "SELECT servings::float8 FROM variant_yields WHERE variant_id = $1 ORDER BY servings",
+    let yields: Vec<f64> = sqlx::query_scalar!(
+        r#"SELECT servings::float8 AS "servings!" FROM variant_yields WHERE variant_id = $1 ORDER BY servings"#,
+        id
     )
-    .bind(id)
     .fetch_all(&s.pool)
     .await?;
     let target = p
@@ -225,10 +225,10 @@ pub async fn get(
     {
         step_images.entry(step).or_default().push(Image::new(media));
     }
-    let hero: Option<Uuid> = sqlx::query_scalar(
+    let hero: Option<Uuid> = sqlx::query_scalar!(
         "SELECT media_id FROM variant_media WHERE variant_id = $1 AND role = 'hero' LIMIT 1",
+        id
     )
-    .bind(id)
     .fetch_optional(&s.pool)
     .await?;
 

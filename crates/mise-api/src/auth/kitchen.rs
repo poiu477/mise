@@ -74,8 +74,10 @@ pub(super) async fn from_cookie(
     let Some((id, household_id)) = row else {
         return Ok(None);
     };
-    let renewed = sqlx::query("UPDATE kitchen_tokens SET last_used_at = now() WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')")
-        .bind(id)
+    let renewed = sqlx::query!(
+        "UPDATE kitchen_tokens SET last_used_at = now() WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')",
+        id
+    )
         .execute(pool)
         .await?
         .rows_affected()
@@ -281,12 +283,14 @@ pub async fn delete(
     Path(id): Path<Uuid>,
 ) -> ApiResult<StatusCode> {
     u.require_admin()?;
-    let n = sqlx::query("DELETE FROM kitchen_tokens WHERE id = $1 AND household_id = $2")
-        .bind(id)
-        .bind(u.household_id)
-        .execute(&s.pool)
-        .await?
-        .rows_affected();
+    let n = sqlx::query!(
+        "DELETE FROM kitchen_tokens WHERE id = $1 AND household_id = $2",
+        id,
+        u.household_id
+    )
+    .execute(&s.pool)
+    .await?
+    .rows_affected();
     if n == 0 {
         Err(ApiError::NotFound)
     } else {
@@ -319,12 +323,12 @@ pub async fn open_link(
     let secret = new_secret();
     let opened: Result<Option<Uuid>, sqlx::Error> = match p.code.as_deref() {
         Some(code) if !code.is_empty() => {
-            sqlx::query_scalar(
+            sqlx::query_scalar!(
                 "UPDATE kitchen_tokens SET link_hash = NULL, link_expires_at = NULL, token_hash = $2, linked_at = now()
                  WHERE link_hash = $1 AND link_expires_at > now() RETURNING id",
+                secret_hash(code),
+                secret_hash(&secret)
             )
-            .bind(secret_hash(code))
-            .bind(secret_hash(&secret))
             .fetch_optional(&s.pool)
             .await
         }

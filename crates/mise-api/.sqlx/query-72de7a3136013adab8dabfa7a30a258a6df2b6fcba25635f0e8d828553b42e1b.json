@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT servings::float8 AS \"servings!\" FROM variant_yields WHERE variant_id = $1 ORDER BY servings",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "servings!",
+        "type_info": "Float8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "72de7a3136013adab8dabfa7a30a258a6df2b6fcba25635f0e8d828553b42e1b"
+}

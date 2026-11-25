@@ -242,14 +242,16 @@ async fn start_inner(
         req = req.add_scope(Scope::new(scope.clone()));
     }
     let (url, state, nonce) = req.set_pkce_challenge(challenge).url();
-    sqlx::query("DELETE FROM oidc_logins WHERE created_at < now() - interval '15 minutes'")
+    sqlx::query!("DELETE FROM oidc_logins WHERE created_at < now() - interval '15 minutes'")
         .execute(&s.pool)
         .await?;
-    sqlx::query("INSERT INTO oidc_logins (state_hash, nonce, pkce_verifier, return_to) VALUES ($1, $2, $3, $4)")
-        .bind(secret_hash(state.secret()))
-        .bind(nonce.secret())
-        .bind(verifier.secret())
-        .bind(safe_return(p.return_to))
+    sqlx::query!(
+        "INSERT INTO oidc_logins (state_hash, nonce, pkce_verifier, return_to) VALUES ($1, $2, $3, $4)",
+        secret_hash(state.secret()),
+        nonce.secret(),
+        verifier.secret(),
+        safe_return(p.return_to)
+    )
         .execute(&s.pool)
         .await?;
     Ok((url.to_string(), state.secret().clone()))
@@ -430,11 +432,13 @@ async fn callback_inner(
         }
     };
     if let Some(group) = &cfg.admin_group {
-        sqlx::query("UPDATE users SET is_admin = $2 WHERE id = $1")
-            .bind(user)
-            .bind(groups.iter().any(|g| g == group))
-            .execute(&s.pool)
-            .await?;
+        sqlx::query!(
+            "UPDATE users SET is_admin = $2 WHERE id = $1",
+            user,
+            groups.iter().any(|g| g == group)
+        )
+        .execute(&s.pool)
+        .await?;
     }
     Ok(Outcome::SignedIn { user, return_to })
 }
@@ -530,10 +534,10 @@ async fn find_or_create(
                 .unwrap_or_else(|| "user".into());
             let mut username = base.clone();
             let mut n = 2;
-            while sqlx::query_scalar::<_, bool>(
-                "SELECT EXISTS (SELECT 1 FROM users WHERE lower(username) = lower($1))",
+            while sqlx::query_scalar!(
+                r#"SELECT EXISTS (SELECT 1 FROM users WHERE lower(username) = lower($1)) AS "value!""#,
+                &username
             )
-            .bind(&username)
             .fetch_one(&mut *tx)
             .await?
             {
@@ -541,10 +545,10 @@ async fn find_or_create(
                 n += 1;
             }
             let household = match &cfg.household {
-                Some(h) => match sqlx::query_scalar::<_, Uuid>(
+                Some(h) => match sqlx::query_scalar!(
                     "SELECT id FROM households WHERE name = $1 ORDER BY created_at LIMIT 1",
+                    h
                 )
-                .bind(h)
                 .fetch_optional(&mut *tx)
                 .await?
                 {
@@ -560,24 +564,28 @@ async fn find_or_create(
                 }
             };
             let id = Uuid::now_v7();
-            sqlx::query("INSERT INTO users (id, username, display_name, email, household_id) VALUES ($1, $2, $3, $4, $5)")
-                .bind(id)
-                .bind(&username)
-                .bind(name.unwrap_or_else(|| username.clone()))
-                .bind(if email_verified { email } else { None })
-                .bind(household)
+            sqlx::query!(
+                "INSERT INTO users (id, username, display_name, email, household_id) VALUES ($1, $2, $3, $4, $5)",
+                id,
+                &username,
+                name.unwrap_or_else(|| username.clone()),
+                if email_verified { email } else { None },
+                household
+            )
                 .execute(&mut *tx)
                 .await?;
             tracing::info!(%username, "account created by single sign-on");
             (id, false)
         }
     };
-    sqlx::query("INSERT INTO user_identities (issuer, subject, user_id) VALUES ($1, $2, $3)")
-        .bind(issuer)
-        .bind(subject)
-        .bind(id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query!(
+        "INSERT INTO user_identities (issuer, subject, user_id) VALUES ($1, $2, $3)",
+        issuer,
+        subject,
+        id
+    )
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     Ok(if disabled {
         Account::Disabled
@@ -591,11 +599,13 @@ async fn new_household(
     name: &str,
 ) -> anyhow::Result<Uuid> {
     let id = Uuid::now_v7();
-    sqlx::query("INSERT INTO households (id, name) VALUES ($1, $2)")
-        .bind(id)
-        .bind(name)
-        .execute(&mut **tx)
-        .await?;
+    sqlx::query!(
+        "INSERT INTO households (id, name) VALUES ($1, $2)",
+        id,
+        name
+    )
+    .execute(&mut **tx)
+    .await?;
     Ok(id)
 }
 

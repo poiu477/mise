@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO variant_yields (variant_id, servings) VALUES ($1, $2::float8::numeric)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "681d6c73c864481cb34c1b560b59840b7f25cb033a65fa3e164f5a8188c7c702"
+}

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE shopping_extras SET checked = $3 WHERE id = $1 AND household_id = $2 RETURNING week",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "week",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "shopping_extras",
+            "name": "week"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3239f5b2efb37e6c2aa749ced5fb6755fb0fd44eac9b7c9e911ac160e8e0a319"
+}

@@ -12,3 +12,7 @@ workspace = true
 anyhow = "1.0.104"
 sqlx = { workspace = true, features = ["migrate", "macros"] }
 tracing = "0.1.44"
+
+[dev-dependencies]
+# examples/migrate.rs, which scripts/sqlx-prepare runs.
+tokio = { version = "1.54.1", features = ["macros", "rt"] }

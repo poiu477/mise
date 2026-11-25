@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE kitchen_tokens SET link_hash = NULL, link_expires_at = NULL, token_hash = $2, linked_at = now()\n                 WHERE link_hash = $1 AND link_expires_at > now() RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "kitchen_tokens",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1520ac64e94f45723f70d91b6c6787dfb354e2d462ed4667dda7a0a786b7916b"
+}

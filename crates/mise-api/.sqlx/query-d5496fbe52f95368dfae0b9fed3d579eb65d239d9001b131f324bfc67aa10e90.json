@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM pantry_staples WHERE household_id = $1 AND food_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d5496fbe52f95368dfae0b9fed3d579eb65d239d9001b131f324bfc67aa10e90"
+}

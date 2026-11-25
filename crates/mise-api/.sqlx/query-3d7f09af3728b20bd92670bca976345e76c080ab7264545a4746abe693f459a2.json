@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ARRAY(SELECT y.servings::float8 FROM variant_yields y WHERE y.variant_id = e.variant_id) AS \"yields!\"\n         FROM plan_entries e WHERE e.id = $1 AND e.household_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "yields!",
+        "type_info": "Float8Array",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3d7f09af3728b20bd92670bca976345e76c080ab7264545a4746abe693f459a2"
+}

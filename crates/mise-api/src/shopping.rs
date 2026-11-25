@@ -318,11 +318,12 @@ async fn plan_lines(s: &AppState, household: Uuid, week: Date) -> ApiResult<Plan
     };
     let count_of = |food: Uuid| nearest(food).find_map(|f| f.count.clone());
 
-    let staple_ids: Vec<Uuid> =
-        sqlx::query_scalar("SELECT food_id FROM pantry_staples WHERE household_id = $1")
-            .bind(household)
-            .fetch_all(&s.pool)
-            .await?;
+    let staple_ids: Vec<Uuid> = sqlx::query_scalar!(
+        "SELECT food_id FROM pantry_staples WHERE household_id = $1",
+        household
+    )
+    .fetch_all(&s.pool)
+    .await?;
 
     // Every food the plan uses, in the plan's order, with what it needs.
     struct Use {
@@ -478,10 +479,12 @@ async fn build(s: &AppState, household: Uuid, week: Date) -> ApiResult<ShoppingL
             .into_iter()
             .map(|(k, c, h)| (k, (c, h)))
             .collect();
-    let usual: String = sqlx::query_scalar("SELECT weight_unit FROM households WHERE id = $1")
-        .bind(household)
-        .fetch_one(&s.pool)
-        .await?;
+    let usual: String = sqlx::query_scalar!(
+        "SELECT weight_unit FROM households WHERE id = $1",
+        household
+    )
+    .fetch_one(&s.pool)
+    .await?;
     let usual = Weights::stored(&usual);
     let per_food: HashMap<Uuid, Weights> = sqlx::query_as::<_, (Uuid, String)>(
         "SELECT food_id, weight_unit FROM food_weight_units WHERE household_id = $1",
@@ -621,17 +624,17 @@ pub async fn mark(
     let foods = plan_lines(&s, me.household_id, week)
         .await?
         .foods_to_mark(&b.key);
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO shopping_marks (household_id, week, item_key, checked, hidden)
          SELECT $1, $2, k, coalesce($4, false), coalesce($5, false) FROM UNNEST($3::text[]) AS k
          ON CONFLICT (household_id, week, item_key)
          DO UPDATE SET checked = coalesce($4, shopping_marks.checked), hidden = coalesce($5, shopping_marks.hidden)",
+        me.household_id,
+        week,
+        &foods,
+        b.checked,
+        b.hidden
     )
-    .bind(me.household_id)
-    .bind(week)
-    .bind(&foods)
-    .bind(b.checked)
-    .bind(b.hidden)
     .execute(&s.pool)
     .await?;
     Ok(Json(build(&s, me.household_id, week).await?))
@@ -685,15 +688,15 @@ pub async fn add_extra(
         ));
     }
     // Two missing keys never conflict, so additions without one always go in.
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO shopping_extras (id, household_id, week, name, client_key) VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (household_id, client_key) DO NOTHING",
+        Uuid::now_v7(),
+        me.household_id,
+        week,
+        clean(&b.name)?,
+        key
     )
-    .bind(Uuid::now_v7())
-    .bind(me.household_id)
-    .bind(week)
-    .bind(clean(&b.name)?)
-    .bind(key)
     .execute(&s.pool)
     .await?;
     Ok(Json(build(&s, me.household_id, week).await?))
@@ -724,10 +727,12 @@ pub async fn update_extra(
     Path(id): Path<Uuid>,
     JsonBody(b): JsonBody<ExtraChange>,
 ) -> ApiResult<Json<ShoppingList>> {
-    let week: Date = sqlx::query_scalar("UPDATE shopping_extras SET checked = $3 WHERE id = $1 AND household_id = $2 RETURNING week")
-        .bind(id)
-        .bind(me.household_id)
-        .bind(b.checked)
+    let week: Date = sqlx::query_scalar!(
+        "UPDATE shopping_extras SET checked = $3 WHERE id = $1 AND household_id = $2 RETURNING week",
+        id,
+        me.household_id,
+        b.checked
+    )
         .fetch_optional(&s.pool)
         .await?
         .ok_or(ApiError::NotFound)?;
@@ -750,11 +755,11 @@ pub async fn remove_extra(
     Extension(me): Extension<CurrentUser>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<ShoppingList>> {
-    let week: Date = sqlx::query_scalar(
+    let week: Date = sqlx::query_scalar!(
         "DELETE FROM shopping_extras WHERE id = $1 AND household_id = $2 RETURNING week",
+        id,
+        me.household_id
     )
-    .bind(id)
-    .bind(me.household_id)
     .fetch_optional(&s.pool)
     .await?
     .ok_or(ApiError::NotFound)?;
@@ -787,16 +792,20 @@ pub async fn add_staple(
     Extension(me): Extension<CurrentUser>,
     JsonBody(b): JsonBody<NewStaple>,
 ) -> ApiResult<Json<ShoppingList>> {
-    let added = sqlx::query("INSERT INTO pantry_staples (household_id, food_id) SELECT $1, f.id FROM foods f WHERE f.id = $2 ON CONFLICT DO NOTHING")
-        .bind(me.household_id)
-        .bind(b.food_id)
+    let added = sqlx::query!(
+        "INSERT INTO pantry_staples (household_id, food_id) SELECT $1, f.id FROM foods f WHERE f.id = $2 ON CONFLICT DO NOTHING",
+        me.household_id,
+        b.food_id
+    )
         .execute(&s.pool)
         .await?;
     if added.rows_affected() == 0
-        && !sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM foods WHERE id = $1)")
-            .bind(b.food_id)
-            .fetch_one(&s.pool)
-            .await?
+        && !sqlx::query_scalar!(
+            r#"SELECT EXISTS (SELECT 1 FROM foods WHERE id = $1) AS "value!""#,
+            b.food_id
+        )
+        .fetch_one(&s.pool)
+        .await?
     {
         return Err(ApiError::NotFound);
     }
@@ -820,11 +829,13 @@ pub async fn remove_staple(
     Path(food_id): Path<Uuid>,
     Query(p): Query<WeekParams>,
 ) -> ApiResult<Json<ShoppingList>> {
-    sqlx::query("DELETE FROM pantry_staples WHERE household_id = $1 AND food_id = $2")
-        .bind(me.household_id)
-        .bind(food_id)
-        .execute(&s.pool)
-        .await?;
+    sqlx::query!(
+        "DELETE FROM pantry_staples WHERE household_id = $1 AND food_id = $2",
+        me.household_id,
+        food_id
+    )
+    .execute(&s.pool)
+    .await?;
     Ok(Json(build(&s, me.household_id, monday(p.week)).await?))
 }
 
@@ -847,10 +858,12 @@ pub async fn settings(
     State(s): State<AppState>,
     Extension(me): Extension<CurrentUser>,
 ) -> ApiResult<Json<ShoppingSettings>> {
-    let w: String = sqlx::query_scalar("SELECT weight_unit FROM households WHERE id = $1")
-        .bind(me.household_id)
-        .fetch_one(&s.pool)
-        .await?;
+    let w: String = sqlx::query_scalar!(
+        "SELECT weight_unit FROM households WHERE id = $1",
+        me.household_id
+    )
+    .fetch_one(&s.pool)
+    .await?;
     Ok(Json(ShoppingSettings {
         weight_unit: Weights::stored(&w),
     }))
@@ -871,11 +884,13 @@ pub async fn update_settings(
     Extension(me): Extension<CurrentUser>,
     JsonBody(b): JsonBody<ShoppingSettings>,
 ) -> ApiResult<Json<ShoppingSettings>> {
-    sqlx::query("UPDATE households SET weight_unit = $2 WHERE id = $1")
-        .bind(me.household_id)
-        .bind(b.weight_unit.core().as_str())
-        .execute(&s.pool)
-        .await?;
+    sqlx::query!(
+        "UPDATE households SET weight_unit = $2 WHERE id = $1",
+        me.household_id,
+        b.weight_unit.core().as_str()
+    )
+    .execute(&s.pool)
+    .await?;
     Ok(Json(b))
 }
 
@@ -907,25 +922,29 @@ pub async fn set_food_weights(
     Extension(me): Extension<CurrentUser>,
     JsonBody(b): JsonBody<FoodWeights>,
 ) -> ApiResult<Json<ShoppingList>> {
-    if !sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM foods WHERE id = $1)")
-        .bind(b.food_id)
-        .fetch_one(&s.pool)
-        .await?
+    if !sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM foods WHERE id = $1) AS "value!""#,
+        b.food_id
+    )
+    .fetch_one(&s.pool)
+    .await?
     {
         return Err(ApiError::NotFound);
     }
     match b.weight_unit {
-        Some(w) => sqlx::query(
+        Some(w) => sqlx::query!(
             "INSERT INTO food_weight_units (household_id, food_id, weight_unit) VALUES ($1, $2, $3)
              ON CONFLICT (household_id, food_id) DO UPDATE SET weight_unit = $3",
-        )
-        .bind(me.household_id)
-        .bind(b.food_id)
-        .bind(w.core().as_str()),
+            me.household_id,
+            b.food_id,
+            w.core().as_str()
+        ),
         None => {
-            sqlx::query("DELETE FROM food_weight_units WHERE household_id = $1 AND food_id = $2")
-                .bind(me.household_id)
-                .bind(b.food_id)
+            sqlx::query!(
+                "DELETE FROM food_weight_units WHERE household_id = $1 AND food_id = $2",
+                me.household_id,
+                b.food_id
+            )
         }
     }
     .execute(&s.pool)

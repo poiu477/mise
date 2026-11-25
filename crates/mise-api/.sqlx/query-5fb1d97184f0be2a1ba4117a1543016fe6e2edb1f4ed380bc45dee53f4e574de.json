@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO shopping_extras (id, household_id, week, name, client_key) VALUES ($1, $2, $3, $4, $5)\n         ON CONFLICT (household_id, client_key) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5fb1d97184f0be2a1ba4117a1543016fe6e2edb1f4ed380bc45dee53f4e574de"
+}

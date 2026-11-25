@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oidc_logins (state_hash, nonce, pkce_verifier, return_to) VALUES ($1, $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4e0d3572287bbbbb2a0a83353bb7a9f3bac431f841a58386680d8da6edd37668"
+}

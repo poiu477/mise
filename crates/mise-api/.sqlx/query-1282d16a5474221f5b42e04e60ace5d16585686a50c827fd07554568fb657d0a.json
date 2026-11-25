@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM plan_entries WHERE id = $1 AND household_id = $2 RETURNING week",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "week",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "plan_entries",
+            "name": "week"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1282d16a5474221f5b42e04e60ace5d16585686a50c827fd07554568fb657d0a"
+}

@@ -1,0 +1,4 @@
+# sqlx's checked query macros (crates/mise-api) build from the query metadata committed in crates/mise-api/.sqlx, so no
+# build needs a database. scripts/sqlx-prepare writes that metadata again after a query or a migration changes.
+[env]
+SQLX_OFFLINE = "true"

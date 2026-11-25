@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO line_amounts (line_id, servings, amount, unit)\n                 VALUES ($1, $2::float8::numeric, $3::float8::numeric, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8",
+        "Float8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "52c155df94ac321755acfda2798a26df078f41826f76b69d4ec0697f63b7163d"
+}

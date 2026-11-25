@@ -253,16 +253,16 @@ pub async fn create_session(
     days: i64,
 ) -> Result<String, ApiError> {
     let token = new_secret();
-    sqlx::query("DELETE FROM sessions WHERE expires_at < now()")
+    sqlx::query!("DELETE FROM sessions WHERE expires_at < now()")
         .execute(pool)
         .await?;
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO sessions (token_hash, user_id, expires_at, user_agent) VALUES ($1, $2, now() + make_interval(days => $3::int), $4)",
+        secret_hash(&token),
+        user,
+        days as i32,
+        user_agent.map(|u| u.chars().take(200).collect::<String>())
     )
-    .bind(secret_hash(&token))
-    .bind(user)
-    .bind(days as i32)
-    .bind(user_agent.map(|u| u.chars().take(200).collect::<String>()))
     .execute(pool)
     .await?;
     Ok(token)
@@ -352,9 +352,11 @@ async fn from_session(
     };
     // Sliding expiry, written at most hourly.
     if OffsetDateTime::now_utc() - seen > time::Duration::hours(1) {
-        sqlx::query("UPDATE sessions SET last_seen_at = now(), expires_at = now() + make_interval(days => $2::int) WHERE token_hash = $1")
-            .bind(&hash)
-            .bind(days as i32)
+        sqlx::query!(
+            "UPDATE sessions SET last_seen_at = now(), expires_at = now() + make_interval(days => $2::int) WHERE token_hash = $1",
+            &hash,
+            days as i32
+        )
             .execute(pool)
             .await?;
     }
@@ -379,8 +381,10 @@ async fn from_token(pool: &PgPool, token: &str) -> Result<Option<CurrentUser>, A
     let Some((id, username, is_admin, household_id, scope)) = row else {
         return Ok(None);
     };
-    sqlx::query("UPDATE api_tokens SET last_used_at = now() WHERE token_hash = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')")
-        .bind(&hash)
+    sqlx::query!(
+        "UPDATE api_tokens SET last_used_at = now() WHERE token_hash = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 hour')",
+        &hash
+    )
         .execute(pool)
         .await?;
     Ok(Some(CurrentUser {

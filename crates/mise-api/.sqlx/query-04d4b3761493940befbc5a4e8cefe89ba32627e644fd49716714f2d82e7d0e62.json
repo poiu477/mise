@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT weight_unit FROM households WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "weight_unit",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "households",
+            "name": "weight_unit"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "04d4b3761493940befbc5a4e8cefe89ba32627e644fd49716714f2d82e7d0e62"
+}
