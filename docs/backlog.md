@@ -17,28 +17,6 @@ status.md if it changed either.
 
 ## Ready
 
-### T39 · Nothing an admin or an import does can hang the install
-
-From the code review (items 6 to 8). Each fails every later import, not just the one that caused it.
-
-- **A merge can make a parent loop.** Merging a food into its own grandchild (`from → C → into`) sets `C.parent =
-  into`, and option derivation's walk up the tree (`fold` in `mise-ingest/src/options.rs`) has no visited set, so it
-  never ends. Refuse a merge or `set_parent` that would make a loop (in `curate.rs` and the review page's answers),
-  and give every walk up the tree a visited set that stops it with an error naming the loop.
-- **The import lock can outlive its import.** `shared_stages` takes a session-level advisory lock on a pooled
-  connection; a cancelled or panicking request returns the connection to the pool still locked, and every later import
-  waits forever, using up the pool. Take a transaction-level lock (`pg_advisory_xact_lock`) inside a transaction
-  that ends with the stages, so it goes whatever happens.
-- **One long imported title breaks grouping.** Imports don't cap titles (the editor caps them at 200), and a slug
-  past Postgres's index row size fails every later grouping run. Cap titles and slugs on every way in (link, file,
-  bundle), as the editor does, and cap slug length where it is made.
-- **Touches:** `crates/mise-ingest/src/curate.rs`, `options.rs`, `import.rs`, `dishes.rs`, `schema_org.rs`,
-  `crates/mise-api/src/review.rs`.
-- **Needs:** nothing.
-- **Done when:** tests show a merge into a grandchild refused with a message and the tree unchanged; a parent loop put
-  in the database by hand makes option derivation fail with an error instead of running on; an import cancelled
-  mid-stages (the future dropped) leaves the next import able to run; a page whose recipe title is 10,000 characters
-  imports with its title cut to 200 and grouping still runs.
 
 ### T41 · A browser's cached data follows the account
 
