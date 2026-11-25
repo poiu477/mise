@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Variant } from "./api/client";
-import { allergens, difficulty, minutes, servingsText } from "./recipe";
+import { allergens, difficulty, maxServings, minutes, servingsText } from "./recipe";
 
 describe("minutes", () => {
   it("reads hours and minutes", () => {
@@ -40,5 +40,13 @@ describe("servingsText", () => {
   it("counts servings in words", () => {
     expect(servingsText(1)).toBe("1 serving");
     expect(servingsText(6)).toBe("6 servings");
+  });
+});
+
+describe("maxServings", () => {
+  it("is 24, or the largest published yield when that is more", () => {
+    expect(maxServings([2, 4])).toBe(24);
+    expect(maxServings([])).toBe(24);
+    expect(maxServings([8, 40])).toBe(40);
   });
 });

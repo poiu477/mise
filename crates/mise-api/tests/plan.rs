@@ -907,3 +907,55 @@ async fn bad_input_is_refused() {
         StatusCode::UNAUTHORIZED
     );
 }
+
+#[tokio::test]
+async fn a_version_is_planned_up_to_its_largest_published_yield() {
+    let k = test_app!(Kitchen::new());
+    let salt = k.food("Test Salt", json!({})).await;
+    // A roast published for 40, and a stew published for 2 and 4.
+    let roast = k.recipe("Test Roast", &[(salt, 1.0, "tsp", false)]).await;
+    sqlx::query("INSERT INTO variant_yields (variant_id, servings) VALUES ($1, 40)")
+        .bind(roast)
+        .execute(&k.pool)
+        .await
+        .unwrap();
+    let stew = k.recipe("Test Stew", &[(salt, 1.0, "tsp", false)]).await;
+
+    let add = |variant: Uuid, servings: f64| {
+        let k = &k;
+        async move {
+            k.send(
+                "POST",
+                "/api/v1/plan/entries",
+                As::Cookie(&k.cookie),
+                Some(json!({"week": WEEK, "variant_id": variant, "servings": servings})),
+            )
+            .await
+            .status
+        }
+    };
+    assert_eq!(add(roast, 40.0).await, StatusCode::OK, "its own yield");
+    assert_eq!(add(roast, 41.0).await, StatusCode::BAD_REQUEST);
+    assert_eq!(add(stew, 24.0).await, StatusCode::OK, "any count to 24");
+    assert_eq!(add(stew, 25.0).await, StatusCode::BAD_REQUEST);
+
+    // Changing a planned count follows the same rule, by the entry's own version.
+    let roast_entry = k.plan(roast).await;
+    let change = |entry: String, servings: f64| {
+        let k = &k;
+        async move {
+            k.send(
+                "PATCH",
+                &format!("/api/v1/plan/entries/{entry}"),
+                As::Cookie(&k.cookie),
+                Some(json!({"servings": servings})),
+            )
+            .await
+            .status
+        }
+    };
+    assert_eq!(change(roast_entry.clone(), 40.0).await, StatusCode::OK);
+    assert_eq!(change(roast_entry, 41.0).await, StatusCode::BAD_REQUEST);
+    let stew_entry = k.plan(stew).await;
+    assert_eq!(change(stew_entry, 25.0).await, StatusCode::BAD_REQUEST);
+}

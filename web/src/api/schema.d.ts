@@ -1003,7 +1003,8 @@ export interface components {
         EntryChange: {
             /**
              * Format: double
-             * @description How many to plan it for: more than 0, at most 24.
+             * @description How many to plan it for: more than 0, and at most 24, or the version's largest published yield when that is
+             *     more.
              */
             servings: number;
         };
@@ -2213,7 +2214,7 @@ export interface operations {
                     "application/json": components["schemas"]["DishPage"];
                 };
             };
-            /** @description A query value can't be read: `limit` or `offset` isn't a number, say */
+            /** @description A query value can't be read (`limit` or `offset` isn't a number, say), or `type` isn't a kind of dish */
             400: {
                 headers: {
                     [name: string]: unknown;
