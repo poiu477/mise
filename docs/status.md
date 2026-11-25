@@ -78,6 +78,12 @@ What a reviewer can rely on today:
 
 ## Known issues and limits
 
+- **English only.** Reading recipes assumes English: unit names, abbreviations and plurals (`mise-core/src/quantity.rs`,
+  `ingredient_line.rs`), plural folding, brand stripping and the narrowing words that make one food a kind of another
+  (`food_names.rs`), step text rewritten for a new yield and the times found in it (`step_amounts.rs`,
+  `step_times.rs`), and the words that say a yield counts servings and the worded times in imported pages
+  (`mise-ingest/src/schema_org.rs`). A recipe in another language imports, but its amounts, foods and yields read
+  poorly. The web app's own text is English too.
 - A household's fork stays on the original's dish, and the dish's title follows the original's, so after a share is
   withdrawn the forking household still sees the dish renamed when the owner renames their recipe (from a code
   review; not yet reproduced in a test).
