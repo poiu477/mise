@@ -296,6 +296,70 @@ const NOT_PLURAL: &[&str] = &[
     "harissa",
 ];
 
+/// Whether `word` is in `list`, ignoring a plural "s": "breasts" matches "breast" and the other way about.
+fn in_list(list: &[&str], word: &str) -> bool {
+    list.contains(&word) || list.contains(&format!("{word}s").as_str())
+}
+
+/// Words that only say how a food was cut up or handled before it went in the bag, and the joiners that hold two
+/// foods in one name. Dropping these is what makes "Red Onion, Diced" and "Red Onions" one food.
+///
+/// Deliberately much shorter than [`NARROWING`], which also holds colours, varieties and cuts ("green", "baby",
+/// "steaks"). Those say *which* food it is: cutting them would offer "Bell Pepper" and "Green Bell Pepper" as one
+/// food, when a colour is a kind of the base and [`relate`] already links it as one.
+const PREPARED: &[&str] = &[
+    "chopped",
+    "diced",
+    "minced",
+    "sliced",
+    "shredded",
+    "grated",
+    "crumbled",
+    "cubed",
+    "halved",
+    "quartered",
+    "julienned",
+    "spiralized",
+    "trimmed",
+    "peeled",
+    "pitted",
+    "precooked",
+    "cooked",
+    "and",
+    "or",
+    "with",
+    "plus",
+];
+
+/// The key two names share when they look like the same food written differently: every word folded to its
+/// singular, the words that only say how it was prepared dropped ([`PREPARED`]), then sorted. So "Red Onions",
+/// "Red Onion, Diced" and "Diced Red Onion" share one key, while "Honey" and "Hot Honey" do not, nor "Bell
+/// Pepper" and "Green Bell Pepper": those extra words say which food it is.
+///
+/// Unlike [`singular_key`], which keys a name to one food, this is deliberately looser, and it folds every word
+/// rather than only the last. It is used only to put a pair in front of a person (a `food_duplicate` review
+/// item), never to match a line on its own.
+pub fn duplicate_key(name: &str) -> String {
+    let words: Vec<String> = normalize_name(name)
+        .split(' ')
+        .filter(|w| !w.is_empty())
+        .map(singular)
+        .collect();
+    let mut kept: Vec<&str> = words
+        .iter()
+        .map(String::as_str)
+        .filter(|w| !in_list(PREPARED, w))
+        .collect();
+    // A name of nothing but those words ("Chopped and Diced") keeps them, so such names group by what they say
+    // rather than all landing on one empty key.
+    if kept.is_empty() {
+        kept = words.iter().map(String::as_str).collect();
+    }
+    kept.sort_unstable();
+    kept.dedup();
+    kept.join(" ")
+}
+
 /// Fold the last word to its singular so "Onions" and "Onion" share one key.
 pub fn singular_key(name: &str) -> String {
     let norm = normalize_name(name);
@@ -382,8 +446,7 @@ pub fn relate(specific: &str, base: &str, brands: &Brands) -> Option<Relation> {
         return None;
     }
     // Plural-insensitive membership: "breasts" and "breast" are both narrowing.
-    let is_in =
-        |list: &[&str], w: &str| list.contains(&w) || list.contains(&format!("{w}s").as_str());
+    let is_in = in_list;
     let extra: Vec<&str> = if s.ends_with(&b) {
         s[..s.len() - b.len()].iter().map(String::as_str).collect()
     } else if s.starts_with(&b) {
@@ -435,6 +498,54 @@ mod tests {
         assert_eq!(singular_key("Molasses"), "molasses");
         assert_eq!(singular_key("Couscous"), "couscous");
         assert_eq!(singular_key("Peaches"), "peach");
+    }
+
+    /// Whether the pair would be put to a person as possibly one food.
+    fn same_food(a: &str, b: &str) -> bool {
+        duplicate_key(a) == duplicate_key(b)
+    }
+
+    #[test]
+    fn names_of_one_food_share_a_duplicate_key() {
+        // Word order, plurals and a preparation note left in the name don't make another food.
+        assert!(same_food("Red Onions", "Red Onion, Diced"));
+        assert!(same_food("Red Onion, Diced", "Diced Red Onion"));
+        assert!(same_food("Cheddar Cheese", "Shredded Cheddar Cheese"));
+        assert!(same_food("Kale", "Chopped Kale"));
+        assert!(same_food("Diced Steak", "Steak"));
+        assert!(same_food(
+            "Bok Choy and Napa Cabbage",
+            "Bok Choy & Napa Cabbage"
+        ));
+    }
+
+    #[test]
+    fn a_word_that_changes_the_food_keeps_it_apart() {
+        // Each of these scores above 0.65 by trigram, which is why the pairing goes by words, not that score.
+        assert!(!same_food("Honey", "Hot Honey"));
+        assert!(!same_food("Bell Pepper", "Green Bell Pepper"));
+        assert!(!same_food("Butter", "Peanut Butter"));
+        assert!(!same_food("Sourdough Bread", "Sourdough Bread Bowl"));
+        assert!(!same_food("Chili Powder", "Ancho Chili Powder"));
+        assert!(!same_food("Potatoes", "Sweet Potatoes"));
+    }
+
+    #[test]
+    fn a_name_of_nothing_but_prepared_words_keeps_them() {
+        // Cutting every word would land each on one empty key and offer them all as the same food.
+        assert_eq!(duplicate_key("Chopped Diced"), "chopped diced");
+        assert!(!same_food("Chopped Diced", "Peeled"));
+    }
+
+    #[test]
+    fn a_colour_or_variety_is_not_a_duplicate_but_a_kind() {
+        // These are what `relate` files as a kind of the base, so the queue shouldn't ask about them as duplicates.
+        assert!(!same_food("Bell Pepper", "Green Bell Pepper"));
+        assert!(!same_food("Potato", "Yukon Gold Potato"));
+        assert_eq!(
+            relate("Green Bell Pepper", "Bell Pepper", &none()),
+            Some(Relation::KindOf)
+        );
     }
 
     #[test]
